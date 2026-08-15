@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="ballGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#eab308" />
+    </linearGradient>
+  </defs>
+  <!-- Clipboard top part -->
+  <rect x="30" y="10" width="40" height="40" rx="8" fill="#1f2937" />
+  <!-- Clipboard orange clip -->
+  <rect x="40" y="5" width="20" height="15" rx="3" fill="#ea580c" />
+  <rect x="45" y="8" width="10" height="4" rx="2" fill="#1f2937" />
+  <rect x="35" y="22" width="30" height="25" fill="#1f2937" />
+  
+  <!-- Tennis ball covering most of the clipboard -->
+  <circle cx="50" cy="55" r="35" fill="url(#ballGrad)" stroke="#1f2937" stroke-width="4" />
+  
+  <!-- Tennis ball curved lines -->
+  <path d="M25 30 a 25 25 0 0 0 0 50" stroke="#1f2937" stroke-width="4" fill="none" stroke-linecap="round" />
+  <path d="M75 30 a 25 25 0 0 1 0 50" stroke="#1f2937" stroke-width="4" fill="none" stroke-linecap="round" />
+
+  <!-- Clipboard checks and lines inside the yellow ball -->
+  <path d="M40 45 l 5 5 l 10 -10" stroke="#1f2937" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="60" y="42" width="15" height="4" rx="2" fill="#ea580c" />
+  <rect x="60" y="48" width="10" height="4" rx="2" fill="#ea580c" />
+
+  <path d="M40 65 l 5 5 l 10 -10" stroke="#1f2937" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="60" y="62" width="15" height="4" rx="2" fill="#ea580c" />
+</svg>

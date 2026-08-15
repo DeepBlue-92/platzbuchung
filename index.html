@@ -1,0 +1,284 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platzreservierung</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        html { 
+            overflow-y: scroll;
+            background-color: #f1f5f9; 
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f1f5f9;
+        }
+
+        /* Utility classes for hiding scrollbar explicitly */
+        .hide-scrollbar::-webkit-scrollbar,
+        .scrollbar-none::-webkit-scrollbar,
+        .no-scrollbar::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+
+        .hide-scrollbar,
+        .scrollbar-none,
+        .no-scrollbar {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+        }
+
+        /* Mobile specific scrollbar hiding while maintaining touch scrolling */
+        @media (max-width: 1023px) {
+            html {
+                overflow-y: auto;
+            }
+            html::-webkit-scrollbar,
+            body::-webkit-scrollbar,
+            *::-webkit-scrollbar {
+                display: none !important;
+                width: 0 !important;
+                height: 0 !important;
+            }
+            html, body, * {
+                scrollbar-width: none !important;
+                -ms-overflow-style: none !important;
+            }
+        }
+
+        /* Custom scrollbar override for the calendar container */
+        .custom-calendar-container {
+            position: relative;
+            background: #ffffff;
+            border-radius: 1rem;
+            border: 2px solid #94a3b8; /* slate-400 */
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25); /* shadow-2xl */
+            padding: 3px; /* Sits slightly inward to keep the border safe and separated from scrollbars */
+            overflow: hidden; /* Clips any direct overflow from leaking, guiding kids nicely */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .custom-calendar-scroll {
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+            border-radius: 0.8rem !important; /* Slightly smaller than outer border radius */
+            width: 100%;
+            height: 100%;
+        }
+
+        @media (min-width: 1024px) {
+            .custom-calendar-scroll {
+                overflow-x: hidden !important;
+            }
+
+            /* Modern custom translucent scrollbars on desktop */
+            .custom-calendar-scroll::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+
+            .custom-calendar-scroll::-webkit-scrollbar-track {
+                background: transparent;
+                border-radius: 9999px;
+                margin: 4px; /* Keeps track ends from pushing all the way into top/bottom rounded corners */
+            }
+
+            .custom-calendar-scroll::-webkit-scrollbar-thumb {
+                background-color: rgba(148, 163, 184, 0.45); /* Soft slate-400 translucent */
+                border-radius: 9999px;
+                border: 2px solid transparent;
+                background-clip: padding-box;
+                transition: background-color 0.2s ease;
+            }
+
+            .custom-calendar-scroll::-webkit-scrollbar-thumb:hover {
+                background-color: rgba(71, 85, 105, 0.75); /* Darker slate-600 translucent on hover */
+            }
+
+            .custom-calendar-scroll {
+                scrollbar-width: thin;
+                scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+            }
+        }
+
+        /* Rock-solid layout overrides for the calendar table under scroll */
+        .custom-calendar-scroll table {
+            border-collapse: separate !important;
+            border-spacing: 0 !important;
+        }
+
+        /* First row (Day Header) layout & sticky behavior */
+        .custom-calendar-scroll thead tr:nth-child(1) {
+            height: 40px !important;
+        }
+
+        .custom-calendar-scroll thead tr:nth-child(1) th {
+            position: sticky !important;
+            top: 0 !important;
+            z-index: 25 !important;
+            height: 40px !important;
+            box-sizing: border-box !important;
+            background-color: #e2e8f0 !important; /* solid slate-200 */
+            border-bottom: 2px solid #94a3b8 !important; /* solid slate-400 */
+        }
+
+        /* Row 1 sticky top-left corner 'Zeitraum' */
+        .custom-calendar-scroll thead tr:nth-child(1) th:first-child {
+            left: 0 !important;
+            z-index: 45 !important;
+            background-color: #e2e8f0 !important; /* solid slate-200 */
+            border-right: 2px solid #94a3b8 !important; /* heavy divider right */
+        }
+
+        /* Second row (Courts/Plätze) layout & sticky behavior */
+        .custom-calendar-scroll thead tr:nth-child(2) {
+            height: 32px !important;
+        }
+
+        .custom-calendar-scroll thead tr:nth-child(2) th {
+            position: sticky !important;
+            top: 40px !important; /* Sits exactly below Row 1 (40px) */
+            z-index: 25 !important;
+            height: 32px !important;
+            box-sizing: border-box !important;
+            background-color: #f8fafc !important; /* solid slate-50 */
+            border-bottom: 2px solid #94a3b8 !important; /* heavy bottom divider below the courts */
+        }
+
+        /* Row 2 sticky corner dummy */
+        .custom-calendar-scroll thead tr:nth-child(2) th:first-child {
+            left: 0 !important;
+            z-index: 45 !important;
+            background-color: #f1f5f9 !important; /* solid slate-100 */
+            border-right: 2px solid #94a3b8 !important; /* align with Zeitraum divider */
+        }
+
+        /* Sticky left column for the time cells in body */
+        .custom-calendar-scroll tbody td:first-child {
+            position: sticky !important;
+            left: 0 !important;
+            z-index: 15 !important;
+            border-right: 2px solid #94a3b8 !important; /* heavy divider right */
+        }
+
+        /* Tbody cell bottom border support under separate layout */
+        .custom-calendar-scroll tbody td {
+            box-shadow: inset 0 -1px 0 0 #cbd5e1 !important; /* solid slate-300 bottom border using shadow to prevent intersecting vertical right borders */
+            border-bottom: none !important;
+        }
+        
+        .custom-calendar-scroll tbody td.no-bottom-border {
+            box-shadow: none !important;
+        }
+
+        /* Make native calendar-picker-indicator (week selector / date inputs) white */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(100%) !important;
+            cursor: pointer;
+        }
+        
+        /* Keep native calendar indicator visible (dark) on white background inputs */
+        .bg-white input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="date"].bg-white::-webkit-calendar-picker-indicator {
+            filter: none !important;
+        }
+
+        .stripe-disabled {
+            background-color: #f1f5f9 !important; /* bg-slate-100 */
+            background-image: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                #e2e8f0 10px, /* border-slate-200 */
+                #e2e8f0 20px
+            ) !important;
+            cursor: not-allowed !important;
+            pointer-events: none !important;
+        }
+
+        .stripe-closed {
+            background-color: #f1f5f9 !important; /* bg-slate-100 */
+            background-image: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 7px,
+                #94a3b8 7px, /* bg-slate-400 */
+                #94a3b8 14px
+            ) !important;
+            background-attachment: fixed !important;
+        }
+
+        .stripe-locked {
+            background-color: #e2e8f0 !important; /* bg-slate-200 */
+            background-image: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                #cbd5e1 10px, /* slate-300 */
+                #cbd5e1 20px
+            ) !important;
+            background-attachment: fixed !important;
+        }
+
+        /* Responsive refactoring for patterns on large screens (md: and up) */
+        @media (min-width: 768px) {
+            .stripe-closed {
+                background-color: #f1f5f9 !important; /* slate-100 */
+                background-image: repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 7px,
+                    rgba(148, 163, 184, 0.12) 7px, 
+                    rgba(148, 163, 184, 0.12) 14px
+                ) !important;
+            }
+            .stripe-locked {
+                background-color: #f1f5f9 !important; /* bg-slate-100 */
+                background-image: repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(203, 213, 225, 0.2) 10px, /* slate-300 lightly */
+                    rgba(203, 213, 225, 0.2) 20px
+                ) !important;
+            }
+            .stripe-disabled {
+                background-color: #f8fafc !important; /* bg-slate-50 */
+                background-image: none !important;
+            }
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-slate-100 text-slate-900">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

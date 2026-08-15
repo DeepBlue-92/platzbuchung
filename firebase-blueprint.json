@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile under flat /users/{uid}.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string", "enum": ["super-admin", "admin", "spieler"] },
+        "tenantId": { "type": "string" },
+        "password": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "email": { "type": "string" },
+        "isSuspended": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "username", "role", "tenantId", "password"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A court reservation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "court": { "type": "string" },
+        "players": { "type": "array" },
+        "isLocked": { "type": "boolean" },
+        "hasBallMachine": { "type": "boolean" },
+        "bookedBy": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["id", "date", "time", "court", "players", "isLocked", "hasBallMachine", "bookedBy"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "An upcoming tournament entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "description": { "type": "string" },
+        "participants": { "type": "array" },
+        "maxParticipants": { "type": "integer" },
+        "isRegistrationBlocked": { "type": "boolean" }
+      },
+      "required": ["id", "title", "date", "startTime", "endTime"]
+    },
+    "Rankings": {
+      "title": "Rankings",
+      "description": "Ranking categories state",
+      "type": "object",
+      "properties": {
+        "herren": { "type": "object" },
+        "damen": { "type": "object" },
+        "jugend": { "type": "object" }
+      }
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Club branding and global settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clubName": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "accentColor2": { "type": "string" },
+        "accentColor3": { "type": "string" },
+        "collectEmail": { "type": "boolean" },
+        "collectPhone": { "type": "boolean" },
+        "courts": { "type": "array" },
+        "news": { "type": "string" }
+      },
+      "required": ["clubName"]
+    },
+    "ArbeitsEinsatz": {
+      "title": "ArbeitsEinsatz",
+      "description": "A work assignment logged by a member or admin.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "hours": { "type": "number" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userFullName": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "date", "hours", "category", "description", "userId", "userName", "userFullName", "createdBy", "createdAt"]
+    },
+    "PlannedWorkShift": {
+      "title": "PlannedWorkShift",
+      "description": "A planned volunteer shift/event that members can sign up for.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "time_window": { "type": "string" },
+        "category": { "type": "string" },
+        "title_description": { "type": "string" },
+        "required_volunteers": { "type": "integer" },
+        "assigned_user_ids": { "type": "array" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "date", "category", "title_description", "required_volunteers", "assigned_user_ids"]
+    },
+    "LeagueConfigVersion": {
+      "title": "LeagueConfigVersion",
+      "description": "Effective date configuration for league point calculations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "effective_date": { "type": "string" },
+        "created_at": { "type": "string" },
+        "created_by": { "type": "string" },
+        "base_points_win": { "type": "number" },
+        "base_points_loss": { "type": "number" },
+        "inactivity_deduction_per_week": { "type": "number" },
+        "logistic_factor": { "type": "number" },
+        "max_bonus": { "type": "number" }
+      },
+      "required": ["id", "effective_date", "base_points_win", "base_points_loss", "inactivity_deduction_per_week", "logistic_factor", "max_bonus"]
+    }
+  },
+  "firestore": {
+    "league_config_versions/{versionId}": {
+      "schema": { "$ref": "#/entities/LeagueConfigVersion" },
+      "description": "Effective date configurations for hobbyliga."
+    },
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Users collection. Document ID is Firebase Auth uid. Can be read by any authenticated user for names/rankings, modified only by self or admin."
+    },
+    "bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Global bookings collection. Authenticated users can create/update. Edit restricted to bookedBy or admin."
+    },
+    "tournaments/{tournamentId}": {
+      "schema": { "$ref": "#/entities/Tournament" },
+      "description": "Club tournaments. Created/updated by admin only. Participants can be joined by users."
+    },
+    "state/rankings": {
+      "schema": { "$ref": "#/entities/Rankings" },
+      "description": "Current rankings of members. Modified by admin."
+    },
+    "state/settings": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Club branding, configuration, courts and news. Modified by admin."
+    },
+    "vereine/{vereinsId}/arbeitseinsaetze/{einsatzId}": {
+      "schema": { "$ref": "#/entities/ArbeitsEinsatz" },
+      "description": "Work hours logged by members or bulk entries added by admins."
+    },
+    "vereine/{vereinsId}/plannedWorkShifts/{shiftId}": {
+      "schema": { "$ref": "#/entities/PlannedWorkShift" },
+      "description": "Planned work shifts and volunteer events."
+    },
+    "admins/{userId}": {
+      "schema": { "title": "Admin", "type": "object", "properties": { "id": { "type": "string" } } },
+      "description": "Tracks users with administrative access."
+    },
+    "system/updates": {
+      "schema": { "title": "SystemUpdates", "type": "object", "properties": { "text": { "type": "string" }, "lastUpdated": { "type": "string" }, "updatedBy": { "type": "string" } } },
+      "description": "Global master dataset for system-wide updates and changelogs."
+    }
+  }
+}

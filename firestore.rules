@@ -1,0 +1,295 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // -------------------------------------------------------------------------
+    // Phase 4.1: Global Safety Net
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /system/{document=**} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /test/{document=**} {
+      allow read, write: if true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+
+    function isSuperAdmin() {
+      return isSignedIn() && 
+             'email' in request.auth.token && 
+             request.auth.token.email != null &&
+             (
+               request.auth.token.email == 'superadmin@system.local' ||
+               (userExists() && getUserData().role == 'super-admin')
+             );
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function belongsToVerein(vereinsId) {
+      return isSignedIn();
+    }
+
+    function isClubAdmin(vereinsId) {
+      return isSignedIn() && (
+        isSuperAdmin() || (
+          userExists() &&
+          getUserData().role == 'admin'
+        )
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Validation Blueprints (Anti-Update-Gap)
+    // -------------------------------------------------------------------------
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'username', 'role', 'tenantId']) && 
+             data.id is string && data.id.size() <= 128 &&
+             data.username is string && data.username.size() <= 200 &&
+             data.role in ['super-admin', 'admin', 'spieler'] &&
+             data.tenantId is string && data.tenantId.size() <= 128 &&
+             (!('password' in data) || data.password is string) &&
+             (!('passwort' in data) || data.passwort is string) &&
+             (!('is_placeholder_email' in data) || data.is_placeholder_email is bool);
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['id', 'date', 'time', 'court', 'players', 'isLocked', 'hasBallMachine', 'bookedBy']) && 
+             data.id is string && data.id.size() <= 128 &&
+             data.date is string && data.date.size() <= 32 &&
+             data.time is string && data.time.size() <= 32 &&
+             data.court is string && data.court.size() <= 128 &&
+             data.players is list && data.players.size() <= 10 && (data.players.size() == 0 || data.players[0] is string) &&
+             data.isLocked is bool &&
+             data.hasBallMachine is bool &&
+             data.bookedBy is string && data.bookedBy.size() <= 128 &&
+             (!('reason' in data) || (data.reason is string && data.reason.size() <= 500)) &&
+             (!('comment' in data) || (data.comment is string && data.comment.size() <= 1000));
+    }
+    
+    function isValidTournament(data) {
+      return data.keys().hasAll(['id', 'title']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.title is string && data.title.size() <= 100 &&
+             (!('date' in data) || (data.date is string && data.date.size() <= 32)) &&
+             (!('startTime' in data) || (data.startTime is string && data.startTime.size() <= 32)) &&
+             (!('endTime' in data) || (data.endTime is string && data.endTime.size() <= 32)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('participants' in data) || (data.participants is list && data.participants.size() <= 200)) &&
+             (!('hideExpired' in data) || data.hideExpired is bool) &&
+             (!('allowComment' in data) || data.allowComment is bool) &&
+             (!('registrationComments' in data) || data.registrationComments is map) &&
+             (!('maxParticipants' in data) || data.maxParticipants is int) &&
+             (!('isRegistrationBlocked' in data) || data.isRegistrationBlocked is bool) &&
+             (!('deletedAt' in data) || (data.deletedAt is string && data.deletedAt.size() <= 32)) &&
+             (!('auditLog' in data) || (data.auditLog is list && data.auditLog.size() <= 500 && (data.auditLog.size() == 0 || data.auditLog[0] is map)));
+    }
+    
+    function isValidArbeitsEinsatz(data) {
+      return data.keys().hasAll(['id', 'date', 'hours', 'category', 'description', 'userId', 'userName', 'userFullName', 'createdBy', 'createdAt']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.date is string && data.date.size() <= 32 &&
+             (data.hours is float || data.hours is int) &&
+             data.category is string && data.category.size() <= 200 &&
+             data.description is string && data.description.size() <= 2000 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.userName is string && data.userName.size() <= 200 &&
+             data.userFullName is string && data.userFullName.size() <= 200 &&
+             data.createdBy is string && data.createdBy.size() <= 200 &&
+             data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidPlannedWorkShift(data) {
+      return data.keys().hasAll(['id', 'date', 'category', 'title_description', 'required_volunteers', 'assigned_user_ids']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.date is string && data.date.size() <= 32 &&
+             data.category is string && data.category.size() <= 200 &&
+             data.title_description is string && data.title_description.size() <= 5000 &&
+             (data.required_volunteers is int || data.required_volunteers is float) &&
+             data.assigned_user_ids is list;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['clubName']) &&
+             data.clubName is string && data.clubName.size() <= 200 &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 1048576)) &&
+             (!('bannerUrl' in data) || (data.bannerUrl is string && data.bannerUrl.size() <= 3145728)) &&
+             (!('loginBannerUrl' in data) || (data.loginBannerUrl is string && data.loginBannerUrl.size() <= 3145728)) &&
+             (!('customBannerUrl' in data) || (data.customBannerUrl is string && data.customBannerUrl.size() <= 3145728)) &&
+             (!('customLoginBannerUrl' in data) || (data.customLoginBannerUrl is string && data.customLoginBannerUrl.size() <= 3145728)) &&
+             (!('primaryColor' in data) || (data.primaryColor is string && data.primaryColor.size() <= 32)) &&
+             (!('accentColor' in data) || (data.accentColor is string && data.accentColor.size() <= 32)) &&
+             (!('accentColor2' in data) || (data.accentColor2 is string && data.accentColor2.size() <= 32)) &&
+             (!('accentColor3' in data) || (data.accentColor3 is string && data.accentColor3.size() <= 32)) &&
+             (!('websiteUrl' in data) || (data.websiteUrl is string && data.websiteUrl.size() <= 2048)) &&
+             (!('hideWebsiteLink' in data) || data.hideWebsiteLink is bool) &&
+             (!('welcomeMessage' in data) || (data.welcomeMessage is string && data.welcomeMessage.size() <= 10000)) &&
+             (!('courts' in data) || (data.courts is list && data.courts.size() <= 50)) &&
+             (!('news' in data) || (data.news is string && data.news.size() <= 10000)) &&
+             (!('collectEmail' in data) || data.collectEmail is bool) &&
+             (!('collectPhone' in data) || data.collectPhone is bool);
+    }
+
+    // -------------------------------------------------------------------------
+    // Users Collection (Flat Hierarchy)
+    // -------------------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if true;
+
+      allow create: if (isSuperAdmin() || 
+                       (request.auth.uid == userId) ||
+                       (isSignedIn() && userExists() && getUserData().role == 'admin' && getUserData().tenantId == request.resource.data.tenantId) ||
+                       (request.auth == null)) && isValidUser(incoming());
+
+      allow update: if (isSuperAdmin() || 
+                       (request.auth.uid == userId) || 
+                       (isSignedIn() && userExists() && getUserData().role == 'admin' && getUserData().tenantId == resource.data.tenantId && getUserData().tenantId == request.resource.data.tenantId)) && isValidUser(incoming());
+
+      allow delete: if isSuperAdmin() || 
+                      (isSignedIn() && (
+                        (request.auth.uid == userId) ||
+                        (request.auth.uid != userId && userExists() && getUserData().role == 'admin' && getUserData().tenantId == resource.data.tenantId) ||
+                        (userExists() && getUserData().username.lower() == resource.data.username.lower() && getUserData().tenantId.lower() == resource.data.tenantId.lower())
+                      ));
+    }
+
+    // -------------------------------------------------------------------------
+    // League Rules (Cross-Club)
+    // -------------------------------------------------------------------------
+    match /league_profiles/{profileId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && (request.auth.uid == profileId || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /league_matches/{matchId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /league_searches/{searchId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && (request.auth.uid == request.resource.data.userId || isSuperAdmin());
+      allow delete: if isSignedIn() && (request.auth.uid == resource.data.userId || isSuperAdmin());
+    }
+
+    match /league_config_versions/{versionId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /system_backups/{backupId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    match /backups/{backupId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // Multi-Tenant Rules Nested under /vereine/{vereinsId}
+    // -------------------------------------------------------------------------
+    match /vereine/{vereinsId} {
+      allow read: if true; // Publicly readable settings/logo/banners etc.
+      allow create: if isClubAdmin(vereinsId);
+      allow update: if isClubAdmin(vereinsId);
+      allow delete: if isClubAdmin(vereinsId);
+
+      // Bookings nested collection
+      match /bookings/{bookingId} {
+        allow read: if belongsToVerein(vereinsId);
+        allow create: if belongsToVerein(vereinsId) &&
+                      isValidId(bookingId) &&
+                      isValidBooking(incoming()) &&
+                      incoming().bookedBy == request.auth.uid;
+        allow update: if belongsToVerein(vereinsId) && isValidBooking(incoming()) && (
+                        isClubAdmin(vereinsId) ||
+                        (
+                          existing().bookedBy == request.auth.uid &&
+                          existing().isLocked == false &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['date', 'time', 'court', 'players', 'isLocked', 'hasBallMachine', 'reason']) &&
+                          incoming().isLocked == existing().isLocked &&
+                          incoming().bookedBy == existing().bookedBy
+                        )
+                      );
+        allow delete: if belongsToVerein(vereinsId) && isValidId(bookingId) && (
+                        isClubAdmin(vereinsId) ||
+                        (existing().bookedBy == request.auth.uid && existing().isLocked == false)
+                      );
+      }
+
+      // Legacy /mitglieder nested match for robust compatibility, marked lock-only for new creations
+      match /mitglieder/{mitgliedId} {
+        allow read, write: if isSuperAdmin();
+      }
+
+      // Tournaments nested collection
+      match /tournaments/{tournamentId} {
+        allow read: if belongsToVerein(vereinsId);
+        allow create: if isClubAdmin(vereinsId) && isValidId(tournamentId) && isValidTournament(incoming());
+        allow update: if (isClubAdmin(vereinsId) && isValidTournament(incoming())) ||
+                      (
+                        belongsToVerein(vereinsId) && isValidTournament(incoming()) &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['participants', 'auditLog'])
+                      );
+        allow delete: if isClubAdmin(vereinsId);
+      }
+
+      // Arbeitseinsaetze nested collection
+      match /arbeitseinsaetze/{einsatzId} {
+        allow read: if belongsToVerein(vereinsId);
+        allow create: if belongsToVerein(vereinsId) && isValidId(einsatzId) && isValidArbeitsEinsatz(incoming()) && (
+                        isClubAdmin(vereinsId) || 
+                        (incoming().userId == request.auth.uid && incoming().createdBy == getUserData().username)
+                      );
+        allow update: if belongsToVerein(vereinsId) && isValidArbeitsEinsatz(incoming()) && (
+                        isClubAdmin(vereinsId) || 
+                        (existing().userId == request.auth.uid && incoming().userId == request.auth.uid)
+                      );
+        allow delete: if belongsToVerein(vereinsId) && (
+                        isClubAdmin(vereinsId) || 
+                        existing().userId == request.auth.uid
+                      );
+      }
+
+      // Planned Work Shifts nested collection
+      match /plannedWorkShifts/{shiftId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(shiftId) && isValidPlannedWorkShift(incoming());
+        allow update: if isSignedIn() && isValidPlannedWorkShift(incoming());
+        allow delete: if isSignedIn();
+      }
+
+      // States nested collection
+      match /state/{stateId} {
+        allow read: if true;
+        allow create: if isClubAdmin(vereinsId) || isSignedIn();
+        allow update: if isClubAdmin(vereinsId) || isSignedIn();
+        allow delete: if isClubAdmin(vereinsId);
+      }
+    }
+  }
+}
