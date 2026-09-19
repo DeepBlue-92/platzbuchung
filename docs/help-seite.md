@@ -32,9 +32,13 @@ Für Partnervereine (wie z. B. die **DJK Furth**) steht eine optimierte, öffent
 - **Rangliste:** Die reguläre Vereins-Rangliste ist streng von der Hobbyliga getrennt. Hobbyliga-Filter und der Punkteverlauf erscheinen ausschließlich auf der dedizierten Hobbyliga-Seite.
 
 ### Mitglieder-Onboarding (Begrüßungsfenster)
-Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Mitglieder-Onboarding** festlegen, was Mitglieder beim ersten oder nächsten Einloggen sehen.
+Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Mitglieder-Onboarding** (gestaltet im einheitlichen Design und voller Seitenbreite wie die Mitgliederverwaltung) festlegen, was Mitglieder beim ersten oder nächsten Einloggen sehen.
+- **Volle Seitenbreite & Übersicht:** Die Verwaltungsseite nutzt die gesamte Breite des Bildschirms mit dem gewohnten Header-Karten-Design, Status-Pillen und direkter Vorschau-Möglichkeit.
 - **Hauptschalter (Master Switch):** Bestimmt, ob das Begrüßungsfenster für Mitglieder beim Login überhaupt aufgerufen wird.
 - **Felder anpassen:** Für jedes persönliche Profilfeld (wie Vorname, Nachname, Telefon, Geschlecht, Geburtsdatum, Passwort) kann der Verein einstellen, ob das Feld frei bearbeitbar, nur lesbar oder komplett ausgeblendet sein soll.
+- **Modernes Split-Design:** Auf Laptops und Computern erscheint das Begrüßungsfenster in einem breiten zweigeteilten Layout. Links begrüßt eine sanfte Tennis-Animation zusammen mit dem Willkommenstext das Mitglied. Rechts befinden sich die persönlichen Datenfelder in übersichtlichen Kacheln.
+- **Smartphone-Optimierung:** Auf Mobiltelefonen wird die Animation automatisch ausgeblendet, damit das Display nicht überladen wird und alle Eingabefelder direkt erreichbar sind.
+- **Bestätigen & Hinweis ausblenden:** Am unteren Rand des Formulars befindet sich ein Kontrollkästchen mit der Beschriftung *„Diesen Hinweis nicht mehr anzeigen“* (standardmäßig nicht angehakt). Setzt das Mitglied dort einen Haken und klickt auf *Bestätigen & Weiter*, wird das Begrüßungsfenster bei zukünftigen Anmeldungen nicht mehr angezeigt.
 - **Stapelverarbeitung (Onboarding zurücksetzen):** Mit dem Knopf *Für alle Mitglieder zurücksetzen* können Administratoren mit einem Klick veranlassen, dass alle Mitglieder des Vereins beim nächsten Einloggen erneut durch den Datenabgleich und das Begrüßungsfenster geführt werden.
 - **Erfolgs- und Fehlermeldungen:** Nach dem Speichern oder Zurücksetzen zeigt ein klarer Infobalken direkt an, ob die Aktion erfolgreich war oder ob fehlende Berechtigungen vorliegen.
 

@@ -1,9 +1,7 @@
 {
   "name": "Tennis-Platzreservierung",
   "description": "Ein modernes, interaktives Platzreservierungssystem.",
-  "requestFramePermissions": [
-    "microphone"
-  ],
+  "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

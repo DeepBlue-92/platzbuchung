@@ -830,7 +830,13 @@ export async function saveUser(vereinsId: string, user: User) {
     }
   } else {
     // If editing existing user by ID, verify username isn't stolen from a different account in this tenant
-    if (!snap.empty && snap.docs.some(d => d.id !== docId && (d.data().tenantId === normalizedId || d.data().vereinsId === normalizedId))) {
+    const existingUsername = (existingData.username || existingData.name || '').toLowerCase().replace(/\s/g, '');
+    const isChangingUsername = !!existingUsername && existingUsername !== normalizedUsername;
+    const isConflict = (!existingUsername || isChangingUsername) &&
+      !snap.empty &&
+      snap.docs.some(d => d.id !== docId && (d.data().tenantId === normalizedId || d.data().vereinsId === normalizedId));
+
+    if (isConflict) {
       throw new Error(`Der Benutzername "${user.name}" ist bereits an einen anderen Account vergeben.`);
     }
   }
@@ -958,15 +964,81 @@ export async function saveUser(vereinsId: string, user: User) {
   const safeDoc = sanitizeForFirestore(finalDoc);
 
   await setDoc(doc(db, 'users', docId), safeDoc, { merge: true });
+
+  // If there are duplicate legacy records in Firestore with the exact same username for this tenant,
+  // ensure their onboarding_pending flag is kept in sync to prevent desynchronization
+  if (!snap.empty) {
+    const duplicateDocs = snap.docs.filter(
+      d => d.id !== docId && (d.data().tenantId === normalizedId || d.data().vereinsId === normalizedId)
+    );
+    for (const dup of duplicateDocs) {
+      if ((dup.data().username || dup.data().name || '').toLowerCase().replace(/\s/g, '') === normalizedUsername) {
+        try {
+          await setDoc(doc(db, 'users', dup.id), { onboarding_pending: safeDoc.onboarding_pending }, { merge: true });
+        } catch (e) {
+          console.warn(`Could not sync duplicate user doc ${dup.id}:`, e);
+        }
+      }
+    }
+  }
+}
+
+export async function batchResetMemberOnboarding(vereinsId: string): Promise<number> {
+  const normalizedId = getNormalizedVereinsId(vereinsId);
+  const [tenantSnap, vereinsSnap] = await Promise.all([
+    getDocs(query(collection(db, 'users'), where('tenantId', '==', normalizedId))),
+    getDocs(query(collection(db, 'users'), where('vereinsId', '==', normalizedId))),
+  ]);
+  const docMap = new Map<string, any>();
+  tenantSnap.docs.forEach((d) => docMap.set(d.id, d));
+  vereinsSnap.docs.forEach((d) => docMap.set(d.id, d));
+
+  const promises = Array.from(docMap.values()).map((docSnap) => {
+    const data = docSnap.data();
+    return setDoc(
+      doc(db, 'users', docSnap.id),
+      {
+        id: data.id || docSnap.id,
+        username: data.username || data.name || docSnap.id,
+        name: data.name || data.username || docSnap.id,
+        tenantId: data.tenantId || data.vereinsId || normalizedId,
+        vereinsId: data.vereinsId || data.tenantId || normalizedId,
+        role: data.role || 'mitglied',
+        onboarding_pending: true,
+      },
+      { merge: true }
+    );
+  });
+  await Promise.all(promises);
+  return docMap.size;
 }
 
 export async function resetOnboardingHintsForAllUsers(vereinsId: string) {
   const normalizedId = getNormalizedVereinsId(vereinsId);
-  const q = query(collection(db, 'users'), where('tenantId', '==', normalizedId));
-  const snap = await getDocs(q);
-  const promises = snap.docs.map((docSnap) =>
-    setDoc(doc(db, 'users', docSnap.id), { show_onboarding_hints: true }, { merge: true })
-  );
+  const [tenantSnap, vereinsSnap] = await Promise.all([
+    getDocs(query(collection(db, 'users'), where('tenantId', '==', normalizedId))),
+    getDocs(query(collection(db, 'users'), where('vereinsId', '==', normalizedId))),
+  ]);
+  const docMap = new Map<string, any>();
+  tenantSnap.docs.forEach((d) => docMap.set(d.id, d));
+  vereinsSnap.docs.forEach((d) => docMap.set(d.id, d));
+
+  const promises = Array.from(docMap.values()).map((docSnap) => {
+    const data = docSnap.data();
+    return setDoc(
+      doc(db, 'users', docSnap.id),
+      {
+        id: data.id || docSnap.id,
+        username: data.username || data.name || docSnap.id,
+        name: data.name || data.username || docSnap.id,
+        tenantId: data.tenantId || data.vereinsId || normalizedId,
+        vereinsId: data.vereinsId || data.tenantId || normalizedId,
+        role: data.role || 'mitglied',
+        show_onboarding_hints: true,
+      },
+      { merge: true }
+    );
+  });
   await Promise.all(promises);
 }
 
