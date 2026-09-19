@@ -27,11 +27,14 @@ async function startServer() {
   // Reusable handler for JSON feeds
   const handleFeedRequest = async (req: express.Request, res: express.Response) => {
     try {
-      const type = req.query.type || (req.path.includes("full") || req.path.includes("klarnamen") ? "klarnamen" : "anonymisiert");
+      const requestedType = req.query.type || (req.path.includes("full") || req.path.includes("klarnamen") ? "klarnamen" : "anonymisiert");
       const rawClubId = (req.query.clubId || "sv-neuhausen").toString();
       const normalizedClubId = rawClubId.toLowerCase().replace(/\s/g, "");
 
-      const isAnon = type !== "klarnamen";
+      // Decision Option A: Non-authenticated visitors strictly receive anonymized feed data ("Belegt" / Spieler X)
+      const authHeader = req.headers.authorization;
+      const isAuthenticated = !!(authHeader && authHeader.startsWith("Bearer "));
+      const isAnon = requestedType !== "klarnamen" || !isAuthenticated;
 
       // Check if the feed is enabled in club settings
       const clubRef = doc(db, "vereine", normalizedClubId);
@@ -140,7 +143,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("(.*)", (req, res) => {
+    app.get("*all", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

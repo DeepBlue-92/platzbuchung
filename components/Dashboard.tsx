@@ -8,13 +8,18 @@ import React, {
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { TIME_SLOTS, INITIAL_USERS } from "../constants";
-import { Booking, User, Role } from "../types";
-import { ClubSettings } from "../services/db";
+import { Booking, User, Role, DynamicLeague } from "../types";
+import { ClubSettings, listenToSettings, listenToBookings, listenToClubs, saveBooking } from "../services/db";
+import { getUserClubs, getCanonicalClubId, KNOWN_CLUBS_STAMMDATEN } from "../lib/userUtils";
 import { loginWithUsername } from "../lib/firebase";
 import OnboardingBanner from "./OnboardingBanner";
+import { UserAvatar } from "./UserAvatar";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { createLeagueMatch } from "../services/league";
+import { createLeagueMatch, listenToDynamicLeagues, isLeagueActiveDoc } from "../services/league";
+import { checkPlayerCollisionAsync } from "../services/collisionService";
+import { getWaterfallAssignedLeague, isPlayerEligibleForLeague } from "../utils/playerHelper";
+import { DEFAULT_DYNAMIC_LEAGUES } from "../services/db";
 
 const FIRST_NAMES_DB = [
   "marcandreterstegen",
@@ -239,7 +244,7 @@ const PlayerInput: React.FC<PlayerInputProps> = ({
         onFocus={onFocus}
         onBlur={() => setTimeout(onBlur, 200)}
         placeholder="Spieler suchen..."
-        className="w-full p-2 border-2 border-slate-300 rounded-xl bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 font-bold text-sm transition-all shadow-sm"
+        className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-xl bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 text-sm transition-all shadow-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
       />
       {isActive && value.length > 0 && suggestions.length > 0 && (
         <div className="absolute z-[110] w-full mt-1 bg-white border-2 border-slate-400 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
@@ -297,6 +302,9 @@ interface DashboardProps {
   isPublicWochenplan?: boolean;
   onPublicLoginSuccess?: (u: User) => void;
   onDismissOnboardingHints?: () => void;
+  userClubs?: any[];
+  allClubs?: any[];
+  onSwitchClub?: (clubId: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -316,20 +324,28 @@ const Dashboard: React.FC<DashboardProps> = ({
   isPublicWochenplan = false,
   onPublicLoginSuccess,
   onDismissOnboardingHints,
+  userClubs,
+  allClubs: propAllClubs,
+  onSwitchClub,
 }) => {
+  const [leagueUsers, setLeagueUsers] = useState<User[]>([]);
+
   const formatPlayerName = useCallback((name: string): string => {
     const trimmed = name.trim();
     
-    // Try finding the user by their ID / username in the users list
-    let foundUser = users[trimmed];
+    // Try finding the user by their ID / username in the users list or leagueUsers list
+    let foundUser = users[trimmed] || leagueUsers.find((u) => u.id === trimmed || u.name === trimmed || u.username === trimmed);
     
     if (!foundUser) {
-      // Find user by scanning users values for matching username, klarname, or full name combinations
-      foundUser = (Object.values(users) as User[]).find((u) => {
+      // Find user by scanning users values and leagueUsers for matching username, klarname, or full name combinations
+      const allKnownUsers = [...Object.values(users), ...leagueUsers];
+      foundUser = allKnownUsers.find((u) => {
+        if (!u) return false;
         const full = `${u.firstName || ""} ${u.lastName || ""}`.trim();
         const reverseFull = `${u.lastName || ""}, ${u.firstName || ""}`.trim().replace(/^, |,$/, "");
         return (
-          u.name.toLowerCase() === trimmed.toLowerCase() ||
+          (u.name && u.name.toLowerCase() === trimmed.toLowerCase()) ||
+          (u.username && u.username.toLowerCase() === trimmed.toLowerCase()) ||
           (u.klarname && u.klarname.toLowerCase() === trimmed.toLowerCase()) ||
           (full && full.toLowerCase() === trimmed.toLowerCase()) ||
           (reverseFull && reverseFull.toLowerCase() === trimmed.toLowerCase())
@@ -369,21 +385,24 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
 
     return trimmed;
-  }, [users]);
+  }, [users, leagueUsers]);
 
   const formatPlayerNameCompact = useCallback((name: string): string => {
     const trimmed = name.trim();
     
-    // Try finding the user by their ID / username in the users list
-    let foundUser = users[trimmed];
+    // Try finding the user by their ID / username in the users list or leagueUsers list
+    let foundUser = users[trimmed] || leagueUsers.find((u) => u.id === trimmed || u.name === trimmed || u.username === trimmed);
     
     if (!foundUser) {
-      // Find user by scanning users values for matching username, klarname, or full name combinations
-      foundUser = (Object.values(users) as User[]).find((u) => {
+      // Find user by scanning users values and leagueUsers for matching username, klarname, or full name combinations
+      const allKnownUsers = [...Object.values(users), ...leagueUsers];
+      foundUser = allKnownUsers.find((u) => {
+        if (!u) return false;
         const full = `${u.firstName || ""} ${u.lastName || ""}`.trim();
         const reverseFull = `${u.lastName || ""}, ${u.firstName || ""}`.trim().replace(/^, |,$/, "");
         return (
-          u.name.toLowerCase() === trimmed.toLowerCase() ||
+          (u.name && u.name.toLowerCase() === trimmed.toLowerCase()) ||
+          (u.username && u.username.toLowerCase() === trimmed.toLowerCase()) ||
           (u.klarname && u.klarname.toLowerCase() === trimmed.toLowerCase()) ||
           (full && full.toLowerCase() === trimmed.toLowerCase()) ||
           (reverseFull && reverseFull.toLowerCase() === trimmed.toLowerCase())
@@ -715,12 +734,363 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [bookingTab, setBookingTab] = useState<"normal" | "league">("normal");
   const [leagueOpponentQuery, setLeagueOpponentQuery] = useState("");
   const [leagueOpponent, setLeagueOpponent] = useState<string | null>(null);
-  const [leagueUsers, setLeagueUsers] = useState<User[]>([]);
   const [showLeagueSuggestions, setShowLeagueSuggestions] = useState(false);
+
+  // Resolved opponent user object for avatar & details
+  const selectedOpponentUser = useMemo(() => {
+    if (!leagueOpponent) return null;
+    const inLeague = leagueUsers.find(
+      (u) => u.id === leagueOpponent || u.name === leagueOpponent || resolvePlayerDisplayName(u) === leagueOpponent
+    );
+    if (inLeague) return inLeague;
+    if (users && users[leagueOpponent]) return users[leagueOpponent];
+    if (users) {
+      const inUsers = Object.values(users).find(
+        (u) => u.id === leagueOpponent || u.name === leagueOpponent || resolvePlayerDisplayName(u) === leagueOpponent
+      );
+      if (inUsers) return inUsers;
+    }
+    return null;
+  }, [leagueOpponent, leagueUsers, users]);
 
   const isLeagueEnabledInClub = settings?.modules?.league === true;
   const hasHobbyLeagueOptIn = currentUser?.hobbyLeagueOptIn === true || (currentUser?.hobbyLeagueOptIn as any) === "true";
   const canBookHobbyLeague = isLeagueEnabledInClub && hasHobbyLeagueOptIn;
+
+  // Multi-facility state for booking slider
+  const [selectedFacilityClubId, setSelectedFacilityClubId] = useState<string>(settings?.vereinsId || 'sv-neuhausen');
+  const [currentFacilitySettings, setCurrentFacilitySettings] = useState<ClubSettings | undefined>(settings);
+  const [currentFacilityBookings, setCurrentFacilityBookings] = useState<Booking[]>(bookings);
+  const [systemClubs, setSystemClubs] = useState<any[]>([]);
+
+  const [isLockMode, setIsLockMode] = useState(false);
+  const [reason, setReason] = useState("Training");
+  const [additionalPlayers, setAdditionalPlayers] = useState<string[]>([]);
+  const [playerQuery, setPlayerQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [comment, setComment] = useState("");
+  const [hasBallMachine, setHasBallMachine] = useState(false);
+  const [guestCount, setGuestCount] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
+  const [modalStartTime, setModalStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [isFullDay, setIsFullDay] = useState(false);
+  const [hoveredTime, setHoveredTime] = useState<string | null>(null);
+
+  const [selectedCourtInModal, setSelectedCourtInModal] = useState<string>('');
+
+  const handleSwitchFacility = (newClubId: string) => {
+    setSelectedFacilityClubId(newClubId);
+  };
+
+  // Load system clubs
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('v2_clubs_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSystemClubs(parsed);
+        }
+      }
+    } catch {}
+
+    const unsub = listenToClubs((clubs) => {
+      if (clubs && clubs.length > 0) {
+        setSystemClubs(clubs);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Available clubs list - comprehensive list of all participating league/system clubs
+  const availableClubsList = useMemo(() => {
+    const map = new Map<string, any>();
+    const sourceClubs: any[] = [];
+
+    const userClubList = userClubs && userClubs.length > 0 
+      ? userClubs 
+      : getUserClubs(currentUser, systemClubs);
+
+    if (Array.isArray(userClubList)) sourceClubs.push(...userClubList);
+    if (Array.isArray(systemClubs)) sourceClubs.push(...systemClubs);
+
+    // Seed with known clubs master data
+    Object.entries(KNOWN_CLUBS_STAMMDATEN).forEach(([kId, meta]) => {
+      sourceClubs.push({
+        id: kId,
+        vereinsId: kId,
+        clubName: meta.clubName,
+        name: meta.clubName,
+        city: meta.city,
+        street: meta.street,
+        zip: meta.zip,
+        logoUrl: meta.logoUrl,
+      });
+    });
+
+    sourceClubs.forEach((c) => {
+      const id = c.vereinsId || c.id;
+      if (id) {
+        const canonicalKey = getCanonicalClubId(id);
+        if (canonicalKey && !['super-admin', 'system'].includes(canonicalKey)) {
+          if (map.has(canonicalKey)) {
+            const existing = map.get(canonicalKey);
+            map.set(canonicalKey, {
+              ...existing,
+              street: existing.street || c.street,
+              zip: existing.zip || c.zip,
+              city: existing.city || c.city,
+              facilityPhotoUrl: existing.facilityPhotoUrl || c.facilityPhotoUrl,
+            });
+            return;
+          }
+
+          const matchedSystemClub = (systemClubs || []).find((sc) => {
+            const scId = getCanonicalClubId(sc.vereinsId || sc.id || '');
+            return scId === canonicalKey;
+          });
+          const knownMeta = KNOWN_CLUBS_STAMMDATEN[canonicalKey];
+
+          let cleanClubName = matchedSystemClub?.clubName || matchedSystemClub?.vereinsName || matchedSystemClub?.name;
+          if (!cleanClubName && knownMeta?.clubName) {
+            cleanClubName = knownMeta.clubName;
+          }
+          if (!cleanClubName) {
+            const raw = c.clubName || c.name;
+            if (raw && typeof raw === 'string') {
+              const trimmed = raw.trim();
+              const lower = trimmed.toLowerCase();
+              const isInvalid = ['api', 'system', 'super-admin', 'default', 'null', 'undefined', 'verein', 'tennis-club', 'tennis club', 'tennisclub'].includes(lower) || lower === canonicalKey;
+              if (!isInvalid) {
+                cleanClubName = trimmed;
+              }
+            }
+          }
+          if (!cleanClubName) {
+            if (canonicalKey.includes('neuhausen')) cleanClubName = 'SV Neuhausen';
+            else if (canonicalKey.includes('furth')) cleanClubName = 'DJK Furth';
+            else if (canonicalKey.includes('sportsgeist')) cleanClubName = 'TC Sportsgeist';
+            else cleanClubName = String(id);
+          }
+
+          const resolvedLogo = 
+            matchedSystemClub?.customLogoUrl || 
+            matchedSystemClub?.logoUrl || 
+            matchedSystemClub?.customHeaderLogoUrl || 
+            matchedSystemClub?.headerLogoUrl || 
+            c.logoUrl || 
+            knownMeta?.logoUrl;
+
+          map.set(canonicalKey, {
+            ...c,
+            id: canonicalKey,
+            vereinsId: canonicalKey,
+            clubName: cleanClubName,
+            name: cleanClubName,
+            logoUrl: resolvedLogo,
+            facilityPhotoUrl: matchedSystemClub?.facilityPhotoUrl || c.facilityPhotoUrl,
+            street: matchedSystemClub?.street || c.street || knownMeta?.street,
+            zip: matchedSystemClub?.zip || c.zip || knownMeta?.zip,
+            city: matchedSystemClub?.city || c.city || knownMeta?.city,
+          });
+        }
+      }
+    });
+
+    const currentCanonical = getCanonicalClubId(settings?.vereinsId || 'sv-neuhausen');
+    if (map.size === 0 && currentCanonical && !['super-admin', 'system'].includes(currentCanonical)) {
+      const known = KNOWN_CLUBS_STAMMDATEN[currentCanonical];
+      map.set(currentCanonical, {
+        id: currentCanonical,
+        vereinsId: currentCanonical,
+        clubName: settings?.clubName || known?.clubName || 'SV Neuhausen',
+        name: settings?.clubName || known?.clubName || 'SV Neuhausen',
+        logoUrl: settings?.logoUrl || settings?.headerLogoUrl || known?.logoUrl,
+      });
+    }
+
+    return Array.from(map.values());
+  }, [userClubs, currentUser, systemClubs, settings?.vereinsId, settings?.clubName, settings?.headerLogoUrl, settings?.logoUrl]);
+
+  const currentFacilitySelectValue = useMemo(() => {
+    const norm = getCanonicalClubId(selectedFacilityClubId);
+    const match = availableClubsList.find((c) => getCanonicalClubId(c.vereinsId || c.id) === norm);
+    return match ? (match.vereinsId || match.id) : selectedFacilityClubId;
+  }, [availableClubsList, selectedFacilityClubId]);
+
+  // Sync selected club when modal opens or settings change
+  useEffect(() => {
+    if (isModalOpen) {
+      setSelectedFacilityClubId(settings?.vereinsId || 'sv-neuhausen');
+    }
+  }, [isModalOpen, settings?.vereinsId]);
+
+  // Listen to settings and bookings for the selected facility
+  useEffect(() => {
+    if (!selectedFacilityClubId) return;
+
+    const currentNorm = String(settings?.vereinsId || 'sv-neuhausen').toLowerCase().replace(/\s/g, '');
+    const selNorm = String(selectedFacilityClubId).toLowerCase().replace(/\s/g, '');
+
+    if (selNorm === currentNorm) {
+      setCurrentFacilitySettings(settings);
+      setCurrentFacilityBookings(bookings);
+      return;
+    }
+
+    const unsubSettings = listenToSettings(selectedFacilityClubId, (s) => {
+      setCurrentFacilitySettings(s);
+    });
+
+    const unsubBookings = listenToBookings(selectedFacilityClubId, (b) => {
+      setCurrentFacilityBookings(b || []);
+    });
+
+    return () => {
+      unsubSettings();
+      unsubBookings();
+    };
+  }, [selectedFacilityClubId, settings, bookings]);
+
+  const activeClubObj = useMemo(() => {
+    const norm = getCanonicalClubId(selectedFacilityClubId);
+    return (
+      availableClubsList.find((c) => getCanonicalClubId(c.vereinsId || c.id) === norm) || null
+    );
+  }, [availableClubsList, selectedFacilityClubId]);
+
+  const venueClubName =
+    currentFacilitySettings?.clubName ||
+    activeClubObj?.clubName ||
+    activeClubObj?.vereinsName ||
+    KNOWN_CLUBS_STAMMDATEN[getCanonicalClubId(selectedFacilityClubId)]?.clubName ||
+    settings?.clubName ||
+    'Tennisverein';
+
+  const venueStreet =
+    currentFacilitySettings?.street ||
+    activeClubObj?.street ||
+    settings?.street ||
+    (venueClubName?.toLowerCase().includes('neuhausen') ? 'Sportweg 4' : '');
+  const venueZip =
+    currentFacilitySettings?.zip ||
+    activeClubObj?.zip ||
+    settings?.zip ||
+    (venueClubName?.toLowerCase().includes('neuhausen') ? '84030' : '');
+  const venueCity =
+    currentFacilitySettings?.city ||
+    activeClubObj?.city ||
+    settings?.city ||
+    (venueClubName?.toLowerCase().includes('neuhausen') ? 'Ergolding' : '');
+
+  const fullAddress = [venueStreet, [venueZip, venueCity].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const displayAddress = fullAddress || ((settings?.street && settings?.city) ? `${settings.street}, ${settings.zip || ''} ${settings.city}` : "Keine Adresse hinterlegt");
+
+  const venuePhoto =
+    currentFacilitySettings?.facilityPhotoUrl ||
+    currentFacilitySettings?.customFacilityPhotoUrl ||
+    currentFacilitySettings?.headerLogoUrl ||
+    currentFacilitySettings?.customLogoUrl ||
+    currentFacilitySettings?.logoUrl ||
+    settings?.facilityPhotoUrl ||
+    settings?.customFacilityPhotoUrl ||
+    settings?.headerLogoUrl ||
+    settings?.customLogoUrl ||
+    settings?.logoUrl ||
+    activeClubObj?.facilityPhotoUrl ||
+    activeClubObj?.customFacilityPhotoUrl ||
+    activeClubObj?.logoUrl ||
+    'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?q=80&w=800&auto=format&fit=crop';
+
+  const mapsQuery = encodeURIComponent(`${venueClubName}, ${displayAddress}`);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+
+  // Calculate court availability for the currently selected facility and time window
+  const currentModalCourtOptions = useMemo(() => {
+    const courtsList =
+      currentFacilitySettings?.courts && currentFacilitySettings.courts.length > 0
+        ? currentFacilitySettings.courts
+        : courts && courts.length > 0
+        ? courts
+        : ['Platz 1', 'Platz 2', 'Platz 3', 'Platz 4'];
+
+    if (!selectedSlot?.date) {
+      return courtsList.map((c: string) => ({ name: c, isAvailable: true }));
+    }
+
+    const startIdx = TIME_SLOTS.indexOf(modalStartTime);
+    const endIdx = TIME_SLOTS.indexOf(endTime);
+    if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+      return courtsList.map((c: string) => ({ name: c, isAvailable: true }));
+    }
+
+    const slotsToCheck = TIME_SLOTS.slice(startIdx, endIdx);
+
+    return courtsList.map((courtName: string) => {
+      const isOccupied = slotsToCheck.some((t: string) => {
+        // 1. Check existing bookings (excluding current editing booking)
+        const hasBooking = currentFacilityBookings.some(
+          (b) =>
+            b.id !== selectedSlot.editingId &&
+            b.date === selectedSlot.date &&
+            b.court === courtName &&
+            b.time === t,
+        );
+        if (hasBooking) return true;
+
+        // 2. Check Range Locks
+        const rangeLocks = currentFacilitySettings?.rangeLocks || [];
+        const inRangeLock = rangeLocks.some((l: any) => {
+          if (!l.courts || !l.courts.includes(courtName)) return false;
+          if (selectedSlot.date < l.startDate || selectedSlot.date > l.endDate) return false;
+          const sTime = l.startTime || '00:00';
+          const eTime = l.endTime || '24:00';
+          if (selectedSlot.date === l.startDate && t < sTime) return false;
+          if (selectedSlot.date === l.endDate && t >= eTime) return false;
+          return true;
+        });
+        if (inRangeLock) return true;
+
+        // 3. Check Recurring Locks
+        const recurringLocks = currentFacilitySettings?.recurringLocks || [];
+        const inRecurringLock = recurringLocks.some((l: any) => {
+          const d = new Date(selectedSlot.date);
+          if (d.getDay() !== l.dayOfWeek) return false;
+          if (!l.courts || !l.courts.includes(courtName)) return false;
+          if (t < l.startTime || t >= l.endTime) return false;
+          if (!l.isOngoing) {
+            if (l.startDate && selectedSlot.date < l.startDate) return false;
+            if (l.endDate && selectedSlot.date > l.endDate) return false;
+          }
+          return true;
+        });
+        if (inRecurringLock) return true;
+
+        return false;
+      });
+
+      return {
+        name: courtName,
+        isAvailable: !isOccupied,
+      };
+    });
+  }, [currentFacilitySettings, currentFacilityBookings, courts, selectedSlot?.date, selectedSlot?.editingId, modalStartTime, endTime]);
+
+  // Automatically select the first available court if currently selected court is occupied or unset
+  useEffect(() => {
+    if (!isModalOpen || currentModalCourtOptions.length === 0) return;
+    const currentValid = currentModalCourtOptions.find((c) => c.name === selectedCourtInModal);
+    if (!currentValid || !currentValid.isAvailable) {
+      const firstFree = currentModalCourtOptions.find((c) => c.isAvailable);
+      if (firstFree) {
+        setSelectedCourtInModal(firstFree.name);
+      } else if (currentModalCourtOptions[0]) {
+        setSelectedCourtInModal(currentModalCourtOptions[0].name);
+      }
+    }
+  }, [isModalOpen, currentModalCourtOptions, selectedCourtInModal]);
+
 
   useEffect(() => {
     if (isModalOpen) {
@@ -735,35 +1105,146 @@ const Dashboard: React.FC<DashboardProps> = ({
     const fetchLeagueUsers = async () => {
       if (!isLeagueEnabledInClub) return;
       try {
-
-        const q = query(
-          collection(db, "users"),
-          where("hobbyLeagueOptIn", "==", true)
-        );
-        const snap = await getDocs(q);
+        // Query all registered users across all clubs and tenants without restriction
+        const snap = await getDocs(collection(db, "users"));
         if (!active) return;
-        const users = snap.docs.map((d) => d.data() as User).filter(u => u.isSuspended !== true);
-        setLeagueUsers(users);
+        
+        const map = new Map<string, User>();
+        
+        snap.docs.forEach((d) => {
+          const data = d.data() as any;
+          const id = d.id;
+          const username = data.username || data.name || id;
+          const u: User = {
+            id,
+            name: username,
+            username: data.username || username,
+            firstName: data.firstName || data.vorname || "",
+            lastName: data.lastName || data.nachname || "",
+            klarname: data.klarname || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : (data.vorname && data.nachname ? `${data.vorname} ${data.nachname}` : "")),
+            displayName: data.displayName || data.klarname || "",
+            email: data.email,
+            role: data.role,
+            gender: data.gender || data.geschlecht,
+            birthYear: data.birthYear || data.geburtsjahr,
+            birthDate: data.birthDate || data.geburtsdatum,
+            leagueId: data.leagueId,
+            vereinsId: data.tenantId || data.vereinsId,
+            isSuspended: data.isSuspended,
+            hobbyLeagueOptIn: data.hobbyLeagueOptIn,
+            clubs: data.clubs,
+            ...data,
+          };
+          if (u.isSuspended !== true) {
+            map.set(id, u);
+          }
+        });
+
+        // Also merge any local users from props if present
+        if (users) {
+          Object.values(users).forEach((u) => {
+            if (u && u.id && !map.has(u.id) && u.isSuspended !== true) {
+              map.set(u.id, u);
+            }
+          });
+        }
+
+        setLeagueUsers(Array.from(map.values()));
       } catch (e) {
         console.error("Error fetching league users:", e);
+        if (active && users) {
+          setLeagueUsers(Object.values(users).filter((u) => u && u.isSuspended !== true));
+        }
       }
     };
     fetchLeagueUsers();
     return () => { active = false; };
-  }, [isLeagueEnabledInClub]);
+  }, [isLeagueEnabledInClub, users]);
 
-  const getFilteredLeagueUsers = (queryStr: string) => {
-    if (!queryStr) return [];
-    const lowerQ = queryStr.toLowerCase();
+  // Dynamic Leagues Configuration from DB/Firestore & settings fallback
+  const [dynamicLeagues, setDynamicLeagues] = useState<DynamicLeague[]>(() => {
+    if (settings?.leagueSettings?.leagues && settings.leagueSettings.leagues.length > 0) {
+      return settings.leagueSettings.leagues;
+    }
+    return DEFAULT_DYNAMIC_LEAGUES;
+  });
+
+  useEffect(() => {
+    const unsub = listenToDynamicLeagues((leagues) => {
+      if (leagues && leagues.length > 0) {
+        setDynamicLeagues(leagues);
+      } else if (settings?.leagueSettings?.leagues && settings.leagueSettings.leagues.length > 0) {
+        setDynamicLeagues(settings.leagueSettings.leagues);
+      } else {
+        setDynamicLeagues(DEFAULT_DYNAMIC_LEAGUES);
+      }
+    });
+    return () => unsub();
+  }, [settings]);
+
+  const activeLeagues = useMemo(() => {
+    const active = dynamicLeagues.filter((l) => isLeagueActiveDoc(l));
+    return active.length > 0 ? active : dynamicLeagues;
+  }, [dynamicLeagues]);
+
+  const userLeagueObj = useMemo(() => {
+    if (!currentUser) return undefined;
+    if (currentUser.leagueId) {
+      const direct = activeLeagues.find((l) => l.id === currentUser.leagueId);
+      if (direct) return direct;
+    }
+    const userLeague = getWaterfallAssignedLeague(currentUser, activeLeagues);
+    if (userLeague) return userLeague;
+    const defaultLId = currentUser?.leagueId || "open_mixed";
+    return activeLeagues.find((l) => l.id === defaultLId) || activeLeagues[0];
+  }, [currentUser, activeLeagues]);
+
+  const getFilteredLeagueUsers = (queryStr: string): User[] => {
+    const lowerQ = queryStr ? queryStr.toLowerCase().trim() : "";
+    const activeLId = userLeagueObj?.id || "open_mixed";
+    
     return leagueUsers
       .filter((u) => {
-        if (u.id === currentUser?.id || u.name === currentUser?.name) return false;
-        const fn = u.firstName?.toLowerCase() || "";
-        const ln = u.lastName?.toLowerCase() || "";
-        const kn = u.klarname?.toLowerCase() || "";
-        return fn.includes(lowerQ) || ln.includes(lowerQ) || kn.includes(lowerQ);
-      })
-      .map((u) => u.name || u.id); // returning the identifiers used
+        if (!u) return false;
+
+        // Exclude current logged in user
+        const isCurrentUser =
+          u.id === currentUser?.id ||
+          (u.name && currentUser?.name && u.name.toLowerCase() === currentUser.name.toLowerCase()) ||
+          (u.username && currentUser?.username && u.username.toLowerCase() === currentUser.username.toLowerCase()) ||
+          ((u as any).personId && (currentUser as any)?.personId && (u as any).personId === (currentUser as any).personId);
+        if (isCurrentUser) return false;
+        
+        // Check eligibility for current league
+        if (userLeagueObj) {
+          const eligible = isPlayerEligibleForLeague(u, userLeagueObj, activeLId, u.leagueId, activeLeagues);
+          if (!eligible) return false;
+        }
+
+        if (!lowerQ) return true;
+
+        const fn = (u.firstName || (u as any).vorname || "").toLowerCase();
+        const ln = (u.lastName || (u as any).nachname || "").toLowerCase();
+        const kn = (u.klarname || "").toLowerCase();
+        const dn = ((u as any).displayName || "").toLowerCase();
+        const un = (u.name || u.username || "").toLowerCase();
+        const full1 = `${fn} ${ln}`.trim();
+        const full2 = `${ln} ${fn}`.trim();
+        const full3 = `${ln}, ${fn}`.trim();
+        const resolved = resolvePlayerDisplayName(u).toLowerCase();
+
+        return (
+          fn.includes(lowerQ) ||
+          ln.includes(lowerQ) ||
+          kn.includes(lowerQ) ||
+          dn.includes(lowerQ) ||
+          un.includes(lowerQ) ||
+          full1.includes(lowerQ) ||
+          full2.includes(lowerQ) ||
+          full3.includes(lowerQ) ||
+          resolved.includes(lowerQ)
+        );
+      });
   };
 
   const [inlineUsername, setInlineUsername] = useState("");
@@ -934,24 +1415,62 @@ const Dashboard: React.FC<DashboardProps> = ({
     return days;
   }, [currentCalendarMonth]);
 
-  const [isLockMode, setIsLockMode] = useState(false);
-  const [reason, setReason] = useState("Training");
-  const [additionalPlayers, setAdditionalPlayers] = useState<string[]>([]);
-  const [playerQuery, setPlayerQuery] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [comment, setComment] = useState("");
-  const [hasBallMachine, setHasBallMachine] = useState(false);
-  const [guestCount, setGuestCount] = useState<number>(0);
-  const [error, setError] = useState<string | null>(null);
-  const [modalStartTime, setModalStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [isFullDay, setIsFullDay] = useState(false);
-  const [hoveredTime, setHoveredTime] = useState<string | null>(null);
+  const getDurationInHours = useCallback((start: string, end: string): number => {
+    if (!start || !end) return 0;
+    const [h1, m1] = start.split(":").map(Number);
+    const [h2, m2] = end.split(":").map(Number);
+    if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return 0;
+    return (h2 * 60 + m2 - (h1 * 60 + m1)) / 60;
+  }, []);
+
+  const leagueEndTimeOptions = useMemo(() => {
+    if (!modalStartTime) return [];
+    const startIdx = TIME_SLOTS.indexOf(modalStartTime);
+    if (startIdx === -1) return [];
+
+    let closingIdx = TIME_SLOTS.length - 1;
+    if (selectedSlot?.date && reservationRules?.openingHours) {
+      const weekday = new Date(selectedSlot.date).getDay();
+      const dayRule = reservationRules.openingHours[String(weekday)];
+      if (dayRule && dayRule.end && !dayRule.closed) {
+        const idx = TIME_SLOTS.indexOf(dayRule.end);
+        if (idx !== -1) closingIdx = idx;
+      }
+    }
+
+    const validSlots = TIME_SLOTS.slice(startIdx + 1, closingIdx + 1).filter((t) => {
+      const dur = getDurationInHours(modalStartTime, t);
+      return dur >= 2 && dur <= 3;
+    });
+
+    if (validSlots.length > 0) {
+      return validSlots;
+    }
+    return TIME_SLOTS.slice(startIdx + 1, closingIdx + 1);
+  }, [modalStartTime, getDurationInHours, selectedSlot?.date, reservationRules?.openingHours]);
+
+  const currentLeagueDuration = useMemo(() => {
+    return getDurationInHours(modalStartTime, endTime);
+  }, [modalStartTime, endTime, getDurationInHours]);
+
+  useEffect(() => {
+    if (bookingTab === "league" && modalStartTime) {
+      const currentDur = getDurationInHours(modalStartTime, endTime);
+      // If current duration is not within 2 to 3 hours, default to exactly 2 hours
+      if (currentDur < 2 || currentDur > 3) {
+        const startIdx = TIME_SLOTS.indexOf(modalStartTime);
+        if (startIdx >= 0) {
+          const defaultEndIdx = Math.min(TIME_SLOTS.length - 1, startIdx + 2);
+          setEndTime(TIME_SLOTS[defaultEndIdx]);
+        }
+      }
+    }
+  }, [bookingTab, modalStartTime, endTime, getDurationInHours]);
 
   const bookingOptions = [];
   bookingOptions.push({ id: "normal", label: "Freies Spiel" });
   if (isLeagueEnabledInClub) {
-    bookingOptions.push({ id: "league", label: "Hobbyliga" });
+    bookingOptions.push({ id: "league", label: userLeagueObj?.name || "Ligaspiel" });
   }
   if (currentUser?.role === Role.ADMIN) {
     bookingOptions.push({ id: "lock", label: "Platz sperren" });
@@ -982,10 +1501,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     return TIME_SLOTS.slice(0, maxEndIdx);
   }, [reservationRules?.openingHours, isMobile]);
 
-  // Fixed total height for the calendar grid on desktop (532px)
-  const DESKTOP_GRID_HEIGHT = 532;
-  const gridHeight = isMobile ? `${startTimes.length * 38}px` : `${DESKTOP_GRID_HEIGHT}px`;
-  const slotHeight = isMobile ? "38px" : `${DESKTOP_GRID_HEIGHT / startTimes.length}px`;
+  const gridHeight = isMobile ? `${startTimes.length * 38}px` : `max(480px, calc(100dvh - 270px))`;
+  const slotHeight = isMobile ? "38px" : `${100 / startTimes.length}%`;
 
   const todayStr = useMemo(() => {
     const today = new Date();
@@ -1638,6 +2155,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
 
     setSelectedSlot({ date, court, editingId: activeBooking?.id });
+    setSelectedCourtInModal(court);
     setModalStartTime(blockStartTime);
     setPlayerQuery("");
     setShowSuggestions(false);
@@ -1670,6 +2188,11 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const confirmAction = async () => {
     if (!selectedSlot) return;
+    const courtToBook = selectedCourtInModal || selectedSlot.court || "Platz 1";
+    const currentNorm = String(settings?.vereinsId || 'sv-neuhausen').toLowerCase().replace(/\s/g, '');
+    const selNorm = String(selectedFacilityClubId).toLowerCase().replace(/\s/g, '');
+    const isCurrentClub = selNorm === currentNorm;
+
     if (isLockMode) {
       const start = isFullDay ? TIME_SLOTS[0] : modalStartTime;
       const end = isFullDay ? TIME_SLOTS[TIME_SLOTS.length - 1] : endTime;
@@ -1678,7 +2201,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         selectedSlot.date,
         start,
         end,
-        selectedSlot.court,
+        courtToBook,
         reason,
         false,
         undefined,
@@ -1703,20 +2226,60 @@ const Dashboard: React.FC<DashboardProps> = ({
         (p) => typeof p === "string" && p.trim() !== "",
       );
       try {
-        const result = await onBook(
-          selectedSlot.date,
-          modalStartTime,
-          endTime,
-          selectedSlot.court,
-          players,
-          hasBallMachine,
-          guestCount,
-          selectedSlot.editingId,
-          comment,
-        );
-        if (result) {
-          setError(result);
+        // Player-level collision detection across all clubs & facilities
+        const playerCollision = await checkPlayerCollisionAsync({
+          date: selectedSlot.date,
+          startTime: modalStartTime,
+          endTime: endTime,
+          players: [currentUser, ...players],
+          editingBookingId: selectedSlot.editingId,
+          currentClubId: selectedFacilityClubId || settings?.vereinsId,
+          currentClubBookings: bookings,
+          knownClubIds: (availableClubsList || []).map((c: any) => c.vereinsId || c.id).filter(Boolean),
+        });
+
+        if (playerCollision) {
+          setError(playerCollision.errorMessage);
           return;
+        }
+
+        if (isCurrentClub) {
+          const result = await onBook(
+            selectedSlot.date,
+            modalStartTime,
+            endTime,
+            courtToBook,
+            players,
+            hasBallMachine,
+            guestCount,
+            selectedSlot.editingId,
+            comment,
+          );
+          if (result) {
+            setError(result);
+            return;
+          }
+        } else {
+          // Multi-facility booking
+          const startIndex = TIME_SLOTS.indexOf(modalStartTime);
+          const endIndex = TIME_SLOTS.indexOf(endTime);
+          const slotsToBook = TIME_SLOTS.slice(startIndex, endIndex);
+
+          for (const t of slotsToBook) {
+            const bookingData: Booking = {
+              id: `slot_${selectedSlot.date}_${t.replace(':', '-')}_${courtToBook.replace(/\s+/g, '_')}`,
+              date: selectedSlot.date,
+              time: t,
+              court: courtToBook,
+              players,
+              userId: currentUser?.id || 'guest',
+              comment: comment || '',
+              hasBallMachine: hasBallMachine || false,
+              guestCount: guestCount || 0,
+              createdAt: new Date().toISOString(),
+            };
+            await saveBooking(selectedFacilityClubId, bookingData);
+          }
         }
       } catch (err: any) {
         setError(
@@ -1734,34 +2297,97 @@ const Dashboard: React.FC<DashboardProps> = ({
       return;
     }
 
+    const duration = getDurationInHours(modalStartTime, endTime);
+    if (duration < 2) {
+      setError(`Hobbyliga-Matches müssen eine Mindestspieldauer von 2 Stunden haben (aktuell: ${duration.toFixed(duration % 1 === 0 ? 0 : 1)} Std.).`);
+      return;
+    }
+    if (duration > 3) {
+      setError(`Hobbyliga-Matches dürfen maximal 3 Stunden dauern (aktuell: ${duration.toFixed(duration % 1 === 0 ? 0 : 1)} Std.).`);
+      return;
+    }
+
+    const courtToBook = selectedCourtInModal || selectedSlot.court || "Platz 1";
+    const currentNorm = String(settings?.vereinsId || 'sv-neuhausen').toLowerCase().replace(/\s/g, '');
+    const selNorm = String(selectedFacilityClubId).toLowerCase().replace(/\s/g, '');
+    const isCurrentClub = selNorm === currentNorm;
+
     const myName = spieler1Name || currentUser?.name || currentUser?.id || "Ich";
     const players = [myName, leagueOpponent].filter(
       (p) => typeof p === "string" && p.trim() !== "",
     );
 
     try {
-      const result = await onBook(
-        selectedSlot.date,
-        modalStartTime,
-        endTime,
-        selectedSlot.court,
-        players,
-        false, // hasBallMachine
-        0,     // guestCount
-        selectedSlot.editingId,
-        comment ? `[Hobbyliga] ${comment}` : "[Hobbyliga]"
-      );
-      if (result) {
-        setError(result);
+      // Player-level collision detection across all clubs & facilities
+      const playerCollision = await checkPlayerCollisionAsync({
+        date: selectedSlot.date,
+        startTime: modalStartTime,
+        endTime: endTime,
+        players: [
+          currentUser,
+          ...(leagueOpponentId ? [{ id: leagueOpponentId, name: leagueOpponent }] : [leagueOpponent]),
+        ],
+        editingBookingId: selectedSlot.editingId,
+        currentClubId: selectedFacilityClubId || settings?.vereinsId,
+        currentClubBookings: bookings,
+        knownClubIds: (availableClubsList || []).map((c: any) => c.vereinsId || c.id).filter(Boolean),
+      });
+
+      if (playerCollision) {
+        setError(playerCollision.errorMessage);
         return;
+      }
+
+      if (isCurrentClub) {
+        const result = await onBook(
+          selectedSlot.date,
+          modalStartTime,
+          endTime,
+          courtToBook,
+          players,
+          false, // hasBallMachine
+          0,     // guestCount
+          selectedSlot.editingId,
+          comment ? `[Ligaspiel] ${comment}` : "[Ligaspiel]"
+        );
+        if (result) {
+          setError(result);
+          return;
+        }
+      } else {
+        // Multi-facility booking
+        const startIndex = TIME_SLOTS.indexOf(modalStartTime);
+        const endIndex = TIME_SLOTS.indexOf(endTime);
+        const slotsToBook = TIME_SLOTS.slice(startIndex, endIndex);
+
+        for (const t of slotsToBook) {
+          const bookingData: Booking = {
+            id: `slot_${selectedSlot.date}_${t.replace(':', '-')}_${courtToBook.replace(/\s+/g, '_')}`,
+            date: selectedSlot.date,
+            time: t,
+            court: courtToBook,
+            players,
+            userId: currentUser?.id || 'guest',
+            comment: comment ? `[Ligaspiel] ${comment}` : "[Ligaspiel]",
+            hasBallMachine: false,
+            guestCount: 0,
+            createdAt: new Date().toISOString(),
+          };
+          await saveBooking(selectedFacilityClubId, bookingData);
+        }
       }
 
       // Record in league_matches if it's a new booking
       if (!selectedSlot.editingId && currentUser) {
         try {
-
+          const matchClubId = selectedFacilityClubId || (currentUser as any).tenantId || (settings as any)?.vereinsId || "unknown";
+          const matchClubName = venueClubName || settings?.clubName || "Vereinsanlage";
           await createLeagueMatch({
-            clubId: (currentUser as any).tenantId || "unknown",
+            clubId: matchClubId,
+            clubName: matchClubName,
+            facilityName: matchClubName,
+            court: courtToBook,
+            leagueId: userLeagueObj?.id || (currentUser as any)?.leagueId || "open_mixed",
             player1Id: currentUser.id,
             player2Id: leagueOpponent,
             player1UserId: currentUser.id,
@@ -1769,7 +2395,9 @@ const Dashboard: React.FC<DashboardProps> = ({
             status: "scheduled",
             scheduledDate: selectedSlot.date,
             scheduledStartTime: modalStartTime,
+            scheduledEndTime: endTime,
           });
+          window.dispatchEvent(new CustomEvent("league-result-added"));
         } catch (matchErr) {
           console.error("Failed to create league match record:", matchErr);
         }
@@ -2008,7 +2636,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div 
                 key={time} 
                 style={{ height: slotHeight }}
-                className={`border-b border-slate-300 w-full transition-colors group/cell ${bgClass}`}
+                className={`border-b border-slate-300 last:border-b-0 w-full transition-colors group/cell ${bgClass}`}
                 onMouseEnter={() => setHoveredTime(time)}
                 onMouseLeave={() => setHoveredTime(null)}
                 onClick={() => {
@@ -2116,7 +2744,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               {booking.isLocked && !booking.isEvent ? (
                 // Locked Generic
                 <div className="w-full h-full flex flex-col items-center justify-center p-0.5 select-none hover:bg-slate-200 transition-colors bg-slate-100 rounded border border-slate-300 shadow-sm overflow-hidden">
-                   <div className="bg-white/95 border border-slate-300 shadow-sm rounded-md px-1.5 py-0.5 flex items-center gap-1 max-w-full">
+                   <div className="border-none outline-none bg-white/95 -300 shadow-sm rounded-md px-1.5 py-0.5 flex items-center gap-1 max-w-full">
                      <i className="fa-solid fa-lock text-slate-500 text-[8px]"></i>
                      <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-wide truncate text-slate-700">
                        {booking.reason || "Sperre"}
@@ -2288,7 +2916,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                           className="border-b border-slate-150 last:border-b-0"
                           style={{ height: `${100 / startTimes.length}%` }}
                         >
-                          <td className="p-0.5 text-center align-middle font-bold text-xs text-slate-700 bg-slate-50/60" style={{ height: "1px" }}>
+                          <td className="p-0.5 text-center align-middle font-bold text-sm text-slate-700 bg-slate-50/60" style={{ height: "1px" }}>
                             <div className="flex items-center justify-center">
                               <span className="text-xs font-black text-slate-800 whitespace-nowrap">
                                 {parseInt(time.split(":")[0], 10)} -{" "}
@@ -2759,7 +3387,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 
                 {bookingOptions.length > 1 && (
-                  <div className="px-4 py-3 bg-slate-100 border-b border-slate-200 shrink-0 select-none">
+                  <div className="h-8 px-3 py-1 bg-slate-100 border-b border-slate-200 shrink-0 select-none font-sans font-medium">
                     <div className="relative flex p-0.5 bg-slate-200 rounded-lg border border-slate-200 shrink-0 select-none">
                       <div
                         className={`absolute top-0.5 bottom-0.5 rounded-md shadow-sm transition-all duration-300 ease-out z-0 bg-white`}
@@ -2790,7 +3418,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                              }
                           }}
                         >
-                          {option.id === "league" && <i className="fa-solid fa-trophy"></i>}
                           {option.label}
                         </button>
                       ))}
@@ -2800,7 +3427,34 @@ const Dashboard: React.FC<DashboardProps> = ({
                 
                 {/* Normal Booking Tab Content */}
                 <div style={{ display: bookingTab === "normal" ? "flex" : "none", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-                  <div className="bg-white p-4 pb-4 space-y-4 overflow-y-auto flex-1 text-slate-700">
+                  <div className="bg-slate-50 p-4 pb-4 space-y-4 overflow-y-auto flex-1 text-slate-700">
+                    {/* Platz wählen */}
+                    <div className="bg-white p-3 rounded-xl border border-slate-200 shrink-0 shadow-sm">
+                      <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                        Platz wählen
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={selectedCourtInModal}
+                          disabled={!isUserAuthorizedToEdit}
+                          onChange={(e) => setSelectedCourtInModal(e.target.value)}
+                          className="w-full h-8 px-3 py-1 pr-8 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors appearance-none cursor-pointer text-slate-800 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
+                        >
+                          {currentModalCourtOptions.map(({ name, isAvailable }) => (
+                            <option
+                              key={name}
+                              value={name}
+                              disabled={!isAvailable && name !== selectedCourtInModal}
+                              className={!isAvailable ? 'text-slate-400 bg-slate-100' : 'text-slate-800'}
+                            >
+                              {name} {!isAvailable ? '(belegt)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]"></i>
+                      </div>
+                    </div>
+
                   {error && (
                     <div className="bg-red-50 border border-red-200 text-red-600 p-3 rounded-xl flex items-center gap-2 animate-pulse text-[10px] font-bold">
                       <i className="fa-solid fa-circle-exclamation text-base"></i>
@@ -2823,7 +3477,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                             setEndTime(TIME_SLOTS[startIdx + 1]);
                           }
                         }}
-                        className="w-full p-2 border border-slate-200 rounded-lg bg-white font-bold text-xs outline-none focus:border-[var(--color-accent)] transition-colors disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        className="w-full h-8 px-3 py-1 border border-slate-200 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-accent)] transition-colors disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                       >
                         {TIME_SLOTS.slice(0, -1).map((t) => (
                           <option key={t} value={t}>
@@ -2840,7 +3494,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         value={endTime}
                         disabled={!isUserAuthorizedToEdit}
                         onChange={(e) => setEndTime(e.target.value)}
-                        className="w-full p-2 border border-slate-200 rounded-lg bg-white font-bold text-xs outline-none focus:border-[var(--color-accent)] transition-colors text-slate-900 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        className="w-full h-8 px-3 py-1 border border-slate-200 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-accent)] transition-colors text-slate-900 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                       >
                         {TIME_SLOTS.slice(
                           TIME_SLOTS.indexOf(modalStartTime) + 1,
@@ -2862,7 +3516,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         value={reason}
                         disabled={!isUserAuthorizedToEdit}
                         onChange={(e) => setReason(e.target.value)}
-                        className="w-full px-2.5 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:border-slate-800 bg-slate-50 transition-colors py-2 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        className="w-full px-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-slate-800 bg-slate-50 transition-colors py-2 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         placeholder="z.B. Medenspiel, Training..."
                       />
                       <div className="flex flex-wrap items-center gap-4 pt-1">
@@ -2872,7 +3526,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                             checked={isFullDay}
                             disabled={!isUserAuthorizedToEdit}
                             onChange={(e) => setIsFullDay(e.target.checked)}
-                            className="w-4 h-4 accent-slate-800"
+                            className="w-4 h-4 accent-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <span>GANZTÄGIG</span>
                         </label>
@@ -2880,11 +3534,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                      <div className="bg-slate-50 h-8 px-3 py-1 rounded-lg border border-slate-200 font-sans font-medium">
                         <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
                           {selectedSlot?.editingId ? "Spieler 1 (Ersteller)" : "Spieler 1 (Eingeloggt)"}
                         </label>
-                        <div className="font-bold text-xs text-[var(--color-primary)] flex items-center gap-1.5">
+                        <div className="font-bold text-sm text-[var(--color-primary)] flex items-center gap-1.5">
                           <i className="fa-solid fa-user-check text-[var(--color-primary)]"></i>
                           {spieler1Name}
                         </div>
@@ -2912,7 +3566,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   ? "Keine Berechtigung zum Bearbeiten"
                                   : "Mitspieler suchen & hinzufügen..."
                               }
-                              className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 font-bold text-xs transition-all disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                              className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 text-sm transition-all disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             />
                           </div>
 
@@ -2927,7 +3581,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                       onMouseDown={(e) => { e.preventDefault(); setBookingTab("league"); }}
                                       className="text-[10px] text-amber-600 font-bold bg-amber-50 px-3 py-1.5 rounded-lg hover:bg-amber-100 transition-colors w-full border border-amber-200 shadow-sm"
                                     >
-                                      Suchst du einen Gegner aus der Hobbyliga?
+                                      Suchst du einen Gegner für dein Ligaspiel?
                                     </button>
                                   </div>
                                 ) : (
@@ -3008,7 +3662,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   }
                                 }}
                                 disabled={ballMachineBelegt || !isUserAuthorizedToEdit}
-                                className="w-4 h-4 accent-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="w-4 h-4 accent-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span className="text-[9px] font-bold text-[var(--color-primary)] uppercase flex items-center gap-1.5">
                                 <i className="fa-solid fa-robot"></i>{" "}
@@ -3038,7 +3692,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 type="button"
                                 disabled={!isUserAuthorizedToEdit}
                                 onClick={() => setGuestCount(num)}
-                                className={`flex-1 py-1 rounded-lg border font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-0.5 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed ${guestCount === num ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-sm" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"}`}
+                                className={`flex-1 h-8 rounded-lg border font-bold text-[11px] transition-all active:scale-95 flex items-center justify-center gap-0.5 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed ${guestCount === num ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-sm" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"}`}
                               >
                                 {num > 0 && (
                                   <i className="fa-solid fa-user text-[9px]"></i>
@@ -3063,7 +3717,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     {isUserAuthorizedToEdit && (
                       <button
                         onClick={confirmAction}
-                        className={`flex-1 text-white rounded-xl shadow transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 py-2.5 text-xs font-medium ${isLockMode ? "bg-slate-500 hover:bg-slate-600" : "hover:brightness-95"}`}
+                        className={`flex-1 text-white rounded-xl shadow transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 h-10 text-sm font-medium ${isLockMode ? "bg-slate-500 hover:bg-slate-600" : "hover:brightness-95"}`}
                         style={!isLockMode ? { backgroundColor: settings?.primaryColor || "var(--color-primary)" } : undefined}
                       >
                         <i
@@ -3090,6 +3744,93 @@ const Dashboard: React.FC<DashboardProps> = ({
                 {bookingTab === "league" && (
                   <div className="flex flex-col flex-1 overflow-hidden">
                     <div className="bg-amber-50/50 p-4 pb-4 space-y-4 overflow-y-auto flex-1 text-slate-700">
+                      {/* Austragungsort Card with Facility Switcher */}
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm shrink-0">
+                        <div className="h-24 w-full relative bg-slate-200 overflow-hidden">
+                          <img
+                            src={venuePhoto}
+                            alt="Austragungsort Anlage"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent flex items-end justify-between p-3">
+                            <div className="text-white min-w-0 flex-1 pr-2">
+                              <div className="text-[9px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5 leading-none mb-1">
+                                <i className="fa-solid fa-location-dot"></i>
+                                Austragungsort
+                              </div>
+                              <div className="text-xs font-black truncate drop-shadow-sm text-white">
+                                {venueClubName}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="px-3 py-2 bg-white flex items-center justify-between gap-2">
+                          <a
+                            href={mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-bold text-slate-700 hover:text-[var(--color-primary)] flex items-center gap-1.5 min-w-0 transition-colors group cursor-pointer"
+                            title="In Google Maps öffnen"
+                          >
+                            <i className="fa-solid fa-map-pin text-[var(--color-primary)] text-xs shrink-0"></i>
+                            <span className="truncate">{displayAddress}</span>
+                            <i className="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400 group-hover:text-[var(--color-primary)] shrink-0 transition-colors"></i>
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Anlage wählen */}
+                      <div className="bg-white p-3 rounded-xl border border-slate-200 shrink-0 shadow-sm">
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                          Anlage wählen
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={currentFacilitySelectValue}
+                            disabled={!isUserAuthorizedToEdit}
+                            onChange={(e) => handleSwitchFacility(e.target.value)}
+                            className="w-full h-8 px-3 py-1 pr-8 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer text-slate-800 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
+                          >
+                            {availableClubsList.map((c) => {
+                              const cId = c.vereinsId || c.id;
+                              return (
+                                <option key={cId} value={cId} className="text-slate-800">
+                                  {c.clubName || c.name || cId} {c.city ? `(${c.city})` : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]"></i>
+                        </div>
+                      </div>
+
+                      {/* Platz wählen */}
+                      <div className="bg-white p-3 rounded-xl border border-slate-200 shrink-0 shadow-sm">
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                          Platz wählen
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={selectedCourtInModal}
+                            disabled={!isUserAuthorizedToEdit}
+                            onChange={(e) => setSelectedCourtInModal(e.target.value)}
+                            className="w-full h-8 px-3 py-1 pr-8 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer text-slate-800 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
+                          >
+                            {currentModalCourtOptions.map(({ name, isAvailable }) => (
+                              <option
+                                key={name}
+                                value={name}
+                                disabled={!isAvailable && name !== selectedCourtInModal}
+                                className={!isAvailable ? 'text-slate-400 bg-slate-100' : 'text-slate-800'}
+                              >
+                                {name} {!isAvailable ? '(belegt)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]"></i>
+                        </div>
+                      </div>
+
                       {/* Zeitraum */}
                       <div className="bg-white p-3 rounded-xl border border-slate-200 grid grid-cols-2 gap-3 shrink-0 shadow-sm">
                         <div>
@@ -3103,11 +3844,21 @@ const Dashboard: React.FC<DashboardProps> = ({
                               const newStart = e.target.value;
                               setModalStartTime(newStart);
                               const startIdx = TIME_SLOTS.indexOf(newStart);
-                              if (TIME_SLOTS.indexOf(endTime) <= startIdx) {
-                                setEndTime(TIME_SLOTS[startIdx + 1]);
+                              if (startIdx >= 0) {
+                                let maxEndIdx = TIME_SLOTS.length - 1;
+                              if (selectedSlot?.date && reservationRules?.openingHours) {
+                                const weekday = new Date(selectedSlot.date).getDay();
+                                const dayRule = reservationRules.openingHours[String(weekday)];
+                                if (dayRule && dayRule.end && !dayRule.closed) {
+                                  const idx = TIME_SLOTS.indexOf(dayRule.end);
+                                  if (idx !== -1) maxEndIdx = idx;
+                                }
+                              }
+                              const endIdx = Math.min(maxEndIdx, startIdx + 2);
+                              setEndTime(TIME_SLOTS[endIdx]);
                               }
                             }}
-                            className="w-full p-2 border-2 border-slate-300 rounded-lg bg-white font-black text-[11px] outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                           >
                             {TIME_SLOTS.slice(0, -1).map((t) => (
                               <option key={t} value={t}>{t} Uhr</option>
@@ -3116,98 +3867,132 @@ const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                         <div>
                           <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
-                            Bis
+                            Bis (2 - 3 Std.)
                           </label>
                           <select 
                             value={endTime}
                             disabled={!isUserAuthorizedToEdit}
                             onChange={(e) => setEndTime(e.target.value)}
-                            className="w-full p-2 border-2 border-slate-300 rounded-lg bg-white font-black text-[11px] outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                           >
-                            {TIME_SLOTS.slice(TIME_SLOTS.indexOf(modalStartTime) + 1).map((t) => (
-                              <option key={t} value={t}>{t} Uhr</option>
-                            ))}
+                            {leagueEndTimeOptions.map((t) => {
+                              const dur = getDurationInHours(modalStartTime, t);
+                              return (
+                                <option key={t} value={t}>
+                                  {t} Uhr ({dur.toFixed(dur % 1 === 0 ? 0 : 1)} Std.)
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
                       </div>
 
-                      {(() => {
-                        const [h1, m1] = modalStartTime.split(':').map(Number);
-                        const [h2, m2] = endTime.split(':').map(Number);
-                        const diff = (h2 * 60 + (m2 || 0)) - (h1 * 60 + (m1 || 0));
-                        if (diff > 0 && diff < 90) {
-                          return (
-                            <div className="bg-amber-100/50 border border-amber-200 text-amber-800 p-3 rounded-xl flex items-start gap-2.5 shadow-sm mt-3">
-                              <i className="fa-solid fa-triangle-exclamation text-amber-500 text-sm mt-0.5"></i>
-                              <span className="text-[11px] font-bold">Achtung: Ein Hobbyliga-Spiel sollte normalerweise 90 Minuten dauern (aktuell: {diff} Min).</span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
+                      {/* Validation Warning for Duration */}
+                      {currentLeagueDuration > 0 && currentLeagueDuration < 2 && (
+                        <div className="text-[10px] font-bold text-amber-800 bg-amber-100/90 border border-amber-300 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                          <i className="fa-solid fa-triangle-exclamation text-amber-600 text-xs shrink-0"></i>
+                          <span>Mindestspieldauer für Ligaspiele: 2 Stunden (aktuell: {currentLeagueDuration.toFixed(1)} Std.).</span>
+                        </div>
+                      )}
+                      {currentLeagueDuration > 3 && (
+                        <div className="text-[10px] font-bold text-red-800 bg-red-100/90 border border-red-300 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                          <i className="fa-solid fa-circle-exclamation text-red-600 text-xs shrink-0"></i>
+                          <span>Maximaldauer für Ligaspiele: 3 Stunden (aktuell: {currentLeagueDuration.toFixed(1)} Std.).</span>
+                        </div>
+                      )}
 
                       {/* League Opponent Search */}
-                      <div className="space-y-2 relative bg-white p-3 rounded-xl border border-slate-200 shadow-sm mt-4">
-                        <label className="block text-[10px] font-black text-slate-600 uppercase">
-                          Gegner (Hobbyliga)
-                        </label>
-                        {!leagueOpponent ? (
-                          <div className="relative">
-                            <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs pointer-events-none"></i>
-                            <input 
-                              type="text"
-                              value={leagueOpponentQuery}
-                              disabled={!isUserAuthorizedToEdit}
-                              onChange={(e) => setLeagueOpponentQuery(e.target.value)}
-                              onFocus={() => setShowLeagueSuggestions(true)}
-                              onBlur={() => setTimeout(() => setShowLeagueSuggestions(false), 200)}
-                              placeholder="Gegner suchen..."
-                              className="w-full pl-9 pr-3 py-2 border-2 border-slate-200 rounded-xl bg-white focus:border-amber-500 outline-none text-slate-900 font-bold text-xs transition-colors shadow-sm disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                            />
+                      <div className="space-y-4 mt-4">
+                        <div className="bg-slate-50 h-8 px-3 py-1 rounded-lg border border-slate-200 font-sans font-medium">
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
+                            {selectedSlot?.editingId ? "Spieler 1 (Ersteller)" : "Spieler 1 (Eingeloggt)"}
+                          </label>
+                          <div className="font-bold text-sm text-[var(--color-primary)] flex items-center gap-1.5">
+                            <i className="fa-solid fa-user-check text-[var(--color-primary)]"></i>
+                            {spieler1Name}
+                          </div>
+                        </div>
+                        <div className="space-y-2.5 relative">
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">
+                            Gegner
+                          </label>
+                          {!leagueOpponent ? (
+                            <div className="relative">
+                              <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs pointer-events-none"></i>
+                              <input 
+                                type="text"
+                                value={leagueOpponentQuery}
+                                disabled={!isUserAuthorizedToEdit}
+                                onChange={(e) => setLeagueOpponentQuery(e.target.value)}
+                                onFocus={() => setShowLeagueSuggestions(true)}
+                                onBlur={() => setTimeout(() => setShowLeagueSuggestions(false), 250)}
+                                placeholder="Gegner suchen (Name, Vorname...)"
+                                className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-lg bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 text-sm transition-all disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              />
                             {showLeagueSuggestions && leagueOpponentQuery.trim().length > 0 && isUserAuthorizedToEdit && (
                               <div className="absolute top-full left-0 right-0 z-[120] mt-1 bg-white border border-slate-200 rounded-2xl shadow-lg overflow-hidden max-h-[190px] overflow-y-auto">
                                 {getFilteredLeagueUsers(leagueOpponentQuery).length === 0 ? (
-                                  <div className="p-3 text-xs text-slate-500 text-center">Keine passenden Spieler gefunden.</div>
+                                  <div className="p-3 text-xs text-slate-500 text-center font-medium">Keine passenden Spieler gefunden.</div>
                                 ) : (
-                                  getFilteredLeagueUsers(leagueOpponentQuery).map((s) => (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        setLeagueOpponent(s);
-                                        setLeagueOpponentQuery("");
-                                        setShowLeagueSuggestions(false);
-                                      }}
-                                      className="w-full text-left px-3 py-2 text-[11px] hover:bg-amber-50 font-bold text-slate-700 border-b border-slate-100 last:border-0 flex items-center gap-2 transition-colors cursor-pointer"
-                                    >
-                                      <i className="fa-solid fa-user-plus text-amber-500 opacity-75"></i>
-                                      <span>{formatPlayerName(s)}</span>
-                                    </button>
-                                  ))
+                                  getFilteredLeagueUsers(leagueOpponentQuery).map((u) => {
+                                    const displayName = resolvePlayerDisplayName(u);
+                                    const identifier = u.name || u.id;
+                                    const clubBadge = u.vereinsId ? u.vereinsId.toUpperCase() : "";
+                                    return (
+                                      <button
+                                        key={u.id || identifier}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          setLeagueOpponent(identifier);
+                                          setLeagueOpponentQuery("");
+                                          setShowLeagueSuggestions(false);
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-[11px] hover:bg-amber-50 font-bold text-slate-700 border-b border-slate-100 last:border-0 flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                                      >
+                                        <div className="flex items-center gap-2 truncate">
+                                          <UserAvatar user={u} name={displayName} size="xs" className="shrink-0" />
+                                          <span className="truncate">{displayName}</span>
+                                        </div>
+                                        {clubBadge && (
+                                          <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                                            {clubBadge}
+                                          </span>
+                                        )}
+                                      </button>
+                                    );
+                                  })
                                 )}
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 rounded-xl shadow-sm">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-[10px]">
-                                <i className="fa-solid fa-trophy"></i>
-                              </div>
-                              <span className="font-bold text-xs text-slate-800">{formatPlayerName(leagueOpponent)}</span>
+                          <div className="flex items-center justify-between h-8 px-3 py-1 bg-amber-50 border border-amber-200 rounded-xl shadow-sm font-sans font-medium">
+                            <div className="flex items-center gap-3 truncate">
+                              <UserAvatar
+                                user={selectedOpponentUser}
+                                avatarUrl={selectedOpponentUser?.avatarUrl}
+                                avatarIcon={selectedOpponentUser?.avatarIcon}
+                                name={selectedOpponentUser ? resolvePlayerDisplayName(selectedOpponentUser) : formatPlayerName(leagueOpponent)}
+                                size="xs"
+                                className="shrink-0"
+                              />
+                              <span className="font-bold text-sm text-slate-800 truncate">
+                                {selectedOpponentUser ? resolvePlayerDisplayName(selectedOpponentUser) : formatPlayerName(leagueOpponent)}
+                              </span>
                             </div>
                             {isUserAuthorizedToEdit && (
                               <button
                                 type="button"
                                 onClick={() => setLeagueOpponent(null)}
-                                className="w-6 h-6 rounded-full bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors shadow-sm border border-slate-200"
+                                className="w-6 h-6 rounded-full bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors shadow-sm border border-slate-200 shrink-0"
                               >
                                 <i className="fa-solid fa-xmark"></i>
                               </button>
                             )}
                           </div>
                         )}
+                      </div>
                       </div>
 
                     </div>
@@ -3216,9 +4001,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                         {isUserAuthorizedToEdit && (
                           <button
                             onClick={handleLeagueSubmit}
-                            className="flex-1 text-white rounded-xl shadow transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 py-2.5 text-xs font-medium bg-amber-500 hover:bg-amber-600"
+                            className="flex-1 text-white rounded-xl shadow transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 h-10 text-sm font-medium hover:brightness-95"
+                            style={{ backgroundColor: settings?.primaryColor || "var(--color-primary)" }}
                           >
-                            <i className="fa-solid fa-trophy"></i> Hobbyliga Spiel eintragen
+                            <i className="fa-solid fa-trophy"></i> Ligaspiel eintragen
                           </button>
                         )}
                         <button
@@ -3252,45 +4038,44 @@ const Dashboard: React.FC<DashboardProps> = ({
         }
         onDismiss={() => onDismissOnboardingHints?.()}
       />
-      <div className="flex flex-col lg:flex-row justify-between items-center bg-white p-1.5 md:p-2 lg:p-1 rounded-2xl shadow-sm border border-slate-200/80 gap-2 w-full shrink-0">
-        <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto lg:pl-1">
-          <div className="flex items-center gap-1 w-full sm:w-auto h-[26px] lg:h-7">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-1 pr-2 lg:pr-2.5 rounded-2xl shadow-sm border border-slate-200/80 gap-1.5 lg:gap-2 w-full shrink-0">
+        <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
+          <div className="inline-flex items-center bg-white border border-slate-200 rounded-xl shadow-sm p-1 w-full sm:w-auto shrink-0 h-8 relative gap-1">
             <button
               type="button"
               disabled={isBackDisabled}
               onClick={() => navigateDate(-1)}
-              className={`h-full w-8 bg-slate-100 border border-slate-300 rounded-md flex items-center justify-center text-[var(--color-primary)] transition-all shadow-sm ${
+              className={`px-2 text-slate-600 rounded-lg transition-colors h-full flex items-center justify-center shrink-0 ${
                 isBackDisabled
-                  ? "opacity-40 cursor-not-allowed pointer-events-none"
-                  : "hover:bg-slate-200 active:scale-90 cursor-pointer"
+                  ? "opacity-30 cursor-not-allowed pointer-events-none"
+                  : "hover:bg-slate-100 hover:text-slate-900 active:scale-95 cursor-pointer"
               }`}
+              title="Vorheriger Tag"
+              aria-label="Vorheriger Tag"
             >
-              <i className="fa-solid fa-chevron-left text-[9px] lg:text-[9px]"></i>
+              <i className="fa-solid fa-chevron-left text-[10px]"></i>
             </button>
             <div
               ref={calendarRef}
-              className="relative h-full flex-1 sm:flex-none sm:min-w-[160px] group cursor-pointer"
+              className="relative h-full flex-1 sm:flex-none sm:min-w-[140px] group cursor-pointer"
             >
-              <div
-                className="relative h-full w-full overflow-hidden rounded-md shadow-sm"
+              <button
+                type="button"
                 onClick={openCalendar}
+                className="px-2.5 sm:px-3 text-slate-800 hover:bg-slate-100 rounded-lg flex items-center justify-center gap-1.5 h-full w-full transition-colors outline-none select-none cursor-pointer"
               >
-                <div className="absolute inset-0 bg-[var(--color-primary)] border border-[var(--color-primary)] rounded-md shadow-sm flex items-center justify-center gap-1.5 group-hover:bg-black transition-all px-2">
-                  <i className="fa-solid fa-calendar-day text-white text-[10px] lg:text-[10px]"></i>
-                  <div className="flex flex-col items-center justify-center font-sans">
-                    <span className="text-[11.5px] lg:text-[11px] font-black md:font-medium text-white uppercase tracking-wider whitespace-nowrap pt-[0.5px]">
-                      {viewType === "day"
-                        ? new Date(selectedDate).toLocaleDateString("de-DE", {
-                            weekday: "short",
-                            day: "2-digit",
-                            month: "2-digit",
-                          })
-                        : `${new Date(weekDates[0]).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} - ${new Date(weekDates[6]).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`}
-                    </span>
-                  </div>
-                  <i className="fa-solid fa-caret-down text-white/40 group-hover:text-white transition-colors text-[9px]"></i>
-                </div>
-              </div>
+                <i className="fa-solid fa-calendar-day text-[var(--color-primary)] text-[11px] sm:text-[10.5px]"></i>
+                <span className="text-[11px] sm:text-[11.5px] font-semibold text-slate-800 uppercase tracking-wider whitespace-nowrap pt-[0.5px]">
+                  {viewType === "day"
+                    ? new Date(selectedDate).toLocaleDateString("de-DE", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit",
+                      })
+                    : `${new Date(weekDates[0]).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} - ${new Date(weekDates[6]).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`}
+                </span>
+                <i className="fa-solid fa-caret-down text-slate-400 group-hover:text-slate-600 transition-colors text-[8px]"></i>
+              </button>
 
               {/* STUNNING INLINE CALENDAR DROPDOWN & MOBILE MODAL */}
               {showCustomCalendar && (
@@ -3305,7 +4090,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   />
 
                   {/* Calendar Container */}
-                  <div className="fixed lg:absolute top-1/2 left-1/2 -translate-y-1/2 lg:-translate-y-0 lg:top-[32px] lg:mt-1 -translate-x-1/2 w-[320px] lg:w-[280px] bg-white border border-slate-200/80 rounded-2xl shadow-sm p-5 lg:p-4 z-[9999] animate-in fade-in zoom-in-95 lg:slide-in-from-top-2 duration-200">
+                  <div className="fixed lg:absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 lg:top-[34px] lg:mt-1 lg:left-0 lg:translate-x-0 lg:translate-y-0 w-[320px] lg:w-[280px] bg-white border border-slate-200/90 rounded-2xl shadow-xl p-5 lg:p-4 z-[9999] animate-in fade-in zoom-in-95 lg:slide-in-from-top-2 duration-200">
                     {/* Calendar Header */}
                     <div className="flex items-center justify-between mb-4 lg:mb-3 select-none">
                       <button
@@ -3316,9 +4101,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                           prevMonth.setMonth(prevMonth.getMonth() - 1);
                           setCurrentCalendarMonth(prevMonth);
                         }}
-                        className="w-10 h-10 lg:w-8 lg:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-[var(--color-primary)] transition-colors border border-slate-200 active:scale-95"
+                        className="text-slate-600 hover:text-emerald-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors flex items-center justify-center cursor-pointer active:scale-95"
+                        title="Vorheriger Monat"
+                        aria-label="Vorheriger Monat"
                       >
-                        <i className="fa-solid fa-chevron-left text-sm lg:text-xs"></i>
+                        <i className="fa-solid fa-chevron-left text-xs"></i>
                       </button>
                       <span className="text-sm lg:text-xs font-black text-[var(--color-primary)] uppercase tracking-wider">
                         {
@@ -3347,18 +4134,20 @@ const Dashboard: React.FC<DashboardProps> = ({
                           nextMonth.setMonth(nextMonth.getMonth() + 1);
                           setCurrentCalendarMonth(nextMonth);
                         }}
-                        className="w-10 h-10 lg:w-8 lg:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-[var(--color-primary)] transition-colors border border-slate-200 active:scale-95"
+                        className="text-slate-600 hover:text-emerald-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors flex items-center justify-center cursor-pointer active:scale-95"
+                        title="Nächster Monat"
+                        aria-label="Nächster Monat"
                       >
-                        <i className="fa-solid fa-chevron-right text-sm lg:text-xs"></i>
+                        <i className="fa-solid fa-chevron-right text-xs"></i>
                       </button>
                     </div>
 
                     {/* Weekdays */}
-                    <div className="grid grid-cols-7 text-center gap-1 mb-2 select-none">
+                    <div className="grid grid-cols-7 gap-1 place-items-center mb-2 select-none">
                       {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((wd) => (
                         <span
                           key={wd}
-                          className="text-[10px] lg:text-[9px] font-black uppercase text-slate-400 py-1"
+                          className="w-full text-center text-[10px] lg:text-[9px] font-black uppercase text-slate-400 py-1"
                         >
                           {wd}
                         </span>
@@ -3366,7 +4155,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </div>
 
                     {/* Days grid */}
-                    <div className="grid grid-cols-7 gap-1 lg:gap-1">
+                    <div className="grid grid-cols-7 gap-1 place-items-center">
                       {calendarDays.map((slot, index) => {
                         const isSelected = slot.dateString === selectedDate;
                         const todayStr = getLocalDateString(new Date());
@@ -3380,7 +4169,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                               setSelectedDate(slot.dateString);
                               setShowCustomCalendar(false);
                             }}
-                            className={`aspect-square rounded-xl lg:rounded-lg flex items-center justify-center font-bold text-sm lg:text-xs transition-all relative active:scale-95 ${
+                            className={`w-full aspect-square rounded-xl lg:rounded-lg flex items-center justify-center font-bold text-sm lg:text-xs transition-all relative active:scale-95 cursor-pointer ${
                               !slot.isCurrentMonth
                                 ? "text-slate-300 hover:bg-slate-50"
                                 : isSelected
@@ -3400,13 +4189,16 @@ const Dashboard: React.FC<DashboardProps> = ({
               )}
             </div>
             <button
+              type="button"
               onClick={() => navigateDate(1)}
-              className="h-full w-8 bg-slate-100 border border-slate-300 rounded-md flex items-center justify-center text-[var(--color-primary)] hover:bg-slate-200 transition-all active:scale-90 shadow-sm"
+              className="px-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors active:scale-95 shrink-0 cursor-pointer h-full flex items-center justify-center"
+              title="Nächster Tag"
+              aria-label="Nächster Tag"
             >
-              <i className="fa-solid fa-chevron-right text-[9px] lg:text-[9px]"></i>
+              <i className="fa-solid fa-chevron-right text-[10px]"></i>
             </button>
           </div>
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-md border border-slate-300 shadow-sm w-full sm:w-auto shrink-0 h-[26px] lg:h-7 relative overflow-hidden">
+          <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200 shadow-sm w-full sm:w-auto shrink-0 h-8 relative overflow-hidden gap-0.5">
             {isPublicWochenplan ? (
               <button
                 type="button"
@@ -3414,20 +4206,21 @@ const Dashboard: React.FC<DashboardProps> = ({
                   setIsPublicLoginModalOpen(true);
                   setInlineLoginError(null);
                 }}
-                className="flex-1 px-3 sm:px-4 h-full rounded bg-emerald-600 hover:bg-emerald-700 font-black uppercase text-[10px] lg:text-[9px] tracking-widest text-white transition-all flex items-center justify-center gap-1.5 relative cursor-pointer outline-none shadow-sm active:scale-95 whitespace-nowrap"
+                className="flex-1 px-3 sm:px-4 h-full rounded-lg bg-emerald-600 hover:bg-emerald-700 font-black uppercase text-[10px] lg:text-[9px] tracking-widest text-white transition-all flex items-center justify-center gap-1.5 relative cursor-pointer outline-none shadow-sm active:scale-95 whitespace-nowrap"
               >
                 <i className="fa-solid fa-right-to-bracket text-[10px]"></i> Anmelden
               </button>
             ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => setViewType("day")}
-                  className="flex-1 sm:px-3 h-full rounded font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
+                  className="flex-1 sm:px-3 h-full rounded-lg font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
                 >
                   {viewType === "day" && (
                     <motion.div
                       layoutId="desktopViewTypeBadge"
-                      className="absolute inset-0 rounded shadow-sm"
+                      className="absolute inset-0 rounded-lg shadow-sm"
                       style={{
                         backgroundColor:
                           settings?.primaryColor || "var(--color-primary)",
@@ -3442,13 +4235,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setViewType("week")}
-                  className="flex-1 sm:px-3 h-full rounded font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
+                  className="flex-1 sm:px-3 h-full rounded-lg font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
                 >
                   {viewType === "week" && (
                     <motion.div
                       layoutId="desktopViewTypeBadge"
-                      className="absolute inset-0 rounded shadow-sm"
+                      className="absolute inset-0 rounded-lg shadow-sm"
                       style={{
                         backgroundColor:
                           settings?.primaryColor || "var(--color-primary)",
@@ -3472,7 +4266,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 setSelectedDate(todayStr);
                 setCurrentCalendarMonth(new Date());
               }}
-              className="flex-1 sm:px-3 h-full rounded font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none text-slate-500 hover:text-slate-700 active:scale-95"
+              className="flex-1 sm:px-3 h-full rounded-lg font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none text-slate-500 hover:text-slate-700 active:scale-95"
               title="Zum heutigen Tag springen"
             >
               <i className="fa-solid fa-clock-rotate-left text-[10px]"></i>{" "}
@@ -3480,7 +4274,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2.5 sm:gap-4 overflow-x-auto w-full lg:w-auto shrink-0 border-t sm:border-t-0 lg:border-l border-slate-200 lg:border-slate-300 pt-1.5 sm:pt-0 lg:pl-4 lg:pr-3 min-h-[26px] items-center justify-center sm:justify-start">
+        <div className="flex flex-wrap gap-3 sm:gap-4 overflow-x-auto w-full lg:w-auto shrink-0 border-t sm:border-t-0 lg:border-l border-slate-200 lg:border-slate-300 pt-1 sm:pt-0 lg:pl-4 lg:pr-3 min-h-8 items-center justify-center sm:justify-start">
           <span className="flex items-center gap-1.5 text-[10px] lg:text-[9px] font-black md:font-medium text-slate-600 uppercase whitespace-nowrap">
             <div className="w-3 h-3 bg-white border border-slate-400 rounded-sm shadow-sm"></div>{" "}
             Frei
@@ -3491,7 +4285,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </span>
           <span className="flex items-center gap-1.5 text-[10px] lg:text-[9px] font-black md:font-medium text-slate-600 uppercase whitespace-nowrap">
             <div className="w-3 h-3 bg-slate-200 border border-slate-400 rounded-sm shadow-sm"></div>{" "}
-            Sperre
+            Blockiert
           </span>
         </div>
       </div>
@@ -3549,7 +4343,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       )}
 
-      <div className="flex-grow w-full relative flex flex-col min-h-0">
+      <div className="w-full relative flex flex-col">
         <AnimatePresence mode="wait">
           {viewType === "day" ? (
           <motion.div
@@ -3558,7 +4352,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="space-y-4 lg:space-y-0 flex-grow flex flex-col min-h-0 w-full"
+            className="space-y-4 lg:space-y-0 w-full flex flex-col"
           >
           {/* Mobile Layout Switcher - Only visible on small screens when Day View is active */}
           <div className="lg:hidden flex items-center justify-between bg-white px-2.5 py-1.5 rounded-none border border-slate-200/80 shadow-sm">
@@ -3587,19 +4381,19 @@ const Dashboard: React.FC<DashboardProps> = ({
           {(() => {
             return (
               <div
-                className={`${mobileDayLayout === "columns" ? "flex flex-col max-h-[calc(100dvh-170px)] mb-0 overflow-y-auto hide-scrollbar lg:max-h-none lg:mb-0 lg:overflow-y-visible" : "hidden lg:flex lg:flex-col"} flex-grow min-h-0 w-full [will-change:transform] custom-calendar-container`}
+                className={`${mobileDayLayout === "columns" ? "flex flex-col max-h-[calc(100dvh-170px)] mb-0 overflow-y-auto hide-scrollbar lg:max-h-none lg:mb-0 lg:overflow-y-visible" : "hidden lg:flex lg:flex-col"} w-full [will-change:transform] custom-calendar-container`}
                 style={
                   {
                     ...(isMobile ? swipeStyle : {}),
                   } as React.CSSProperties
                 }
               >
-                <div className="custom-calendar-scroll flex-grow min-h-0 flex flex-col overflow-x-auto overflow-y-auto">
-                  <div className="flex w-full min-w-[600px] flex-grow relative">
+                <div className="custom-calendar-scroll w-full flex flex-col overflow-x-auto overflow-y-auto">
+                  <div className="flex w-full min-w-[600px] relative">
                     {/* Time Axis Column */}
                     <div className="w-24 shrink-0 border-r-2 border-slate-400 bg-slate-200 z-30 flex flex-col sticky left-0 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
                         <div className="h-[72px] border-b-2 border-slate-400 bg-slate-200 text-center font-black md:font-normal uppercase text-[10px] text-[var(--color-primary)] sticky top-0 z-40 flex items-center justify-center">Zeitraum</div>
-                        <div className="flex-grow flex flex-col" style={{ height: gridHeight }}>
+                        <div className="flex flex-col" style={{ height: gridHeight }}>
                             {startTimes.map((time, idx) => {
                                 const nextTime = TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1];
                                 const isHoveredTime = hoveredTime === time;
@@ -3608,7 +4402,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                    <div 
                                       key={time} 
                                       style={{ height: slotHeight, ...(isHoveredTime ? { backgroundColor: defaultGreen } : {}) }}
-                                      className={`border-b border-slate-300 flex items-center justify-center transition-all ${isHoveredTime ? "" : "bg-slate-100"}`}
+                                      className={`border-b border-slate-300 last:border-b-0 flex items-center justify-center transition-all ${isHoveredTime ? "" : "bg-slate-100"}`}
                                       onMouseEnter={() => setHoveredTime(time)}
                                       onMouseLeave={() => setHoveredTime(null)}
                                    >
@@ -3630,7 +4424,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                               </div>
                            ))}
                         </div>
-                        <div className="flex-1 flex">
+                        <div className="flex" style={{ height: gridHeight }}>
                            {courts.map(court => renderDesktopColumn(selectedDate, court, startTimes, true))}
                         </div>
                     </div>
@@ -3647,19 +4441,19 @@ const Dashboard: React.FC<DashboardProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="custom-calendar-container flex-grow min-h-0 w-full relative [will-change:transform]"
+          className="custom-calendar-container w-full relative [will-change:transform]"
           style={
             {
               ...(isMobile ? swipeStyle : {}),
             } as React.CSSProperties
           }
         >
-          <div className="custom-calendar-scroll flex-grow min-h-0 flex flex-col overflow-x-auto overflow-y-auto">
-            <div className="flex w-full flex-grow relative min-w-[700px]">
+          <div className="custom-calendar-scroll w-full flex flex-col overflow-x-auto overflow-y-auto">
+            <div className="flex w-full relative min-w-[700px]">
               {/* Time Axis Column */}
               <div className="w-24 shrink-0 border-r-2 border-slate-400 bg-slate-200 z-30 flex flex-col sticky left-0 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
                   <div className="h-[72px] border-b-2 border-slate-400 bg-slate-200 text-center font-black md:font-normal uppercase text-[10px] text-[var(--color-primary)] sticky top-0 z-40 flex items-center justify-center">Zeitraum</div>
-                  <div className="flex-grow flex flex-col" style={{ height: gridHeight }}>
+                  <div className="flex flex-col" style={{ height: gridHeight }}>
                       {startTimes.map((time, idx) => {
                           const nextTime = TIME_SLOTS[TIME_SLOTS.indexOf(time) + 1];
                           const isHoveredTime = hoveredTime === time;
@@ -3668,7 +4462,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                              <div 
                                 key={time} 
                                 style={{ height: slotHeight, ...(isHoveredTime ? { backgroundColor: defaultGreen } : {}) }}
-                                className={`border-b border-slate-300 flex items-center justify-center transition-all ${isHoveredTime ? "" : "bg-slate-100"}`}
+                                className={`border-b border-slate-300 last:border-b-0 flex items-center justify-center transition-all ${isHoveredTime ? "" : "bg-slate-100"}`}
                                 onMouseEnter={() => setHoveredTime(time)}
                                 onMouseLeave={() => setHoveredTime(null)}
                              >
@@ -3713,9 +4507,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                   
                   {/* Grid Content */}
-                  <div className="flex-1 flex">
+                  <div className="flex" style={{ height: gridHeight }}>
                      {weekDates.map((date) => (
-                        <div key={`${date}-content`} className="flex-1 min-w-0 flex border-r-2 border-slate-500 last:border-r-0">
+                        <div key={`${date}-content`} className="flex-1 min-w-0 flex border-r-2 border-slate-500 last:border-r-0" style={{ height: gridHeight }}>
                            {courts.map(court => renderDesktopColumn(date, court, startTimes, false))}
                         </div>
                      ))}
@@ -3796,7 +4590,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               {/* Error Message */}
               {error && (
                 <div className="px-5 pt-4 pb-0 shrink-0">
-                  <div className="bg-red-50 border-x-4 border-red-500 text-red-700 p-2.5 flex items-center gap-2 animate-pulse text-[11px] font-black shadow-sm">
+                  <div className="bg-red-50 border-x-4 border-red-500 text-red-700 h-8 px-3 py-1 flex items-center gap-2 animate-pulse text-[11px] shadow-sm font-sans font-medium">
                     <i className="fa-solid fa-circle-exclamation text-base"></i>
                     <span>{error}</span>
                   </div>
@@ -3820,7 +4614,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </div>
 
                     {inlineLoginError && (
-                      <div className="bg-red-50 border-x-4 border-red-500 text-red-700 p-2.5 flex items-center gap-2 animate-pulse text-[11px] font-black shadow-sm">
+                      <div className="bg-red-50 border-x-4 border-red-500 text-red-700 h-8 px-3 py-1 flex items-center gap-2 animate-pulse text-[11px] shadow-sm font-sans font-medium">
                         <i className="fa-solid fa-circle-exclamation text-base"></i>
                         <span>{inlineLoginError}</span>
                       </div>
@@ -3857,7 +4651,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                           required
                           value={inlineUsername}
                           onChange={(e) => setInlineUsername(e.target.value)}
-                          className="w-full p-2.5 border-2 border-slate-300 rounded-xl font-bold text-xs outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors"
+                          className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-xl text-sm outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                           placeholder="z. B. max.mustermann"
                         />
                       </div>
@@ -3871,7 +4665,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                           required
                           value={inlinePassword}
                           onChange={(e) => setInlinePassword(e.target.value)}
-                          className="w-full p-2.5 border-2 border-slate-300 rounded-xl font-bold text-xs outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors"
+                          className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-xl text-sm outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                           placeholder="••••••••"
                         />
                       </div>
@@ -3879,7 +4673,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <button
                         type="submit"
                         disabled={isInlineLoggingIn}
-                        className="w-full text-white bg-[var(--color-primary)] hover:brightness-95 disabled:opacity-50 rounded-xl shadow-md transition-transform active:scale-95 uppercase tracking-widest flex items-center justify-center gap-2 py-3 text-xs font-black"
+                        className="w-full text-white bg-[var(--color-primary)] hover:brightness-95 disabled:opacity-50 rounded-xl shadow-md transition-transform active:scale-95 uppercase tracking-widest flex items-center justify-center gap-2 h-10 text-sm font-black"
                       >
                         {isInlineLoggingIn ? (
                           <>
@@ -3930,7 +4724,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                                }
                             }}
                           >
-                            {option.id === "league" && <i className="fa-solid fa-trophy"></i>}
                             {option.label}
                           </button>
                         ))}
@@ -3942,9 +4735,36 @@ const Dashboard: React.FC<DashboardProps> = ({
               {/* Normal Booking Tab Content */}
               <div style={{ display: bookingTab === "normal" ? "flex" : "none", flexDirection: "column", flex: 1, overflow: "hidden" }}>
               <div
-                className="p-5 overflow-y-auto flex-1 bg-white"
+                className="p-5 overflow-y-auto flex-1 bg-slate-50 space-y-5"
                 style={{ isolation: "isolate" }}
               >
+                    {/* Platz wählen */}
+                    <div className="bg-white p-3 rounded-xl mb-5 border border-slate-200 shrink-0 shadow-sm">
+                      <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                        Platz wählen
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={selectedCourtInModal}
+                          disabled={!isUserAuthorizedToEdit}
+                          onChange={(e) => setSelectedCourtInModal(e.target.value)}
+                          className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors appearance-none cursor-pointer text-slate-800 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
+                        >
+                          {currentModalCourtOptions.map(({ name, isAvailable }) => (
+                            <option
+                              key={name}
+                              value={name}
+                              disabled={!isAvailable && name !== selectedCourtInModal}
+                              className={!isAvailable ? 'text-slate-400 bg-slate-100' : 'text-slate-800'}
+                            >
+                              {name} {!isAvailable ? '(belegt)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                      </div>
+                    </div>
+
                 <div className={`space-y-5 ${!isUserAuthorizedToEdit ? "pointer-events-none opacity-80" : ""}`}>
                   {/* Zeitraum */}
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-2 gap-3 shrink-0 shadow-sm">
@@ -3963,7 +4783,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                           setEndTime(TIME_SLOTS[startIdx + 1]);
                         }
                       }}
-                      className="w-full p-2 border-2 border-slate-300 rounded-lg bg-white font-black text-[11px] outline-none focus:border-[var(--color-primary)] transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                      className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                     >
                       {TIME_SLOTS.slice(0, -1).map((t) => (
                         <option key={t} value={t}>
@@ -3980,7 +4800,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       value={endTime}
                       disabled={!isUserAuthorizedToEdit}
                       onChange={(e) => setEndTime(e.target.value)}
-                      className="w-full p-2 border-2 border-slate-300 rounded-lg bg-white font-black text-[11px] outline-none focus:border-[var(--color-primary)] transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                      className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                     >
                       {TIME_SLOTS.slice(
                         TIME_SLOTS.indexOf(modalStartTime) + 1,
@@ -4004,18 +4824,18 @@ const Dashboard: React.FC<DashboardProps> = ({
                         value={reason}
                         disabled={!isUserAuthorizedToEdit}
                         onChange={(e) => setReason(e.target.value)}
-                        className="w-full p-2 border-2 border-slate-300 rounded-xl font-bold text-xs outline-none focus:border-slate-800 bg-slate-50 focus:bg-white transition-colors disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-xl text-sm outline-none focus:border-slate-800 bg-slate-50 focus:bg-white transition-colors disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                         placeholder="z. B. Medenspiel, Training..."
                       />
                     </div>
                     <div className="flex flex-col gap-2 pt-1">
-                      <label className={`flex items-center gap-2.5 text-[11px] font-black text-slate-800 cursor-pointer p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors ${!isUserAuthorizedToEdit ? "opacity-60 bg-slate-100 cursor-not-allowed" : ""}`}>
+                      <label className={`flex items-center gap-3 text-[11px] font-black text-slate-800 cursor-pointer p-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors ${!isUserAuthorizedToEdit ? "opacity-60 bg-slate-100 cursor-not-allowed" : ""}`}>
                         <input
                           type="checkbox"
                           checked={isFullDay}
                           disabled={!isUserAuthorizedToEdit}
                           onChange={(e) => setIsFullDay(e.target.checked)}
-                          className="w-4 h-4 accent-slate-800"
+                          className="w-4 h-4 accent-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                         <span>GANZTÄGIG SPERREN</span>
                       </label>
@@ -4028,7 +4848,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <i className="fa-solid fa-user-check text-[var(--color-primary)] text-[9px]"></i>{" "}
                         {selectedSlot?.editingId ? "Spieler 1 (Ersteller)" : "Spieler 1 (Eingeloggt)"}
                       </label>
-                      <div className="font-black text-[11px] text-[var(--color-primary)] mt-0.5">
+                      <div className="font-black text-sm text-[var(--color-primary)] mt-0.5">
                         {spieler1Name}
                       </div>
                     </div>
@@ -4055,7 +4875,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 ? "Keine Berechtigung zum Bearbeiten"
                                 : "Mitspieler suchen & hinzufügen..."
                             }
-                            className="w-full pl-9 pr-3 py-2 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 font-bold text-xs transition-colors shadow-sm disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                            className="w-full pl-9 pr-3 py-2 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 text-sm transition-colors shadow-sm disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
 
@@ -4070,7 +4890,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     onMouseDown={(e) => { e.preventDefault(); setBookingTab("league"); }}
                                     className="text-xs text-amber-600 font-bold bg-amber-50 px-3 py-2 rounded-xl hover:bg-amber-100 transition-colors w-full border border-amber-200 shadow-sm"
                                   >
-                                    Suchst du einen Gegner aus der Hobbyliga?
+                                    Suchst du einen Gegner für dein Ligaspiel?
                                   </button>
                                 </div>
                               ) : (
@@ -4141,7 +4961,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         return (
                           <div className="flex flex-col justify-end">
                             <label
-                              className={`flex items-center gap-2.5 p-2 bg-green-50 border-2 rounded-xl transition-all shadow-sm ${ballMachineBelegt ? "opacity-50 border-red-200 bg-red-50 cursor-not-allowed" : !isUserAuthorizedToEdit ? "opacity-60 bg-slate-100 border-slate-200 cursor-not-allowed" : "border-[var(--color-primary)]/20 cursor-pointer hover:bg-green-100"}`}
+                              className={`flex items-center gap-3 p-2 bg-green-50 border-2 rounded-xl transition-all shadow-sm ${ballMachineBelegt ? "opacity-50 border-red-200 bg-red-50 cursor-not-allowed" : !isUserAuthorizedToEdit ? "opacity-60 bg-slate-100 border-slate-200 cursor-not-allowed" : "border-[var(--color-primary)]/20 cursor-pointer hover:bg-green-100"}`}
                             >
                               <input
                                 type="checkbox"
@@ -4152,7 +4972,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   }
                                 }}
                                 disabled={ballMachineBelegt || !isUserAuthorizedToEdit}
-                                className="w-4 h-4 accent-[var(--color-primary)] relative top-px disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="w-4 h-4 accent-[var(--color-primary)] relative top-px disabled:opacity-60 disabled:cursor-not-allowed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span className="text-[10px] font-black text-[var(--color-primary)] uppercase flex items-center gap-1.5">
                                 <i className="fa-solid fa-robot"></i>{" "}
@@ -4182,7 +5002,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 type="button"
                                 disabled={!isUserAuthorizedToEdit}
                                 onClick={() => setGuestCount(num)}
-                                className={`flex-1 py-1.5 rounded-lg border-2 font-black text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed ${guestCount === num ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-md" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300"}`}
+                                className={`flex-1 h-8 rounded-lg border-2 font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed ${guestCount === num ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-md" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300"}`}
                               >
                                 {num > 0 && (
                                   <i className="fa-solid fa-user text-[9px]"></i>
@@ -4208,7 +5028,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         disabled={!isUserAuthorizedToEdit}
                         onChange={(e) => setComment(e.target.value)}
                         placeholder="z. B. Vereinsmeisterschaft"
-                        className="w-full p-2 border-2 border-slate-300 rounded-xl font-bold text-xs outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-all shadow-sm disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                        className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-xl text-sm outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-all shadow-sm disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                       />
                     </div>
                   </div>
@@ -4222,7 +5042,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <div className="flex gap-2 w-full">
                   <button
                     onClick={confirmAction}
-                    className={`w-full text-white rounded-xl shadow-md transition-transform active:scale-95 uppercase tracking-widest flex items-center justify-center gap-2 py-2.5 text-xs font-medium ${isLockMode ? "bg-slate-500 hover:bg-slate-600" : "hover:brightness-95"}`}
+                    className={`w-full text-white rounded-xl shadow-md transition-transform active:scale-95 uppercase tracking-widest flex items-center justify-center gap-2 h-10 text-sm font-medium ${isLockMode ? "bg-slate-500 hover:bg-slate-600" : "hover:brightness-95"}`}
                     style={!isLockMode ? { backgroundColor: settings?.primaryColor || "var(--color-primary)" } : undefined}
                   >
                     <i
@@ -4252,7 +5072,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   )}
                 </div>
                 ) : (
-                  <div className="bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-start gap-2.5 shadow-sm">
+                  <div className="bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-start gap-3 shadow-sm">
                     <i className="fa-solid fa-circle-info text-slate-400 text-base mt-0.5"></i>
                     <span className="text-[11px] text-slate-500 font-sans font-semibold leading-relaxed">
                       Diese Reservierung kann nur vom Ersteller oder Admin bearbeitet werden.
@@ -4268,6 +5088,93 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <div className="p-5 overflow-y-auto flex-1 bg-amber-50/50" style={{ isolation: "isolate" }}>
                     <div className="space-y-5">
                       
+                      {/* Austragungsort Card with Facility Switcher */}
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm shrink-0">
+                        <div className="h-24 w-full relative bg-slate-200 overflow-hidden">
+                          <img
+                            src={venuePhoto}
+                            alt="Austragungsort Anlage"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent flex items-end justify-between p-3">
+                            <div className="text-white min-w-0 flex-1 pr-2">
+                              <div className="text-[9px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5 leading-none mb-1">
+                                <i className="fa-solid fa-location-dot"></i>
+                                Austragungsort
+                              </div>
+                              <div className="text-xs font-black truncate drop-shadow-sm text-white">
+                                {venueClubName}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="px-3 py-2 bg-white flex items-center justify-between gap-2">
+                          <a
+                            href={mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-bold text-slate-700 hover:text-[var(--color-primary)] flex items-center gap-1.5 min-w-0 transition-colors group cursor-pointer"
+                            title="In Google Maps öffnen"
+                          >
+                            <i className="fa-solid fa-map-pin text-[var(--color-primary)] text-xs shrink-0"></i>
+                            <span className="truncate">{displayAddress}</span>
+                            <i className="fa-solid fa-arrow-up-right-from-square text-[9px] text-slate-400 group-hover:text-[var(--color-primary)] shrink-0 transition-colors"></i>
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Anlage wählen */}
+                      <div className="bg-white p-3 rounded-xl border border-slate-200 shrink-0 shadow-sm">
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                          Anlage wählen
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={currentFacilitySelectValue}
+                            disabled={!isUserAuthorizedToEdit}
+                            onChange={(e) => handleSwitchFacility(e.target.value)}
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer text-slate-800 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
+                          >
+                            {availableClubsList.map((c) => {
+                              const cId = c.vereinsId || c.id;
+                              return (
+                                <option key={cId} value={cId} className="text-slate-800">
+                                  {c.clubName || c.name || cId} {c.city ? `(${c.city})` : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                        </div>
+                      </div>
+
+                      {/* Platz wählen */}
+                      <div className="bg-white p-3 rounded-xl border border-slate-200 shrink-0 shadow-sm">
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                          Platz wählen
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={selectedCourtInModal}
+                            disabled={!isUserAuthorizedToEdit}
+                            onChange={(e) => setSelectedCourtInModal(e.target.value)}
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer text-slate-800 disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
+                          >
+                            {currentModalCourtOptions.map(({ name, isAvailable }) => (
+                              <option
+                                key={name}
+                                value={name}
+                                disabled={!isAvailable && name !== selectedCourtInModal}
+                                className={!isAvailable ? 'text-slate-400 bg-slate-100' : 'text-slate-800'}
+                              >
+                                {name} {!isAvailable ? '(belegt)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                        </div>
+                      </div>
+
                       {/* Zeitraum */}
                       <div className="bg-white p-4 rounded-xl border border-slate-200 grid grid-cols-2 gap-4 shrink-0 shadow-sm">
                         <div>
@@ -4281,11 +5188,21 @@ const Dashboard: React.FC<DashboardProps> = ({
                               const newStart = e.target.value;
                               setModalStartTime(newStart);
                               const startIdx = TIME_SLOTS.indexOf(newStart);
-                              if (TIME_SLOTS.indexOf(endTime) <= startIdx) {
-                                setEndTime(TIME_SLOTS[startIdx + 1]);
+                              if (startIdx >= 0) {
+                                let maxEndIdx = TIME_SLOTS.length - 1;
+                              if (selectedSlot?.date && reservationRules?.openingHours) {
+                                const weekday = new Date(selectedSlot.date).getDay();
+                                const dayRule = reservationRules.openingHours[String(weekday)];
+                                if (dayRule && dayRule.end && !dayRule.closed) {
+                                  const idx = TIME_SLOTS.indexOf(dayRule.end);
+                                  if (idx !== -1) maxEndIdx = idx;
+                                }
+                              }
+                              const endIdx = Math.min(maxEndIdx, startIdx + 2);
+                              setEndTime(TIME_SLOTS[endIdx]);
                               }
                             }}
-                            className="w-full p-2.5 border-2 border-slate-300 rounded-lg bg-white font-black text-xs outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                           >
                             {TIME_SLOTS.slice(0, -1).map((t) => (
                               <option key={t} value={t}>{t} Uhr</option>
@@ -4294,98 +5211,132 @@ const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                         <div>
                           <label className="block text-[11px] font-black text-slate-600 uppercase tracking-wider mb-1.5">
-                            Bis
+                            Bis (2 - 3 Std.)
                           </label>
                           <select 
                             value={endTime}
                             disabled={!isUserAuthorizedToEdit}
                             onChange={(e) => setEndTime(e.target.value)}
-                            className="w-full p-2.5 border-2 border-slate-300 rounded-lg bg-white font-black text-xs outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-amber-500 transition-colors appearance-none cursor-pointer disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium"
                           >
-                            {TIME_SLOTS.slice(TIME_SLOTS.indexOf(modalStartTime) + 1).map((t) => (
-                              <option key={t} value={t}>{t} Uhr</option>
-                            ))}
+                            {leagueEndTimeOptions.map((t) => {
+                              const dur = getDurationInHours(modalStartTime, t);
+                              return (
+                                <option key={t} value={t}>
+                                  {t} Uhr ({dur.toFixed(dur % 1 === 0 ? 0 : 1)} Std.)
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
                       </div>
 
-                      {(() => {
-                        const [h1, m1] = modalStartTime.split(':').map(Number);
-                        const [h2, m2] = endTime.split(':').map(Number);
-                        const diff = (h2 * 60 + (m2 || 0)) - (h1 * 60 + (m1 || 0));
-                        if (diff > 0 && diff < 90) {
-                          return (
-                            <div className="bg-amber-100/50 border border-amber-200 text-amber-800 p-3 rounded-xl flex items-start gap-2.5 shadow-sm mt-3">
-                              <i className="fa-solid fa-triangle-exclamation text-amber-500 text-sm mt-0.5"></i>
-                              <span className="text-[11px] font-bold">Achtung: Ein Hobbyliga-Spiel sollte normalerweise 90 Minuten dauern (aktuell: {diff} Min).</span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
+                      {/* Validation Warning for Duration */}
+                      {currentLeagueDuration > 0 && currentLeagueDuration < 2 && (
+                        <div className="text-xs font-bold text-amber-800 bg-amber-100/90 border border-amber-300 px-3 py-2 rounded-xl flex items-center gap-2">
+                          <i className="fa-solid fa-triangle-exclamation text-amber-600 text-sm shrink-0"></i>
+                          <span>Mindestspieldauer für Ligaspiele: 2 Stunden (aktuell: {currentLeagueDuration.toFixed(1)} Std.).</span>
+                        </div>
+                      )}
+                      {currentLeagueDuration > 3 && (
+                        <div className="text-xs font-bold text-red-800 bg-red-100/90 border border-red-300 px-3 py-2 rounded-xl flex items-center gap-2">
+                          <i className="fa-solid fa-circle-exclamation text-red-600 text-sm shrink-0"></i>
+                          <span>Maximaldauer für Ligaspiele: 3 Stunden (aktuell: {currentLeagueDuration.toFixed(1)} Std.).</span>
+                        </div>
+                      )}
 
                       {/* League Opponent Search */}
-                      <div className="space-y-2 relative bg-white p-4 rounded-xl border border-slate-200 shadow-sm mt-4">
-                        <label className="block text-[11px] font-black text-slate-600 uppercase mb-1.5">
-                          Gegner (Hobbyliga)
-                        </label>
-                        {!leagueOpponent ? (
-                          <div className="relative">
-                            <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs pointer-events-none"></i>
-                            <input 
-                              type="text"
-                              value={leagueOpponentQuery}
-                              disabled={!isUserAuthorizedToEdit}
-                              onChange={(e) => setLeagueOpponentQuery(e.target.value)}
-                              onFocus={() => setShowLeagueSuggestions(true)}
-                              onBlur={() => setTimeout(() => setShowLeagueSuggestions(false), 200)}
-                              placeholder="Gegner suchen..."
-                              className="w-full pl-10 pr-3 py-2.5 border-2 border-slate-200 rounded-xl bg-white focus:border-amber-500 outline-none text-slate-900 font-bold text-xs transition-colors shadow-sm disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed"
-                            />
+                      <div className="space-y-4 mt-4">
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">
+                            {selectedSlot?.editingId ? "Spieler 1 (Ersteller)" : "Spieler 1 (Eingeloggt)"}
+                          </label>
+                          <div className="font-bold text-[13px] text-[var(--color-primary)] flex items-center gap-1.5">
+                            <i className="fa-solid fa-user-check text-[var(--color-primary)]"></i>
+                            {spieler1Name}
+                          </div>
+                        </div>
+                        <div className="space-y-2.5 relative">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">
+                            Gegner
+                          </label>
+                          {!leagueOpponent ? (
+                            <div className="relative">
+                              <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                              <input 
+                                type="text"
+                                value={leagueOpponentQuery}
+                                disabled={!isUserAuthorizedToEdit}
+                                onChange={(e) => setLeagueOpponentQuery(e.target.value)}
+                                onFocus={() => setShowLeagueSuggestions(true)}
+                                onBlur={() => setTimeout(() => setShowLeagueSuggestions(false), 250)}
+                                placeholder="Gegner suchen (Name, Vorname...)"
+                                className="w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-accent)] outline-none text-slate-900 text-sm transition-all shadow-sm disabled:opacity-60 disabled:bg-slate-100 disabled:cursor-not-allowed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              />
                             {showLeagueSuggestions && leagueOpponentQuery.trim().length > 0 && isUserAuthorizedToEdit && (
                               <div className="absolute top-full left-0 right-0 z-[120] mt-1 bg-white border border-slate-200 rounded-2xl shadow-lg overflow-hidden max-h-[190px] overflow-y-auto">
                                 {getFilteredLeagueUsers(leagueOpponentQuery).length === 0 ? (
-                                  <div className="p-3 text-xs text-slate-500 text-center">Keine passenden Spieler gefunden.</div>
+                                  <div className="p-3 text-xs text-slate-500 text-center font-medium">Keine passenden Spieler gefunden.</div>
                                 ) : (
-                                  getFilteredLeagueUsers(leagueOpponentQuery).map((s) => (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        setLeagueOpponent(s);
-                                        setLeagueOpponentQuery("");
-                                        setShowLeagueSuggestions(false);
-                                      }}
-                                      className="w-full text-left px-4 py-2.5 text-xs hover:bg-amber-50 font-bold text-slate-700 border-b border-slate-100 last:border-0 flex items-center gap-2 transition-colors cursor-pointer"
-                                    >
-                                      <i className="fa-solid fa-user-plus text-amber-500 opacity-75"></i>
-                                      <span>{formatPlayerName(s)}</span>
-                                    </button>
-                                  ))
+                                  getFilteredLeagueUsers(leagueOpponentQuery).map((u) => {
+                                    const displayName = resolvePlayerDisplayName(u);
+                                    const identifier = u.name || u.id;
+                                    const clubBadge = u.vereinsId ? u.vereinsId.toUpperCase() : "";
+                                    return (
+                                      <button
+                                        key={u.id || identifier}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          setLeagueOpponent(identifier);
+                                          setLeagueOpponentQuery("");
+                                          setShowLeagueSuggestions(false);
+                                        }}
+                                        className="w-full text-left px-4 py-2.5 text-xs hover:bg-amber-50 font-bold text-slate-700 border-b border-slate-100 last:border-0 flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                                      >
+                                        <div className="flex items-center gap-3 truncate">
+                                          <UserAvatar user={u} name={displayName} size="xs" className="shrink-0" />
+                                          <span className="truncate">{displayName}</span>
+                                        </div>
+                                        {clubBadge && (
+                                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                                            {clubBadge}
+                                          </span>
+                                        )}
+                                      </button>
+                                    );
+                                  })
                                 )}
                               </div>
                             )}
                           </div>
                         ) : (
                           <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-xl shadow-sm">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white text-xs">
-                                <i className="fa-solid fa-trophy"></i>
-                              </div>
-                              <span className="font-bold text-sm text-slate-800">{formatPlayerName(leagueOpponent)}</span>
+                            <div className="flex items-center gap-3 truncate">
+                              <UserAvatar
+                                user={selectedOpponentUser}
+                                avatarUrl={selectedOpponentUser?.avatarUrl}
+                                avatarIcon={selectedOpponentUser?.avatarIcon}
+                                name={selectedOpponentUser ? resolvePlayerDisplayName(selectedOpponentUser) : formatPlayerName(leagueOpponent)}
+                                size="sm"
+                                className="shrink-0"
+                              />
+                              <span className="font-bold text-sm text-slate-800 truncate">
+                                {selectedOpponentUser ? resolvePlayerDisplayName(selectedOpponentUser) : formatPlayerName(leagueOpponent)}
+                              </span>
                             </div>
                             {isUserAuthorizedToEdit && (
                               <button
                                 type="button"
                                 onClick={() => setLeagueOpponent(null)}
-                                className="w-8 h-8 rounded-full bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors shadow-sm border border-slate-200 cursor-pointer"
+                                className="w-8 h-8 rounded-full bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors shadow-sm border border-slate-200 cursor-pointer shrink-0"
                               >
                                 <i className="fa-solid fa-xmark text-sm"></i>
                               </button>
                             )}
                           </div>
                         )}
+                      </div>
                       </div>
 
                     </div>
@@ -4396,13 +5347,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <div className="flex gap-2 w-full">
                         <button
                           onClick={handleLeagueSubmit}
-                          className="w-full text-white bg-amber-500 hover:bg-amber-600 rounded-xl shadow-md transition-transform active:scale-95 uppercase tracking-widest flex items-center justify-center gap-2 py-2.5 text-xs font-medium"
+                          className="w-full text-white rounded-xl shadow-md transition-transform active:scale-95 uppercase tracking-widest flex items-center justify-center gap-2 h-10 text-sm font-medium hover:brightness-95"
+                          style={{ backgroundColor: settings?.primaryColor || "var(--color-primary)" }}
                         >
-                          <i className="fa-solid fa-trophy text-[12px]"></i> Hobbyliga Spiel eintragen
+                          <i className="fa-solid fa-trophy text-[12px]"></i> Ligaspiel eintragen
                         </button>
                       </div>
                     ) : (
-                      <div className="bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-start gap-2.5 shadow-sm">
+                      <div className="bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-start gap-3 shadow-sm">
                         <i className="fa-solid fa-circle-info text-slate-400 text-base mt-0.5"></i>
                         <span className="text-[11px] text-slate-500 font-sans font-semibold leading-relaxed">
                           Diese Reservierung kann nur vom Ersteller oder Admin bearbeitet werden.
@@ -4458,7 +5410,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             {inlineLoginError && (
-              <div className="bg-rose-50 border-x-4 border-rose-500 text-rose-700 p-3 rounded-r-xl flex items-center gap-2.5 text-xs font-bold shadow-sm">
+              <div className="bg-rose-50 border-x-4 border-rose-500 text-rose-700 p-3 rounded-r-xl flex items-center gap-3 text-xs font-bold shadow-sm">
                 <i className="fa-solid fa-circle-exclamation text-base shrink-0"></i>
                 <span>{inlineLoginError}</span>
               </div>
@@ -4499,7 +5451,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   autoFocus
                   value={inlineUsername}
                   onChange={(e) => setInlineUsername(e.target.value)}
-                  className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors"
+                  className="w-full p-3 border-2 border-slate-200 rounded-xl text-sm outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   placeholder="z. B. max.mustermann"
                 />
               </div>
@@ -4513,7 +5465,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   required
                   value={inlinePassword}
                   onChange={(e) => setInlinePassword(e.target.value)}
-                  className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors"
+                  className="w-full p-3 border-2 border-slate-200 rounded-xl text-sm outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   placeholder="••••••••"
                 />
               </div>
@@ -4525,7 +5477,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   backgroundColor:
                     settings?.primaryColor || "var(--color-primary)",
                 }}
-                className="w-full text-white hover:brightness-95 disabled:opacity-50 rounded-xl shadow-md transition-all active:scale-[0.98] uppercase tracking-widest flex items-center justify-center gap-2 py-3.5 text-xs font-black cursor-pointer"
+                className="w-full text-white hover:brightness-95 disabled:opacity-50 rounded-xl shadow-md transition-all active:scale-[0.98] uppercase tracking-widest flex items-center justify-center gap-2 h-10 text-sm font-black cursor-pointer"
               >
                 {isInlineLoggingIn ? (
                   <>

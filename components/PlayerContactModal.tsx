@@ -1,13 +1,13 @@
 import React from "react";
 import { User, Person } from "../types";
+import { resolveClubName } from "../services/clubHelper";
+import { resolvePlayerDisplayName } from "../utils/playerHelper";
 
 
 
-const getWhatsAppLink = (phone: string) => {
-  if (!phone) return '';
-  return `https://wa.me/${phone.replace(/[^0-9]/g, '')}`;
+const canViewContactInfo = (user: any, target: any, viewerClubIds?: string[]) => {
+  return target.showContactInfo !== false;
 };
-const canViewContactInfo = (user: any, target: any, viewerClubIds?: string[]) => true; // mock for now
 
 interface PlayerContactModalProps {
   targetUser: User | Person;
@@ -29,15 +29,7 @@ export const PlayerContactModal: React.FC<PlayerContactModalProps> = ({
   if (!targetUser) return null;
   const isAllowed = canViewContactInfo(targetUser, currentUser, viewerClubIds);
   
-  const whatsAppUrl = targetUser.phone ? getWhatsAppLink(targetUser.phone) : null;
-
-  
-  const fullName =
-    `${targetUser.firstName || ""} ${targetUser.lastName || ""}`.trim() ||
-    targetUser.klarname ||
-    targetUser.name ||
-    "Unbekannter Spieler";
-
+  const fullName = resolvePlayerDisplayName(targetUser);
   const genderLabel = targetUser.gender === "w" ? "Damen" : "Herren";
 
   return (
@@ -62,7 +54,7 @@ export const PlayerContactModal: React.FC<PlayerContactModalProps> = ({
             <div>
               <h3 className="text-base font-black tracking-wide leading-tight">{fullName}</h3>
               <p className="text-[10px] uppercase font-bold text-white/80 tracking-widest">
-                {genderLabel}-Rangliste • {targetUser.vereinsId || "SV Neuhausen"}
+                {genderLabel}-Rangliste • {resolveClubName(targetUser.vereinsId)}
               </p>
             </div>
           </div>
@@ -76,23 +68,26 @@ export const PlayerContactModal: React.FC<PlayerContactModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 space-y-6">
-          {/* Stats Bar */}
-          {(rankPosition !== undefined || points !== undefined) && (
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
-              {rankPosition !== undefined && (
-                <div className="text-center border-r border-slate-200 pr-2">
-                  <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Rangplatz</span>
-                  <span className="text-base font-black text-slate-800">#{rankPosition}</span>
-                </div>
-              )}
-              {points !== undefined && (
-                <div className="text-center">
-                  <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Punktestand</span>
-                  <span className="text-base font-black text-[var(--color-primary)]">
-                    {typeof points === "number" ? points.toFixed(1) : points}
-                  </span>
-                </div>
-              )}
+          {/* Rangplatz-Anzeige waagerecht zentriert ohne Trennlinie */}
+          {rankPosition !== undefined && (
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
+              <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+                Rangplatz
+              </span>
+              <span className="text-base font-black text-slate-800">
+                #{rankPosition}
+              </span>
+            </div>
+          )}
+
+          {points !== undefined && (
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
+              <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">
+                Punktestand
+              </span>
+              <span className="text-base font-black text-[var(--color-primary)]">
+                {typeof points === "number" ? points.toFixed(1) : points}
+              </span>
             </div>
           )}
 
@@ -105,34 +100,22 @@ export const PlayerContactModal: React.FC<PlayerContactModalProps> = ({
             {isAllowed ? (
               <div className="space-y-3">
                 {targetUser.phone ? (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <i className="fa-solid fa-phone text-xs"></i>
-                      </div>
-                      <div>
-                        <span className="text-[9px] font-black uppercase text-slate-400 block">Telefon</span>
-                        <a href={`tel:${targetUser.phone}`} className="text-xs font-bold text-slate-800 hover:underline">
-                          {targetUser.phone}
-                        </a>
-                      </div>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <i className="fa-solid fa-phone text-xs"></i>
                     </div>
-                    {whatsAppUrl && (
-                      <a
-                        href={whatsAppUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 transition shadow-sm active:scale-95"
-                      >
-                        <i className="fa-brands fa-whatsapp text-sm"></i> WhatsApp
+                    <div>
+                      <span className="text-[9px] font-black uppercase text-slate-400 block">Telefon</span>
+                      <a href={`tel:${targetUser.phone}`} className="text-xs font-bold text-slate-800 hover:underline">
+                        {targetUser.phone}
                       </a>
-                    )}
+                    </div>
                   </div>
                 ) : (
                   <p className="text-xs text-slate-400 italic">Keine Telefonnummer hinterlegt.</p>
                 )}
 
-                {targetUser.email ? (
+                {targetUser.email && !targetUser.email.endsWith('.system.local') && !targetUser.is_placeholder_email ? (
                   <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
                     <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
                       <i className="fa-solid fa-envelope text-xs"></i>
@@ -145,7 +128,7 @@ export const PlayerContactModal: React.FC<PlayerContactModalProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400 italic">Keine E-Mail-Adresse hinterlegt.</p>
+                  <p className="text-xs text-slate-400 italic">Keine gültige E-Mail-Adresse hinterlegt.</p>
                 )}
               </div>
             ) : (

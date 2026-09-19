@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { updateEmail, updatePassword } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { saveUser, ClubSettings } from "../services/db";
+import { saveUser, isUsernameTakenGlobally, ClubSettings, DEFAULT_ONBOARDING_SETTINGS } from "../services/db";
 import { User, Gender } from "../types";
+import { parseDateToYYYYMMDD } from "../utils/playerHelper";
+import { AvatarUploader } from "./AvatarUploader";
 
 
 interface ProfileModalProps {
   currentUser: User;
+  loggedInUser?: User | null;
   allUsers: Record<string, User>;
   onClose: () => void;
   onCloseStart?: () => void;
@@ -17,6 +20,7 @@ interface ProfileModalProps {
 
 const ProfileModal: React.FC<ProfileModalProps> = ({
   currentUser,
+  loggedInUser,
   allUsers,
   onClose,
   onCloseStart,
@@ -27,24 +31,64 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   const [username, setUsername] = useState(currentUser.name);
   const [firstName, setFirstName] = useState(currentUser.firstName || "");
   const [lastName, setLastName] = useState(currentUser.lastName || "");
-  const [email, setEmail] = useState(currentUser.email || "");
+  const [email, setEmail] = useState(() => {
+    const e = currentUser.email || "";
+    if (e.endsWith(".system.local")) return "";
+    return e;
+  });
   const [phone, setPhone] = useState(currentUser.phone || "");
   const [gender, setGender] = useState<Gender>(currentUser.gender || "m");
-  const [showContactInfo, setShowContactInfo] = useState<boolean>(
+  const [birthDate, setBirthDate] = useState(() => parseDateToYYYYMMDD(currentUser.birthDate));
+  const [showContactInfo, setShowContactInfo] = useState(
     currentUser.showContactInfo !== false
   );
   const [showOnboardingHints, setShowOnboardingHints] = useState(
     currentUser.show_onboarding_hints !== false
   );
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser.avatarUrl || null);
+  const [avatarIcon, setAvatarIcon] = useState<string | null>(currentUser.avatarIcon || "initials");
+
+  useEffect(() => {
+    setAvatarUrl(currentUser.avatarUrl || null);
+    setAvatarIcon(currentUser.avatarIcon || "initials");
+  }, [currentUser.avatarUrl, currentUser.avatarIcon]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+
+  const activeUser = loggedInUser || currentUser;
+  const isAdmin = activeUser.role === "admin" || activeUser.role === "super-admin";
+
+  const onboardingConfig = {
+    ...DEFAULT_ONBOARDING_SETTINGS,
+    ...(settings?.club_onboarding_settings || {}),
+  };
+
+  const fieldNamePermission = onboardingConfig.field_name || "EDITABLE";
+  const fieldBirthdatePermission = onboardingConfig.field_birthdate || onboardingConfig.field_demographics || "READ_ONLY";
+  const fieldGenderPermission = onboardingConfig.field_gender || onboardingConfig.field_demographics || "READ_ONLY";
+
+  const isNameDisabled = !isAdmin && fieldNamePermission === "READ_ONLY";
+  const isBirthdateDisabled = !isAdmin && fieldBirthdatePermission === "READ_ONLY";
+  const isGenderDisabled = !isAdmin && fieldGenderPermission === "READ_ONLY";
+
+  const showSection1 =
+    fieldNamePermission !== "HIDDEN" || fieldBirthdatePermission !== "HIDDEN" || fieldGenderPermission !== "HIDDEN";
+
+  // Info notice is shown ONLY if at least one displayed field in this section is set to 'READ_ONLY'
+  const hasDisplayedReadOnlyField =
+    (fieldNamePermission !== "HIDDEN" && fieldNamePermission === "READ_ONLY") ||
+    (fieldBirthdatePermission !== "HIDDEN" && fieldBirthdatePermission === "READ_ONLY") ||
+    (fieldGenderPermission !== "HIDDEN" && fieldGenderPermission === "READ_ONLY");
+
+  const showAdminNotice = !isAdmin && hasDisplayedReadOnlyField;
 
   useEffect(() => {
     const timer = setTimeout(() => setIsAnimatingIn(true), 10);
@@ -63,13 +107,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   };
 
   
-  const getWhatsAppLink = (phone: string) => {
-    if (!phone) return '';
-    return `https://wa.me/${phone.replace(/[^0-9]/g, '')}`;
-  };
-  const whatsAppUrl = getWhatsAppLink(phone);
-
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!auth.currentUser) {
@@ -100,18 +137,25 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
 
     const normalizedNewUsername = username.trim();
 
-    const isTaken = Object.values(allUsers).some(
+    const isTakenLocally = Object.values(allUsers).some(
       (u: User) =>
         u.id !== currentUser.id &&
         u.name.toLowerCase() === normalizedNewUsername.toLowerCase()
     );
-    if (isTaken) {
-      setError("Dieser Benutzername ist bereits vergeben.");
+    if (isTakenLocally) {
+      setError("Dieser Benutzername ist in diesem Verein bereits vergeben.");
+      return;
+    }
+
+    const isTakenGlobally = await isUsernameTakenGlobally(normalizedNewUsername, currentUser.id);
+    if (isTakenGlobally) {
+      setError("Dieser Benutzername ist systemweit bereits vergeben.");
       return;
     }
 
     setIsSaving(true);
     setError("");
+    setSuccessMessage("");
 
     try {
       if (newPassword) {
@@ -129,14 +173,15 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
       const usernameChanged =
         normalizedNewUsername.toLowerCase() !== currentUser.name.toLowerCase();
 
+      const effectiveVereinsId = (settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen")
+        .toLowerCase()
+        .trim();
+
       if (usernameChanged && !isSystemAdmin && !finalEmail) {
         const emailSlug = normalizedNewUsername
           .toLowerCase()
           .replace(/\s/g, "");
-        const vId = (currentUser.vereinsId || "sv-neuhausen")
-          .toLowerCase()
-          .trim();
-        finalEmail = `${emailSlug}@${vId}.system.local`;
+        finalEmail = `${emailSlug}@${effectiveVereinsId}.system.local`;
       }
 
       if (finalEmail && finalEmail.toLowerCase() !== oldEmail.toLowerCase()) {
@@ -158,16 +203,20 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
         email: finalEmail,
         phone: phone.trim(),
         gender,
+        birthDate: birthDate ? birthDate.trim() : null,
         showContactInfo,
         show_onboarding_hints: showOnboardingHints,
+        avatarUrl: avatarUrl || null,
+        avatarIcon: avatarIcon || "initials",
         ...(newPassword ? { password: newPassword } : {}),
       };
 
-      await saveUser(currentUser.vereinsId || "sv-neuhausen", updatedUser);
+      await saveUser(effectiveVereinsId, updatedUser);
       onSuccess(updatedUser);
-      handleClose();
+      setSuccessMessage("Daten / Icon erfolgreich gespeichert.");
     } catch (err: any) {
       console.error("Profile update error:", err);
+      setSuccessMessage("");
       let errMsg = "Fehler beim Speichern des Profils.";
       if (err.code === "auth/requires-recent-login") {
         errMsg =
@@ -234,85 +283,126 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                 </div>
               )}
 
-              {/* Status Banner / Member Info */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Verein</span>
-                  <span className="text-xs font-bold text-slate-800 uppercase">{currentUser.vereinsId || "SV Neuhausen"}</span>
+              {successMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold leading-relaxed flex items-center gap-2 animate-in fade-in duration-200 shadow-2xs">
+                  <i className="fa-solid fa-circle-check text-emerald-600 text-sm shrink-0"></i>
+                  <span>{successMessage}</span>
                 </div>
-                <div className="text-right">
-                  <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Ranglisten-Kategorie</span>
-                  <span className="text-xs font-bold text-[var(--color-primary)] uppercase">
-                    {gender === "w" ? "Damen" : "Herren"}
-                  </span>
-                </div>
-              </div>
+              )}
+
+              {/* Avatar-Uploader mit Hard-Bandwidth-Protection (WebP <= 25 KB & 0-Byte Vektor Fallback) */}
+              <AvatarUploader
+                user={currentUser}
+                userId={currentUser.id || currentUser.name}
+                avatarUrl={avatarUrl}
+                avatarIcon={avatarIcon}
+                onChange={({ avatarUrl: newUrl, avatarIcon: newIcon }) => {
+                  if (newUrl !== undefined) {
+                    setAvatarUrl(newUrl);
+                    if (newUrl) setAvatarIcon(null);
+                  }
+                  if (newIcon !== undefined) {
+                    setAvatarIcon(newIcon);
+                    if (newIcon) setAvatarUrl(null);
+                  }
+                }}
+                primaryColor={primaryColor}
+              />
 
               {/* Section 1: Realer Name & Geschlecht */}
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
-                  <i className="fa-solid fa-address-card text-[11px]"></i>
-                  Persönliche Daten (Pflichtfelder)
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                      Vorname <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      type="text"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="Max"
-                      required
-                      className="w-full text-xs px-3 border-2 border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all py-2"
-                    />
+              {showSection1 && (
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                    <i className="fa-solid fa-address-card text-[11px]"></i>
+                    Persönliche Daten {fieldNamePermission !== "HIDDEN" ? "(Pflichtfelder)" : ""}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {fieldNamePermission !== "HIDDEN" && (
+                      <>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                            Vorname <span className="text-red-500">*</span>
+                          </label>
+                          <input 
+                            type="text"
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            placeholder="Max"
+                            required
+                            disabled={isNameDisabled}
+                            className={`w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium ${
+                              isNameDisabled
+                                ? "disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                : ""
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                            Nachname <span className="text-red-500">*</span>
+                          </label>
+                          <input 
+                            type="text"
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                            placeholder="Mustermann"
+                            required
+                            disabled={isNameDisabled}
+                            className={`w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium ${
+                              isNameDisabled
+                                ? "disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                : ""
+                            }`}
+                          />
+                        </div>
+                      </>
+                    )}
+                    {fieldGenderPermission !== "HIDDEN" && (
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                          Geschlecht
+                        </label>
+                        <select
+                          value={gender}
+                          onChange={(e) => setGender(e.target.value as Gender)}
+                          disabled={isGenderDisabled}
+                          className="w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed cursor-pointer font-sans font-medium"
+                        >
+                          <option value="m">männlich</option>
+                          <option value="w">weiblich</option>
+                        </select>
+                      </div>
+                    )}
+                    {fieldBirthdatePermission !== "HIDDEN" && (
+                      <div>
+                        <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                          Geburtsdatum
+                        </label>
+                        <input 
+                          type="date"
+                          min="1900-01-01"
+                          max="2099-12-31"
+                          value={birthDate}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val.length <= 10) {
+                              setBirthDate(val);
+                            }
+                          }}
+                          disabled={isBirthdateDisabled}
+                          className="w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed font-sans font-medium"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                      Nachname <span className="text-red-500">*</span>
-                    </label>
-                    <input 
-                      type="text"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Mustermann"
-                      required
-                      className="w-full text-xs px-3 border-2 border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all py-2"
-                    />
-                  </div>
+                  {showAdminNotice && (
+                    <div className="mt-2 text-[10px] text-slate-400 font-medium px-1 flex items-start gap-1.5">
+                      <i className="fa-solid fa-circle-info mt-0.5 text-blue-400"></i>
+                      Stammdaten zur Liga-Zuordnung. Änderungen bitte über den Administrator anfragen.
+                    </div>
+                  )}
                 </div>
-
-                <div>
-                  <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                    Geschlecht <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setGender("m")}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                        gender === "m"
-                          ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm"
-                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      <i className="fa-solid fa-mars"></i> Herren ('m')
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setGender("w")}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                        gender === "w"
-                          ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm"
-                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      <i className="fa-solid fa-venus"></i> Damen ('w')
-                    </button>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Section 1.5: Kontaktdaten & WhatsApp Link */}
               <div className="space-y-4 pt-1">
@@ -329,59 +419,22 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="max@beispiel.de"
-                      className="w-full text-xs px-3 border-2 border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all py-2"
+                      placeholder="name@beispiel.de"
+                      className="w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                     />
                   </div>
                   <div>
                     <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
-                      Telefonnummer (für Spielvereinbarungen)
+                      TELEFONNUMMER
                     </label>
                     <input 
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+49 170 1234567"
-                      className="w-full text-xs px-3 border-2 border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all py-2"
+                      className="w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                     />
                   </div>
-                </div>
-
-                {/* Privacy Toggle (Kontaktfreigabe) */}
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showContactInfo}
-                      onChange={(e) => setShowContactInfo(e.target.checked)}
-                      className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer shrink-0"
-                    />
-                    <div>
-                      <span className="text-xs font-bold text-slate-800 block">
-                        Kontaktinformationen sichtbar: {showContactInfo ? "Ja" : "Nein"}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-medium block leading-tight mt-0.5">
-                        Wenn aktiviert, können Spieler deiner Regio-Rangliste deine Telefonnummer und E-Mail sehen, um Forderungsspiele zu vereinbaren.
-                      </span>
-                    </div>
-                  </label>
-
-                  {/* WhatsApp Button Preview */}
-                  {phone.trim() && showContactInfo && whatsAppUrl && (
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1.5">
-                        <i className="fa-brands fa-whatsapp text-emerald-600 text-sm"></i> WhatsApp-Link bereit
-                      </span>
-                      <a
-                        href={whatsAppUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 hover:bg-emerald-700 transition"
-                      >
-                        <i className="fa-brands fa-whatsapp"></i> Chat Starten
-                      </a>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -401,7 +454,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Benutzername"
-                    className="w-full text-xs px-3 border-2 border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all py-2"
+                    className="w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                   />
                 </div>
 
@@ -416,7 +469,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full text-xs px-3 pr-9 border-2 border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all py-2"
+                        className="w-full h-8 px-3 pr-9 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                       />
                       <button
                         type="button"
@@ -436,27 +489,39 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full text-xs px-3 border-2 border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all py-2"
+                      className="w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Section 3: App Hilfen */}
+              {/* Section 3: App Hilfen & Privatsphäre */}
               <div className="space-y-3 pt-2">
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
                   <i className="fa-solid fa-sliders text-[11px]"></i>
-                  App-Anzeige
+                  Privatsphäre & App-Anzeige
                 </h4>
+                <label className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={showContactInfo}
+                    onChange={(e) => setShowContactInfo(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">Kontaktdaten freigeben</span>
+                    <span className="text-[10px] text-slate-500 font-medium">Meine E-Mail und Telefonnummer in Börse/Rangliste anzeigen</span>
+                  </div>
+                </label>
                 <label className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
                   <input
                     type="checkbox"
                     checked={showOnboardingHints}
                     onChange={(e) => setShowOnboardingHints(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                    className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-800 block">Onboarding-Tipps anzeigen</span>
+                    <span className="text-xs font-bold text-slate-800 block">Tipps anzeigen</span>
                   </div>
                 </label>
               </div>
@@ -467,7 +532,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
             <button
               type="submit"
               disabled={isSaving}
-              className="w-full text-white rounded-2xl uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-50 inline-flex items-center justify-center gap-2 py-2.5 text-sm font-medium"
+              className="w-full text-white rounded-2xl uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-50 inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-medium whitespace-nowrap"
               style={{ backgroundColor: primaryColor }}
             >
               {isSaving ? (

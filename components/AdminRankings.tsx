@@ -1,10 +1,13 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { RankingState, User, RankingCategory } from "../types";
+import { ClubSettings } from "../services/db";
 
 interface AdminRankingsProps {
   rankings: RankingState | null;
   users: Record<string, User>;
   onUpdateRankings: (newData: RankingState) => void;
+  settings?: ClubSettings;
+  onUpdateSettings?: (newSettings: ClubSettings) => void;
 }
 
 const defaultRules = `* Forderungsrecht innerhalb der gesamten Kategorie.
@@ -16,9 +19,13 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
   rankings,
   users,
   onUpdateRankings,
+  settings,
+  onUpdateSettings,
 }) => {
   const categories = rankings?.categories || [];
   const rules = rankings?.rules || defaultRules;
+  const currentViewMode: "pyramid" | "list" =
+    settings?.rankingViewMode || rankings?.viewMode || "pyramid";
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(
     categories.length > 0 ? categories[0].id : null,
   );
@@ -58,12 +65,34 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
   const activeCategory = categories.find((c) => c.id === activeCategoryId);
 
   const handleUpdate = (newCategories: RankingCategory[]) => {
-    onUpdateRankings({ categories: newCategories, rules: rules });
+    onUpdateRankings({
+      categories: newCategories,
+      rules: rules,
+      viewMode: currentViewMode,
+    });
   };
 
   const handleSaveRules = () => {
-    onUpdateRankings({ categories: categories, rules: editedRulesText });
+    onUpdateRankings({
+      categories: categories,
+      rules: editedRulesText,
+      viewMode: currentViewMode,
+    });
     setIsEditingRules(false);
+  };
+
+  const handleUpdateGlobalViewMode = (mode: "pyramid" | "list") => {
+    onUpdateRankings({
+      categories: categories,
+      rules: rules,
+      viewMode: mode,
+    });
+    if (onUpdateSettings && settings) {
+      onUpdateSettings({
+        ...settings,
+        rankingViewMode: mode,
+      });
+    }
   };
 
   const handleAddCategory = () => {
@@ -250,7 +279,46 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
   }, [newPlayerQuery, userList, activeEntryNames]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Global View Mode Setting */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+            <i className="fa-solid fa-eye text-[var(--color-primary)]"></i>
+            Globales Ansichtsformat der Rangliste
+          </h4>
+          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+            Bestimmt die Darstellung für alle Mitglieder (Pyramide oder Tabelle). Der manuelle Ansichts-Schalter auf der Mitgliederseite ist deaktiviert.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleUpdateGlobalViewMode("pyramid")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              currentViewMode === "pyramid"
+                ? "bg-white text-slate-900 shadow-xs font-black"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <i className="fa-solid fa-network-wired text-[11px]"></i>
+            Pyramide (Tannenbaum)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleUpdateGlobalViewMode("list")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              currentViewMode === "list"
+                ? "bg-white text-slate-900 shadow-xs font-black"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <i className="fa-solid fa-list-ol text-[11px]"></i>
+            Tabelle (Liste)
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Category Management */}
         <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 shadow-sm">
@@ -264,7 +332,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
               placeholder="Name (z.B. Herren, Damen)"
-              className="w-full px-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white py-2"
+              className="w-full px-2.5 rounded-xl border border-slate-300 text-xs bg-white py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
             />
             <div className="flex gap-2">
               <select 
@@ -272,7 +340,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                 onChange={(e) =>
                   setNewCatLayout(e.target.value as "pyramid" | "linear")
                 }
-                className="flex-1 px-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white py-2"
+                className="flex-1 px-2.5 rounded-xl border border-slate-300 text-xs bg-white py-2 font-sans font-medium"
               >
                 <option value="pyramid">Tannenbaum (Pyramide)</option>
                 <option value="linear">Lineare Liste</option>
@@ -416,7 +484,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
               {isEditingRules && (
                 <div className="mb-4 bg-white p-3 rounded-2xl border border-slate-200 space-y-3">
                   <textarea
-                    className="w-full min-h-[140px] border border-slate-250 rounded-xl outline-none focus:border-[var(--color-primary)] text-slate-800 bg-slate-50/50 resize-y p-2 text-sm font-medium"
+                    className="w-full min-h-[140px] border border-slate-250 rounded-xl outline-none focus:border-[var(--color-primary)] text-slate-800 bg-slate-50/50 resize-y p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     value={editedRulesText}
                     onChange={(e) => setEditedRulesText(e.target.value)}
                     placeholder="Trage hier die Regeln ein. Verwende * am Zeilenanfang für Listenpunkte..."
@@ -448,9 +516,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
               <div className="mb-4 relative z-[180]">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <input
-                      type="text"
-                      className="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm font-medium"
+                    <input className="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       placeholder="Spielername suchen..."
                       value={newPlayerQuery}
                       onChange={(e) => {
@@ -542,7 +608,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                                 }
                               }, 250)
                             }
-                            className="w-full px-1 border-2 border-[var(--color-accent)] rounded-md bg-white text-slate-900 font-bold text-[10px] shadow-sm outline-none relative z-[151] py-2"
+                            className="w-full px-1 border-2 border-[var(--color-accent)] rounded-md bg-white text-slate-900 text-[10px] shadow-sm outline-none relative z-[151] py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             placeholder="Suchen..."
                           />
                           {activeSearchIdx === idx && (

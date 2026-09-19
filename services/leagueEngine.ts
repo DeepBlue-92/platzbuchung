@@ -11,7 +11,7 @@ export interface LeaguePointConfig {
 }
 
 export const defaultConfig: LeaguePointConfig = {
-  initialRankingPoints: 100,
+  initialRankingPoints: 0,
   participationPoints: 5,
   base_points_win: 5,
   base_points_loss: 5,
@@ -48,7 +48,7 @@ export function getConfigForDate(
       const winPts = baseRule.base_points_win ?? 5;
       const lossPts = baseRule.base_points_loss ?? 5;
       return {
-        initialRankingPoints: 100,
+        initialRankingPoints: baseRule.initial_ranking_points ?? 0,
         participationPoints: winPts,
         base_points_win: winPts,
         base_points_loss: lossPts,
@@ -72,7 +72,7 @@ export function getConfigForDate(
   const lossPts = active.base_points_loss ?? 5;
 
   return {
-    initialRankingPoints: 100,
+    initialRankingPoints: active.initial_ranking_points ?? 0,
     participationPoints: winPts,
     base_points_win: winPts,
     base_points_loss: lossPts,
@@ -113,20 +113,7 @@ export function applyDecay(
   matchesCount?: number,
   targetDateIso?: string
 ): number {
-  if (!lastMatchDateIso || matchesCount === 0) return currentPoints;
-  
-  const lastMatch = new Date(lastMatchDateIso);
-  const target = targetDateIso ? new Date(targetDateIso) : new Date();
-  const diffTime = target.getTime() - lastMatch.getTime();
-  if (diffTime <= 0) return currentPoints;
-
-  const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
-  
-  if (diffWeeks > 0) {
-    const decayAmount = diffWeeks * config.decayPointsPerWeek;
-    return Math.max(0, currentPoints - decayAmount);
-  }
-  
+  // Das Punkte-Modell ist rein akkumulativ. Es gibt keinen Punkteabzug für Inaktivität.
   return currentPoints;
 }
 

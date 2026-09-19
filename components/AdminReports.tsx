@@ -231,7 +231,7 @@ const AdminReports: React.FC<AdminReportsProps> = ({
               <select 
                 value={reportYear}
                 onChange={(e) => setReportYear(Number(e.target.value))}
-                className="bg-white border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] flex-1 min-w-[90px] shadow-sm cursor-pointer py-2"
+                className="bg-white border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] flex-1 min-w-[90px] shadow-sm cursor-pointer py-2 font-sans font-medium"
               >
                 {years.map((y) => (
                   <option key={y} value={y}>

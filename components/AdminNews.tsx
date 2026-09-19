@@ -43,7 +43,7 @@ const AdminNews: React.FC<AdminNewsProps> = ({ currentNews, onUpdateNews }) => {
               value={newsInput}
               onChange={(e) => setNewsInput(e.target.value)}
               placeholder="Z.B. Die Anmeldung für die Vereinsmeisterschaft läuft!"
-              className="w-full p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 text-[var(--color-primary)] font-bold text-lg outline-none focus:border-[var(--color-accent)] shadow-sm min-h-[150px] resize-none transition-all"
+              className="w-full p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 text-[var(--color-primary)] text-lg outline-none focus:border-[var(--color-accent)] shadow-sm min-h-[150px] resize-none transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
             />
           </div>
 

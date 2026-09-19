@@ -183,7 +183,7 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-200">
                 <th className="px-5 py-3 font-black">Sicherungspunkt</th>
-                <th className="px-5 py-3 font-black text-center">Erstellt von</th>
+                <th className="px-5 py-3 font-black text-center">Erstellt von / Typ</th>
                 <th className="px-5 py-3 font-black text-center">Inhalt &amp; Umfang</th>
                 <th className="px-5 py-3 font-black text-right">Aktionen</th>
               </tr>
@@ -210,87 +210,48 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
                     : 0
                 );
                 const matchesCount = backup.stats?.matchesCount ?? (backup.leagueMatches?.length || 0);
-                const tournamentsCount = backup.stats?.tournamentsCount ?? (
-                  backup.clubs
-                    ? backup.clubs.reduce((acc: number, c: any) => acc + (c.tournaments?.length || 0), 0)
-                    : 0
-                );
 
                 return (
                   <tr
                     key={backup.id}
                     className="hover:bg-slate-50/50 transition-colors"
                   >
-                    <td className="px-5 py-4">
-                      <div className="font-bold text-slate-800 text-xs flex items-center gap-2">
-                        <span>{backup.name}</span>
+                    <td className="px-5 py-3.5">
+                      <div className="font-bold text-slate-800 text-xs">
+                        {backup.name}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono mt-1 flex items-center gap-1.5">
-                        <i className="fa-solid fa-calendar-days text-[10px] text-slate-400"></i>
+                      <div className="text-[11px] text-slate-400 mt-0.5 font-medium flex items-center gap-1.5">
+                        <i className="fa-regular fa-clock text-[10px]"></i>
                         {formattedDate} Uhr
-                        <span className="text-slate-300">•</span>
-                        <span className="text-slate-400 font-normal">ID: {backup.id}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-center">
-                      <span
-                        className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-block ${
-                          backup.creator === "system"
-                            ? "bg-sky-50 border border-sky-200 text-sky-700"
-                            : backup.creator === "rollback-auto"
-                            ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
-                            : "bg-amber-50 border border-amber-200 text-amber-800"
-                        }`}
-                      >
-                        {backup.creator === "system"
-                          ? "Wöchentlich (Auto)"
-                          : backup.creator === "rollback-auto"
-                          ? "Sicherheits-Backup"
-                          : "Super-Admin (Manuell)"}
-                      </span>
+                    <td className="px-5 py-3.5 text-center text-xs font-semibold text-slate-700">
+                      {backup.creator === "system" ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          <i className="fa-solid fa-clock-rotate-left text-[10px]"></i>
+                          Wöchentlich (Auto)
+                        </span>
+                      ) : backup.creator === "rollback-auto" ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          <i className="fa-solid fa-shield text-[10px]"></i>
+                          Sicherheits-Backup
+                        </span>
+                      ) : backup.creator === "league-reset" ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                          <i className="fa-solid fa-shield-halved text-[10px] text-purple-600"></i>
+                          Snapshot (Vor Reset)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <i className="fa-solid fa-user-shield text-[10px]"></i>
+                          Super-Admin
+                        </span>
+                      )}
                     </td>
-                    <td className="px-5 py-4 text-center">
-                      <div className="flex flex-wrap items-center justify-center gap-1.5 font-sans">
-                        <span
-                          className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1"
-                          title="Anzahl Vereine / Mandanten"
-                        >
-                          <i className="fa-solid fa-building text-slate-400 text-[9px]"></i>
-                          {clubsCount} {clubsCount === 1 ? "Verein" : "Vereine"}
-                        </span>
-                        <span
-                          className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1"
-                          title="Benutzerkonten"
-                        >
-                          <i className="fa-solid fa-users text-slate-400 text-[9px]"></i>
-                          {usersCount} User
-                        </span>
-                        <span
-                          className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1"
-                          title="Platzbuchungen"
-                        >
-                          <i className="fa-solid fa-calendar-check text-slate-400 text-[9px]"></i>
-                          {bookingsCount} Buchungen
-                        </span>
-                        <span
-                          className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1"
-                          title="Hobbyliga Matches"
-                        >
-                          <i className="fa-solid fa-trophy text-slate-400 text-[9px]"></i>
-                          {matchesCount} Matches
-                        </span>
-                        {tournamentsCount > 0 && (
-                          <span
-                            className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1"
-                            title="Turniere"
-                          >
-                            <i className="fa-solid fa-medal text-slate-400 text-[9px]"></i>
-                            {tournamentsCount} Turniere
-                          </span>
-                        )}
-                      </div>
+                    <td className="px-5 py-3.5 text-center text-xs text-slate-600 font-medium">
+                      {clubsCount} {clubsCount === 1 ? "Verein" : "Vereine"} · {usersCount} User · {bookingsCount} Buchungen · {matchesCount} Matches
                     </td>
-                    <td className="px-5 py-4 text-right">
+                    <td className="px-5 py-3.5 text-right">
                       <button
                         onClick={() => handleOpenRollbackModal(backup)}
                         disabled={loading || isPerformingRollback}
@@ -335,8 +296,8 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
       {/* ROLLBACK CONFIRMATION DIALOG (SUPERADMIN-SAFETY)                           */}
       {/* ========================================================================= */}
       {rollbackModalBackup && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+          <div className="border-none outline-none bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl -200 space-y-5 animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
@@ -425,7 +386,7 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
                 onChange={(e) => setRollbackConfirmInput(e.target.value.toUpperCase())}
                 placeholder="ROLLBACK"
                 disabled={isPerformingRollback}
-                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 text-sm font-mono tracking-widest font-black uppercase text-slate-900 outline-none transition-all"
+                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-300 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 text-sm font-mono tracking-widest uppercase text-slate-900 outline-none transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 autoFocus
               />
               <p className="text-[10px] text-slate-400 font-semibold">

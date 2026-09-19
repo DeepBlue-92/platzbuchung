@@ -16,7 +16,10 @@ import {
   Tournament,
   ArbeitsEinsatz,
   DynamicLeague,
+  ClubFeeSettings,
 } from "../types";
+import { GuestFeeSettingsEditor } from "./admin/GuestFeeSettingsEditor";
+import { getDefaultFeeSettings, validateFeeSettings } from "../utils/guestFeeCalculator";
 import {
   ClubSettings,
   DEFAULT_SETTINGS,
@@ -26,8 +29,9 @@ import {
   listenToArbeitseinsaetze,
   saveArbeitseinsatz,
   resetOnboardingHintsForAllUsers,
+  isUsernameTakenGlobally,
 } from "../services/db";
-import { createLeagueMatch, updatePlayerLeagueAssignment } from "../services/league";
+import { calculateAge } from "../utils/playerHelper";
 import { RichTextRenderer, RichTextEditorToolbar } from "./RichText";
 import firebaseConfig from "../firebase-applet-config.json";
 import { TIME_SLOTS } from "../constants";
@@ -41,6 +45,9 @@ import {
   addExistingPersonToClub,
   PrivacySafeCandidate,
 } from "../services/duplicateDetection";
+import { UserAvatar } from "./UserAvatar";
+import { AvatarUploader } from "./AvatarUploader";
+import AdminOnboardingTab from "./AdminOnboardingTab";
 
 interface AdminSettingsProps {
   users: Record<string, User>;
@@ -72,7 +79,7 @@ const TABS = [
   { id: "sperren", label: "Sperren", icon: "fa-ban" },
   { id: "layout", label: "Layout", icon: "fa-paint-roller" },
   { id: "users", label: "Benutzer", icon: "fa-users" },
-  { id: "hobbyliga", label: "Hobbyliga", icon: "fa-trophy" },
+  { id: "onboarding", label: "Mitglieder-Onboarding", icon: "fa-user-check" },
   { id: "database", label: "Datenverwaltung", icon: "fa-database" },
   { id: "ranking", label: "Rangliste", icon: "fa-medal" },
   { id: "arbeitseinsaetze", label: "Arbeitseinsätze", icon: "fa-briefcase" },
@@ -101,6 +108,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   onDeleteBooking,
   isSuperAdminImpersonating = false,
 }) => {
+  const currentClubId = settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen";
   const [currentTab, setCurrentTab] = useState<
     | "allgemein"
     | "rules"
@@ -108,7 +116,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     | "sperren"
     | "layout"
     | "users"
-    | "hobbyliga"
+    | "onboarding"
     | "database"
     | "ranking"
     | "arbeitseinsaetze"
@@ -210,16 +218,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
     const eventData = {
       title: eventTitle.trim(),
-      date: eventDate || undefined,
-      startTime: eventStartTime || undefined,
-      endTime: eventEndTime || undefined,
-      description: eventDescription.trim() || undefined,
+      date: eventDate || null,
+      startTime: eventStartTime || null,
+      endTime: eventEndTime || null,
+      description: eventDescription.trim() || null,
       hideExpired: eventHideExpired,
       allowComment: eventAllowComment,
       maxParticipants: eventMaxParticipants
         ? parseInt(eventMaxParticipants, 10)
-        : undefined,
-      isRegistrationBlocked: eventIsRegistrationBlocked || undefined,
+        : null,
+      isRegistrationBlocked: eventIsRegistrationBlocked || null,
     };
 
     if (editingTournamentId) {
@@ -719,6 +727,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
   // Settings State Drafts
   const [clubName, setClubName] = useState(settings.clubName);
+  const [street, setStreet] = useState(settings.street || "");
+  const [zip, setZip] = useState(settings.zip || "");
+  const [city, setCity] = useState(settings.city || "");
+  const [facilityPhotoUrl, setFacilityPhotoUrl] = useState(
+    settings.facilityPhotoUrl || ""
+  );
+  const [customFacilityPhotoUrl, setCustomFacilityPhotoUrl] = useState(
+    settings.customFacilityPhotoUrl ||
+      (settings.facilityPhotoUrl ? settings.facilityPhotoUrl : "")
+  );
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl);
   const [headerLogoUrl, setHeaderLogoUrl] = useState(
     settings.headerLogoUrl || settings.logoUrl,
@@ -833,12 +851,19 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const [isRemapping, setIsRemapping] = useState<boolean>(false);
 
   useEffect(() => {
-    const clubId = currentUser.vereinsId || "sv-neuhausen";
+    const clubId = currentClubId;
     const unsubscribe = listenToArbeitseinsaetze(clubId, (entries) => {
       setAeEntries(entries);
     });
     return () => unsubscribe();
-  }, [currentUser.vereinsId]);
+  }, [currentClubId]);
+
+  const isSuperAdmin =
+    currentUser?.role === Role.SUPER_ADMIN ||
+    (currentUser?.role as any) === "super-admin" ||
+    !!isSuperAdminImpersonating;
+
+  const isLeagueEnabled = settings.modules?.league === true;
 
   const [modules, setModules] = useState({
     events: settings.modules?.events !== false,
@@ -855,6 +880,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     guestFeePerHour: 2.5,
     maxBookingsPerDay: 2,
     maxBookingsPerWeek: 0,
+    bypassRestrictionsForLeagueGames: false,
     cancellationDeadlineMinutes: 30,
     maxDurationMinutesSingle: 90,
     maxDurationMinutesDouble: 120,
@@ -877,6 +903,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       .toFixed(2)
       .replace(".", ","),
   );
+  const [feeSettings, setFeeSettings] = useState<ClubFeeSettings>(() =>
+    settings.feeSettings || getDefaultFeeSettings(settings.reservationRules)
+  );
+  const [isFeeSettingsValid, setIsFeeSettingsValid] = useState(true);
   const [localNews, setLocalNews] = useState(settings.news || "");
   const [impressum, setImpressum] = useState(settings.impressum || "");
   const [helpText, setHelpText] = useState(settings.helpText || "");
@@ -910,9 +940,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     password: "",
     role: Role.USER,
     gender: "m",
+    showContactInfo: true,
+    show_onboarding_hints: true,
   });
-  const [manualPointsOverride, setManualPointsOverride] = useState<number | "">("");
-  const [manualPointsReason, setManualPointsReason] = useState("");
   const [showUserForm, setShowUserForm] = useState(false);
   const [inlineEditingUserId, setInlineEditingUserId] = useState<string | null>(
     null,
@@ -963,12 +993,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     favicon: boolean;
     banner: boolean;
     loginBanner: boolean;
+    facilityPhoto: boolean;
   }>({
     logo: false,
     headerLogo: false,
     favicon: false,
     banner: false,
     loginBanner: false,
+    facilityPhoto: false,
   });
 
   // --- Dynamic League Management States ---
@@ -1115,6 +1147,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   // Keep state drafts in sync with incoming settings
   useEffect(() => {
     setClubName(settings.clubName);
+    setStreet(settings.street || "");
+    setZip(settings.zip || "");
+    setCity(settings.city || "");
+    setFacilityPhotoUrl(settings.facilityPhotoUrl || "");
+    setCustomFacilityPhotoUrl(
+      settings.customFacilityPhotoUrl ||
+        (settings.facilityPhotoUrl ? settings.facilityPhotoUrl : "")
+    );
     setLogoUrl(settings.logoUrl);
     setHeaderLogoUrl(settings.headerLogoUrl || settings.logoUrl);
     setFaviconUrl(settings.faviconUrl || "/favicon.svg");
@@ -1183,6 +1223,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       availableBallMachines: 1,
       guestFeePerHour: 2.5,
       maxBookingsPerDay: 2,
+      maxBookingsPerWeek: 0,
+      bypassRestrictionsForLeagueGames: false,
       cancellationDeadlineMinutes: 30,
       maxDurationMinutesSingle: 90,
       maxDurationMinutesDouble: 120,
@@ -1202,6 +1244,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     });
     const fee = settings.reservationRules?.guestFeePerHour ?? 2.5;
     setGuestFeeString(fee.toFixed(2).replace(".", ","));
+    setFeeSettings(settings.feeSettings || getDefaultFeeSettings(settings.reservationRules));
     setLocalNews(settings.news || "");
     setImpressum(settings.impressum || "");
     setHelpText(settings.helpText || "");
@@ -1213,10 +1256,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       if (tab === "allgemein") {
         return (
           clubName !== settings.clubName ||
+          (street || "") !== (settings.street || "") ||
+          (zip || "") !== (settings.zip || "") ||
+          (city || "") !== (settings.city || "") ||
+          (customFacilityPhotoUrl || "") !== (settings.customFacilityPhotoUrl || settings.facilityPhotoUrl || "") ||
           (modules.events ?? true) !== (settings.modules?.events ?? true) ||
           (modules.ranking ?? true) !== (settings.modules?.ranking ?? true) ||
           (modules.guests ?? true) !== (settings.modules?.guests ?? true) ||
-          modules.arbeitseinsaetze !== (settings.modules?.arbeitseinsaetze ?? false)
+          modules.arbeitseinsaetze !== (settings.modules?.arbeitseinsaetze ?? false) ||
+          (isSuperAdmin && (modules.league === true) !== (settings.modules?.league === true))
         );
       }
       if (tab === "arbeitseinsaetze") {
@@ -1246,6 +1294,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             (settings.reservationRules?.maxBookingsPerDay ?? 2) ||
           (reservationRules.maxBookingsPerWeek ?? 0) !==
             (settings.reservationRules?.maxBookingsPerWeek ?? 0) ||
+          (reservationRules.bypassRestrictionsForLeagueGames ?? false) !==
+            (settings.reservationRules?.bypassRestrictionsForLeagueGames ?? false) ||
           (reservationRules.guestBillingMode ?? "per_player") !==
             (settings.reservationRules?.guestBillingMode ?? "per_player") ||
           (reservationRules.cancellationDeadlineMinutes ?? 30) !==
@@ -1263,7 +1313,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           JSON.stringify(reservationRules.openingHours) !==
             JSON.stringify(settings.reservationRules?.openingHours) ||
           JSON.stringify(courtsList) !==
-            JSON.stringify(settings.courts || ["Platz 1", "Platz 2"])
+            JSON.stringify(settings.courts || ["Platz 1", "Platz 2"]) ||
+          JSON.stringify(feeSettings) !==
+            JSON.stringify(settings.feeSettings || getDefaultFeeSettings(settings.reservationRules))
         );
       }
       if (tab === "layout") {
@@ -1333,6 +1385,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     },
     [
       clubName,
+      street,
+      zip,
+      city,
+      customFacilityPhotoUrl,
+      facilityPhotoUrl,
       settings,
       welcomeMessage,
       helpText,
@@ -1358,12 +1415,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       hideWebsiteLink,
       localNews,
       impressum,
-      helpText,
       sollStunden,
       commentsRequired,
       aeVisibility,
       aeInterval,
       aeMaxDaysBack,
+      showPlannedShifts,
+      aeCategories,
     ],
   );
 
@@ -1371,7 +1429,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   useEffect(() => {
     if (onDirtyChange) {
       const isDirty =
-        isTabDirty("allgemein") || isTabDirty("rules") || isTabDirty("layout");
+        isTabDirty("allgemein") || isTabDirty("rules") || isTabDirty("layout") || isTabDirty("arbeitseinsaetze");
       onDirtyChange(isDirty);
     }
   }, [isTabDirty, onDirtyChange]);
@@ -1381,7 +1439,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       onUpdateSettings({
         ...settings,
         clubName,
-        modules,
+        street,
+        zip,
+        city,
+        facilityPhotoUrl: customFacilityPhotoUrl,
+        customFacilityPhotoUrl: customFacilityPhotoUrl,
+        modules: {
+          ...modules,
+          league: isSuperAdmin ? modules.league === true : settings.modules?.league === true,
+        },
       });
       setMessage({
         text: "Allgemeine Einstellungen erfolgreich gespeichert.",
@@ -1428,9 +1494,33 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         }
       }
 
+      const feeValidation = validateFeeSettings(feeSettings);
+      if (!feeValidation.isValid) {
+        setMessage({
+          text: "Speichern fehlgeschlagen: Bitte überprüfe die unvollständigen Gastgebühr-Regeln.",
+          type: "error",
+        });
+        return;
+      }
+
+      const syncedReservationRules = {
+        ...reservationRules,
+        guestFeePerHour:
+          feeSettings.fee_calculation_mode === "SIMPLE" && feeSettings.simple_config
+            ? feeSettings.simple_config.amount_cents / 100
+            : reservationRules.guestFeePerHour,
+        guestBillingMode:
+          feeSettings.fee_calculation_mode === "SIMPLE" && feeSettings.simple_config
+            ? feeSettings.simple_config.rate_type === "PER_COURT_HOUR"
+              ? ("per_court" as const)
+              : ("per_player" as const)
+            : reservationRules.guestBillingMode,
+      };
+
       onUpdateSettings({
         ...settings,
-        reservationRules,
+        reservationRules: syncedReservationRules,
+        feeSettings,
         courts: newCourts,
       });
       setMessage({
@@ -1472,6 +1562,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const handleDiscardTab = (tab: string) => {
     if (tab === "allgemein") {
       setClubName(settings.clubName);
+      setStreet(settings.street || "");
+      setZip(settings.zip || "");
+      setCity(settings.city || "");
       setModules(settings.modules || { events: true, ranking: true });
     } else if (tab === "arbeitseinsaetze") {
       setSollStunden(settings.arbeitseinsaetzeSettings?.sollStunden ?? 10);
@@ -1489,6 +1582,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         availableBallMachines: 1,
         guestFeePerHour: 2.5,
         maxBookingsPerDay: 2,
+        maxBookingsPerWeek: 0,
+        bypassRestrictionsForLeagueGames: false,
         cancellationDeadlineMinutes: 30,
         maxDurationMinutesSingle: 90,
         maxDurationMinutesDouble: 120,
@@ -1497,6 +1592,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       setGuestFeeString(
         (activeRules.guestFeePerHour ?? 2.5).toFixed(2).replace(".", ","),
       );
+      setFeeSettings(settings.feeSettings || getDefaultFeeSettings(settings.reservationRules));
       setCourtsList(settings.courts || ["Platz 1", "Platz 2"]);
     } else if (tab === "layout") {
       setLogoUrl(settings.logoUrl);
@@ -1957,7 +2053,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
   const handleImageUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
-    type: "logo" | "headerLogo" | "favicon" | "banner" | "loginBanner",
+    type: "logo" | "headerLogo" | "favicon" | "banner" | "loginBanner" | "facilityPhoto",
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1970,9 +2066,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         img.onload = () => {
           const canvas = document.createElement("canvas");
           const MAX_WIDTH =
-            type === "banner" || type === "loginBanner" ? 1200 : 300;
+            type === "banner" || type === "loginBanner" || type === "facilityPhoto" ? 1200 : 300;
           const MAX_HEIGHT =
-            type === "banner" || type === "loginBanner" ? 1200 : 300;
+            type === "banner" || type === "loginBanner" || type === "facilityPhoto" ? 1200 : 300;
           let width = img.width;
           let height = img.height;
 
@@ -2015,9 +2111,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             setLoginBannerUrl(dataUrl);
             setCustomLoginBannerUrl(dataUrl);
           }
+          if (type === "facilityPhoto") {
+            setFacilityPhotoUrl(dataUrl);
+            setCustomFacilityPhotoUrl(dataUrl);
+          }
 
           setMessage({
-            text: "Bild erfolgreich geladen und im Cache bereitgestellt. Bitte speichere den Layout-Bereich, um die Änderungen dauerhaft zu übernehmen.",
+            text: "Bild erfolgreich geladen und im Cache bereitgestellt. Bitte speichere den Bereich, um die Änderungen dauerhaft zu übernehmen.",
             type: "success",
           });
           setUploadingImage((prev) => ({ ...prev, [type]: false }));
@@ -2104,7 +2204,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             email: em,
             phone: editingUser.phone,
           },
-          currentUser.vereinsId || "sv-neuhausen"
+          currentClubId
         );
         setLiveDuplicateCandidates(candidates);
       } catch (err) {
@@ -2115,12 +2215,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [editingUser.firstName, editingUser.lastName, editingUser.email, showUserForm, inlineEditingUserId, currentUser.vereinsId]);
+  }, [editingUser.firstName, editingUser.lastName, editingUser.email, showUserForm, inlineEditingUserId, currentClubId]);
 
   const handleSaveUser = async (bypassDuplicateCheck = false) => {
-    if (!editingUser.name || !editingUser.password) {
+    if (!editingUser.firstName?.trim() || !editingUser.lastName?.trim()) {
       setMessage({
-        text: "Name und Passwort sind erforderlich.",
+        text: "Vorname und Nachname sind Pflichtfelder.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (!editingUser.name?.trim() || !editingUser.password) {
+      setMessage({
+        text: "Benutzername und Passwort sind erforderlich.",
         type: "error",
       });
       return;
@@ -2145,7 +2253,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           email: editingUser.email,
           phone: editingUser.phone,
         },
-        currentUser.vereinsId || "sv-neuhausen"
+        currentClubId
       );
       if (candidates.length > 0) {
         setDuplicateCandidatesModal({ candidates });
@@ -2154,7 +2262,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     }
 
     let key = editingUser.name.toLowerCase().replace(/\s/g, "");
-    let finalUsername = editingUser.name;
+    let finalUsername = editingUser.name.trim();
 
     const targetKey = inlineEditingUserId
       ? inlineEditingUserId.toLowerCase().replace(/\s/g, "")
@@ -2177,7 +2285,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       let suffix = 2;
       const baseKey = key;
       const baseName = finalUsername;
-      while (users[key]) {
+      while (users[key] || (await isUsernameTakenGlobally(finalUsername))) {
         key = `${baseKey}${suffix}`;
         finalUsername = `${baseName}${suffix}`;
         suffix++;
@@ -2190,15 +2298,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       name: finalUsername,
       klarname:
         editingUser.klarname ||
-        `${editingUser.firstName || ""} ${editingUser.lastName || ""}`.trim() ||
+        `${editingUser.firstName?.trim() || ""} ${editingUser.lastName?.trim() || ""}`.trim() ||
         finalUsername,
       password: editingUser.password,
+      mustChangePassword: !!editingUser.mustChangePassword,
       role: editingUser.role || Role.MITGLIED,
-      firstName: editingUser.firstName,
-      lastName: editingUser.lastName,
-      email: editingUser.is_placeholder_email ? "" : editingUser.email,
+      firstName: editingUser.firstName?.trim(),
+      lastName: editingUser.lastName?.trim(),
+      email: editingUser.is_placeholder_email ? "" : (editingUser.email?.trim() || ""),
       is_placeholder_email: !!editingUser.is_placeholder_email,
-      phone: editingUser.phone,
+      phone: editingUser.phone?.trim() || "",
+      showContactInfo: editingUser.showContactInfo !== false,
+      show_onboarding_hints: editingUser.show_onboarding_hints !== false,
+      onboarding_pending: editingUser.onboarding_pending !== undefined ? !!editingUser.onboarding_pending : (existingUser ? !!existingUser.onboarding_pending : (settings.club_onboarding_settings?.auto_enable_for_new_users !== false)),
+      isSuspended: !!editingUser.isSuspended,
       hauptAdmin: (() => {
         if (existingUser) return existingUser.hauptAdmin ?? false;
         if (editingUser.role === Role.ADMIN) {
@@ -2211,33 +2324,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       })(),
       createdAt: existingUser?.createdAt || new Date().toISOString(),
       gender: editingUser.gender || "m",
+      birthDate: editingUser.birthDate ? editingUser.birthDate.trim() : null,
+      avatarUrl: editingUser.avatarUrl !== undefined ? (editingUser.avatarUrl || null) : (existingUser?.avatarUrl || null),
+      avatarIcon: editingUser.avatarIcon !== undefined ? (editingUser.avatarIcon || "initials") : (existingUser?.avatarIcon || "initials"),
     };
 
     try {
       await onUpdateUsers(updatedUsers);
-      
-      // Handle manual points override
-      if (manualPointsOverride !== "") {
-        const userIdForMatch = updatedUsers[key].id || key;
-        await createLeagueMatch({
-          clubId: currentUser.vereinsId || "sv-neuhausen",
-          player1Id: userIdForMatch,
-          player2Id: "system", // Dummy opponent for manual adjustment
-          player1UserId: userIdForMatch,
-          player2UserId: "system",
-          status: 'completed',
-          isManualAdjustment: true,
-          manualPointsValue: Number(manualPointsOverride),
-          manualAdjustmentReason: manualPointsReason,
-          played_at: new Date().toISOString(),
-          result: {
-            winnerId: userIdForMatch,
-            sets: [],
-            reportedBy: currentUser.name || "admin",
-            reportedAt: new Date().toISOString(),
-          }
-        });
-      }
 
       setMessage({
         text: `Benutzer "${finalUsername}" erfolgreich gespeichert.`,
@@ -2247,14 +2340,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       setEditingUser({
         name: "",
         password: "",
-        role: Role.MITGLIED,
+        role: Role.USER,
+        gender: "m",
         firstName: "",
         lastName: "",
         email: "",
         phone: "",
+        birthDate: "",
+        showContactInfo: true,
+        show_onboarding_hints: true,
+        isSuspended: false,
       });
-      setManualPointsOverride("");
-      setManualPointsReason("");
       setShowUserForm(false);
       setInlineEditingUserId(null);
     } catch (err: any) {
@@ -2348,6 +2444,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           const lastName = parts[4]?.trim() || "";
           const email = parts[5]?.trim() || "";
           const phone = parts[6]?.trim() || "";
+          const genderRaw = parts[7]?.trim().toLowerCase();
+          const gender = genderRaw === "w" ? "w" : "m";
+          const birthDate = parts[8]?.trim() || undefined;
           const id = nameLower.replace(/[^a-z0-9]/g, "");
 
           if (name && password) {
@@ -2363,6 +2462,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
               );
               return;
             }
+
             parsedNames.add(nameLower);
             newUsers.push({
               id,
@@ -2373,6 +2473,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
               lastName,
               email,
               phone,
+              gender,
+              birthDate,
               show_onboarding_hints: true,
             });
           }
@@ -2383,7 +2485,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       setImportErrors(errorsList);
       if (newUsers.length === 0 && errorsList.length === 0) {
         setMessage({
-          text: "Keine gültigen Daten gefunden. Format: Benutzername;Passwort;Rolle;Vorname;Nachname;Email;Telefon",
+          text: "Keine gültigen Daten gefunden. Format: Benutzername;Passwort;Rolle;Vorname;Nachname;Email;Telefon;Geschlecht;Geburtsdatum",
           type: "error",
         });
       }
@@ -2478,7 +2580,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
   const downloadTemplate = () => {
     const content =
-      "Benutzername;Passwort;Rolle;Vorname;Nachname;Email;Telefon\nmaxmustermann;tennis123;user;Max;Mustermann;max@beispiel.de;+49 170 1234567\nerikamusterfrau;geheim;admin;Erika;Musterfrau;erika@beispiel.de;+49 171 7654321";
+      "Benutzername;Passwort;Rolle;Vorname;Nachname;Email;Telefon;Geschlecht;Geburtsdatum\nmaxmustermann;tennis123;user;Max;Mustermann;max@beispiel.de;+49 170 1234567;m;1990-05-15\nerikamusterfrau;geheim;admin;Erika;Musterfrau;erika@beispiel.de;+49 171 7654321;w;1985-11-20\nfelixjunior;jugend123;user;Felix;Junior;felix@beispiel.de;;m;2012-08-10";
     const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -2490,7 +2592,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   };
 
   const exportMembersCSV = () => {
-    const header = "Benutzername;Passwort;Rolle;Vorname;Nachname;Email;Telefon\n";
+    const header = "Benutzername;Passwort;Rolle;Vorname;Nachname;Email;Telefon;Geschlecht;Geburtsdatum\n";
     const rows = sortedAndFilteredUsers
       .map((u) => {
         const roleText = u.role || Role.USER;
@@ -2500,7 +2602,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         const phone = u.phone || "";
         const password = u.password || "";
         const name = u.name || "";
-        return `${name};${password};${roleText};${firstName};${lastName};${email};${phone}`;
+        const geschlecht = u.gender || "m";
+        const geburtsdatum = u.birthDate || "";
+        return `${name};${password};${roleText};${firstName};${lastName};${email};${phone};${geschlecht};${geburtsdatum}`;
       })
       .join("\n");
 
@@ -2670,7 +2774,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const publishAnonymizedFeed = async () => {
     try {
       const list = getAnonymizedBookingsList();
-      await savePublicBookings(settings.vereinsId || "sv-neuhausen", list);
+      await savePublicBookings(currentClubId, list);
       setMessage({
         text: "Der anonymisierte, öffentliche Feed wurde erfolgreich in die Cloud-Datenbank geladen!",
         type: "success",
@@ -2687,7 +2791,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const publishClearFeed = async () => {
     try {
       const list = getClearBookingsList();
-      await saveClearBookings(settings.vereinsId || "sv-neuhausen", list);
+      await saveClearBookings(currentClubId, list);
       setMessage({
         text: "Der öffentliche Feed mit Klarnamen wurde erfolgreich in die Cloud-Datenbank geladen!",
         type: "success",
@@ -2749,13 +2853,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
   const getPublicFeedURL = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const clubId = settings.vereinsId || "sv-neuhausen";
+    const clubId = currentClubId;
     return `${origin}/api/public/feeds/bookings?type=anonymisiert&clubId=${clubId}`;
   };
 
   const getClearFeedURL = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const clubId = settings.vereinsId || "sv-neuhausen";
+    const clubId = currentClubId;
     return `${origin}/api/public/feeds/bookings?type=klarnamen&clubId=${clubId}`;
   };
 
@@ -3013,23 +3117,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         Aktivieren
                       </h3>
                       <div className="space-y-4">
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Plätze
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Hauptmodul für Platzbuchungen und Belegungsplan
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={true}
-                            disabled
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 cursor-not-allowed opacity-80"
-                          />
-                        </label>
-
+                        {/* 1. Veranstaltungen */}
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
                           <div className="flex-1 min-w-0 pr-4">
                             <div className="font-black text-xs text-slate-800 uppercase">
@@ -3048,10 +3136,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 events: e.target.checked,
                               })
                             }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0"
+                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </label>
 
+                        {/* 2. Rangliste */}
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
                           <div className="flex-1 min-w-0 pr-4">
                             <div className="font-black text-xs text-slate-800 uppercase">
@@ -3071,36 +3160,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 ranking: e.target.checked,
                               })
                             }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0"
+                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </label>
 
+                        {/* 3. Gastspiele */}
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
                           <div className="flex-1 min-w-0 pr-4">
                             <div className="font-black text-xs text-slate-800 uppercase">
-                              Hobby-Liga
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Aktiviert das Modul für die vereinsübergreifende Hobby-Liga in diesem Verein
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={modules.league === true}
-                            onChange={(e) =>
-                              setModules({
-                                ...modules,
-                                league: e.target.checked,
-                              })
-                            }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0"
-                          />
-                        </label>
-
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Gaststunden / Abrechnung
+                              Gastspiele
                             </div>
                             <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
                               Ermöglicht Abrechnung und Erfassung von
@@ -3116,27 +3184,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 guests: e.target.checked,
                               })
                             }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0"
+                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </label>
 
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Statistik
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Auswertung von Buchungen, Spielzeiten und Vereinsstatistiken
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={true}
-                            disabled
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 cursor-not-allowed opacity-80"
-                          />
-                        </label>
-
+                        {/* 4. Arbeitseinsätze */}
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
                           <div className="flex-1 min-w-0 pr-4">
                             <div className="font-black text-xs text-slate-800 uppercase">
@@ -3155,7 +3207,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 arbeitseinsaetze: e.target.checked,
                               })
                             }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0"
+                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </label>
                       </div>
@@ -3167,7 +3219,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         <i className="fa-solid fa-circle-info"></i> Allgemeine
                         Einstellungen
                       </h3>
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                         <div>
                           <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
                             Vereinsname
@@ -3176,8 +3228,102 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             type="text"
                             value={clubName}
                             onChange={(e) => setClubName(e.target.value)}
-                            className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                            placeholder="z. B. SV Neuhausen"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
+                        </div>
+
+                        {/* Standort der Platzanlage (Strukturierte Adressfelder) */}
+                        <div className="pt-2 border-t border-slate-200/60">
+                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                            <i className="fa-solid fa-location-dot text-[var(--color-primary)]"></i>
+                            Standort der Platzanlage
+                          </label>
+                          <div className="space-y-3">
+                            <div>
+                              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                Straße & Hausnummer
+                              </span>
+                              <input 
+                                type="text"
+                                value={street}
+                                onChange={(e) => setStreet(e.target.value)}
+                                placeholder="z. B. Sportweg 4"
+                                className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              />
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="col-span-1">
+                                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                  PLZ
+                                </span>
+                                <input 
+                                  type="text"
+                                  value={zip}
+                                  onChange={(e) => setZip(e.target.value)}
+                                  placeholder="z. B. 84030"
+                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                  Ort
+                                </span>
+                                <input 
+                                  type="text"
+                                  value={city}
+                                  onChange={(e) => setCity(e.target.value)}
+                                  placeholder="z. B. Ergolding"
+                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="pt-2">
+                              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                Anlagen-Foto (Für Liga & Buchung)
+                              </span>
+                              <div className="flex flex-col gap-2">
+                                {(customFacilityPhotoUrl || headerLogoUrl) ? (
+                                  <div className="relative h-20 w-32 rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                                    <img 
+                                      src={customFacilityPhotoUrl || headerLogoUrl} 
+                                      alt="Anlagen Vorschau" 
+                                      className="w-full h-full object-cover"
+                                    />
+                                    {customFacilityPhotoUrl && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setFacilityPhotoUrl("");
+                                          setCustomFacilityPhotoUrl("");
+                                        }}
+                                        className="absolute top-1 right-1 w-6 h-6 bg-white/90 rounded-full flex items-center justify-center text-red-500 shadow-sm hover:bg-red-50 transition-colors"
+                                        title="Anlagen-Foto entfernen"
+                                      >
+                                        <i className="fa-solid fa-xmark text-xs"></i>
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : null}
+                                <div className="flex flex-col gap-2 relative">
+                                  <label className="cursor-pointer flex items-center justify-center gap-2 w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all border border-slate-200 active:scale-95">
+                                    <i className="fa-solid fa-upload"></i> Foto hochladen
+                                    <input className="hidden placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleImageUpload(e as any, "facilityPhoto");
+                                      }}
+                                    />
+                                  </label>
+                                  <p className="text-[10px] text-slate-400 leading-tight">
+                                    Optional. Wenn leer, wird das Logo/Banner als Fallback für die Austragungsort-Karte genutzt.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -3220,7 +3366,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <select
                               value={aeVisibility}
                               onChange={(e) => setAeVisibility(e.target.value as any)}
-                              className="w-full h-10 px-4 pr-10 bg-white text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none"
+                              className="w-full h-10 px-4 pr-10 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none font-sans font-medium"
                             >
                               <option value="full">Vollständig sichtbar</option>
                               <option value="active_only">Nur aktive Helfer sichtbar (0-Stunden ausblenden)</option>
@@ -3238,7 +3384,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <select
                               value={aeInterval}
                               onChange={(e) => setAeInterval(e.target.value as any)}
-                              className="w-full h-10 px-4 pr-10 bg-white text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none"
+                              className="w-full h-10 px-4 pr-10 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none font-sans font-medium"
                             >
                               <option value="0.25">0,25-Stunden-Schritte</option>
                               <option value="0.5">0,5-Stunden-Schritte</option>
@@ -3254,7 +3400,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             id="aeCommentsRequired"
                             checked={commentsRequired}
                             onChange={(e) => setCommentsRequired(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <div className="flex flex-col">
                             <label htmlFor="aeCommentsRequired" className="text-xs font-bold text-slate-700 uppercase tracking-wide cursor-pointer select-none">
@@ -3272,7 +3418,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             id="aeShowPlannedShifts"
                             checked={showPlannedShifts}
                             onChange={(e) => setShowPlannedShifts(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <div className="flex flex-col">
                             <label htmlFor="aeShowPlannedShifts" className="text-xs font-bold text-slate-700 uppercase tracking-wide cursor-pointer select-none">
@@ -3308,7 +3454,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 setNewAeCategory("");
                               }
                             }}
-                            className="flex-1 h-10 px-4 bg-white text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all outline-none"
+                            className="flex-1 h-10 px-4 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all outline-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <button
                             type="button"
@@ -3353,7 +3499,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           setEditingCategoryIndex(null);
                                         }
                                       }}
-                                      className="flex-1 h-8 px-2 bg-white text-xs font-bold text-slate-700 rounded-lg border border-slate-300 focus:outline-none focus:border-[var(--color-primary)] outline-none"
+                                      className="flex-1 h-8 px-2 bg-white text-xs text-slate-700 rounded-lg border border-slate-300 focus:outline-none focus:border-[var(--color-primary)] outline-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       autoFocus
                                     />
                                     <button
@@ -3432,8 +3578,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   </div>
 
                   {categoryToDelete && (
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
+                      <div className="border-none outline-none bg-white rounded-2xl -200 shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
                         <h3 className="text-base font-black text-slate-800 uppercase tracking-wide flex items-center gap-2 mb-3">
                           <i className="fa-solid fa-triangle-exclamation text-amber-500 text-lg"></i>
                           Kategorie kann nicht gelöscht werden
@@ -3451,7 +3597,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <select
                                 value={remapTargetCategory}
                                 onChange={(e) => setRemapTargetCategory(e.target.value)}
-                                className="w-full h-10 px-4 pr-10 bg-white text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none cursor-pointer"
+                                className="w-full h-10 px-4 pr-10 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none cursor-pointer font-sans font-medium"
                               >
                                 {aeCategories
                                   .filter(c => c !== categoryToDelete)
@@ -3491,7 +3637,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     e => e.category.trim().toLowerCase() === categoryToDelete.trim().toLowerCase()
                                   );
                                   
-                                  const clubId = currentUser.vereinsId || "sv-neuhausen";
+                                  const clubId = currentClubId;
                                   
                                   for (const entry of entriesToUpdate) {
                                     await saveArbeitseinsatz(clubId, {
@@ -3585,7 +3731,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 maxActiveBookings: isNaN(val) ? 0 : val,
                               });
                             }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
                         <div>
@@ -3603,7 +3749,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 maxBookingsPerDay: isNaN(val) ? 0 : val,
                               });
                             }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
                         <div>
@@ -3621,9 +3767,37 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 maxBookingsPerWeek: isNaN(val) ? 0 : val,
                               });
                             }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
+                        
+                        <div className="pt-2">
+                          <label className="flex items-start gap-3 cursor-pointer group">
+                            <div className="relative flex items-center justify-center mt-0.5">
+                              <input
+                                type="checkbox"
+                                checked={reservationRules.bypassRestrictionsForLeagueGames ?? false}
+                                onChange={(e) =>
+                                  setReservationRules({
+                                    ...reservationRules,
+                                    bypassRestrictionsForLeagueGames: e.target.checked,
+                                  })
+                                }
+                                className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-lg checked:bg-[var(--color-primary)] checked:border-[var(--color-primary)] transition-all cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              />
+                              <i className="fa-solid fa-check absolute text-white text-[10px] opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"></i>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-slate-800 group-hover:text-[var(--color-primary)] transition-colors">
+                                Ligaspiele von Standard-Buchungsbeschränkungen ausnehmen
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-medium">
+                                Umgeht Tages- und Wochenlimits für Hobbyliga-Matches (nur auf Verfügbarkeit geprüft).
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+
                         <div>
                           <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
                             Stornierungsfrist (Minuten vor Spielbeginn) (0 = sofort stornierbar / keine Frist)
@@ -3641,7 +3815,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 cancellationDeadlineMinutes: isNaN(val) ? 0 : val,
                               });
                             }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
                         <div className="pt-2 border-t border-slate-100">
@@ -3660,67 +3834,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   parseInt(e.target.value) || 0,
                               })
                             }
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
                         {modules.guests !== false && (
                           <div className="pt-2 border-t border-slate-100">
                             <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Gastspielergebühr / Stunde (€)
+                              Gastspiel-Tarifordnung
                             </label>
-                            <input 
-                              type="text"
-                              value={guestFeeString}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setGuestFeeString(val);
-                                const clean = val.replace(",", ".");
-                                const parsed = parseFloat(clean);
-                                if (!isNaN(parsed)) {
-                                  setReservationRules({
-                                    ...reservationRules,
-                                    guestFeePerHour: parsed,
-                                  });
-                                }
-                              }}
-                              onBlur={() => {
-                                const clean = guestFeeString.replace(",", ".");
-                                let numValue = parseFloat(clean);
-                                if (isNaN(numValue)) {
-                                  numValue = 0;
-                                }
-                                setGuestFeeString(
-                                  numValue.toFixed(2).replace(".", ","),
-                                );
-                                setReservationRules({
-                                  ...reservationRules,
-                                  guestFeePerHour: numValue,
-                                });
-                              }}
-                              className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm text-xs mb-3 py-2"
-                              placeholder="z.B. 2,50"
-                            />
-                            <div className="mb-3">
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                                Abrechnungsmodell für Gäste
-                              </label>
-                              <select
-                                value={reservationRules.guestBillingMode ?? "per_player"}
-                                onChange={(e) =>
-                                  setReservationRules({
-                                    ...reservationRules,
-                                    guestBillingMode: e.target.value as "per_player" | "per_court",
-                                  })
-                                }
-                                className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
-                              >
-                                <option value="per_player">
-                                  Abrechnung je Spieler (Gebühr wird mit der Anzahl der Gastspieler multipliziert)
-                                </option>
-                                <option value="per_court">
-                                  Abrechnung pauschal je Platz (Gebühr gilt einmalig für den Platz, unabhängig von der Gästeanzahl)
-                                </option>
-                              </select>
+                            <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center justify-between gap-2">
+                              <div>
+                                <span className="font-bold text-slate-800">
+                                  {feeSettings.fee_calculation_mode === "ADVANCED"
+                                    ? "Erweiterter Regel-Builder"
+                                    : "Einfaches Standardmodell"}
+                                </span>
+                                <div className="text-[11px] text-slate-400 mt-0.5">
+                                  {feeSettings.fee_calculation_mode === "ADVANCED"
+                                    ? `${(feeSettings.advanced_config?.rules || []).length} aktive Regeln konfiguriert`
+                                    : `${((feeSettings.simple_config?.amount_cents ?? 250) / 100).toFixed(2).replace(".", ",")} € (${feeSettings.simple_config?.rate_type === "PER_COURT_HOUR" ? "pro Platzstunde" : "pro Gast/Std."})`}
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-150">
+                                Siehe unten
+                              </span>
                             </div>
                           </div>
                         )}
@@ -3741,7 +3878,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 maxAdvanceDays: val * 7,
                               });
                             }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors mt-2">
@@ -3763,7 +3900,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 allowPastBookings: e.target.checked,
                               })
                             }
-                            className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer"
+                            className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </label>
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors mt-2">
@@ -3787,7 +3924,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 requireCoplayer: e.target.checked,
                               })
                             }
-                            className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer"
+                            className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </label>
                         <div className="pt-4 border-t border-slate-100">
@@ -3839,7 +3976,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             openingHours: updatedHours,
                                           });
                                         }}
-                                        className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer"
+                                        className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       />
                                       <span className="text-[10px] font-black uppercase text-slate-500">
                                         Geschlossen
@@ -3863,7 +4000,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                               openingHours: updatedHours,
                                             });
                                           }}
-                                          className="px-1.5 border border-slate-200 rounded-lg bg-white text-xs font-black text-slate-700 py-2"
+                                          className="px-1.5 border border-slate-200 rounded-lg bg-white text-xs text-slate-700 py-2 font-sans font-medium"
                                         >
                                           {TIME_SLOTS.slice(0, -1).map((t) => (
                                             <option key={t} value={t}>
@@ -3890,7 +4027,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                               openingHours: updatedHours,
                                             });
                                           }}
-                                          className="px-1.5 border border-slate-200 rounded-lg bg-white text-xs font-black text-slate-700 py-2"
+                                          className="px-1.5 border border-slate-200 rounded-lg bg-white text-xs text-slate-700 py-2 font-sans font-medium"
                                         >
                                           {TIME_SLOTS.slice(1).map((t) => (
                                             <option key={t} value={t}>
@@ -3929,7 +4066,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   updated[i] = e.target.value;
                                   setCourtsList(updated);
                                 }}
-                                className="text-xs font-black text-[var(--color-primary)] flex-1 bg-transparent border-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 rounded px-2 transition-all py-2"
+                                className="text-xs text-[var(--color-primary)] flex-1 bg-transparent border-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 rounded px-2 transition-all py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <div className="flex bg-white rounded border border-slate-200 overflow-hidden shadow-sm shrink-0">
                                 <button
@@ -3966,7 +4103,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={newCourtName}
                             onChange={(e) => setNewCourtName(e.target.value)}
                             placeholder="Z.B. Platz 3 Oder Halle..."
-                            className="flex-1 px-3 border-2 border-slate-200 rounded-xl text-xs font-bold focus:border-[var(--color-primary)] outline-none bg-slate-50 focus:bg-white transition-colors py-2"
+                            className="flex-1 px-3 border-2 border-slate-200 rounded-xl text-xs focus:border-[var(--color-primary)] outline-none bg-slate-50 focus:bg-white transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <button
                             type="button"
@@ -3980,14 +4117,39 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     </div>
                   </div>
 
+                  {modules.guests !== false && (
+                    <div className="pt-2">
+                      <GuestFeeSettingsEditor
+                        feeSettings={feeSettings}
+                        onChange={(newFeeSettings) => {
+                          setFeeSettings(newFeeSettings);
+                          if (newFeeSettings.fee_calculation_mode === "SIMPLE" && newFeeSettings.simple_config) {
+                            const euro = newFeeSettings.simple_config.amount_cents / 100;
+                            const bMode =
+                              newFeeSettings.simple_config.rate_type === "PER_COURT_HOUR"
+                                ? ("per_court" as const)
+                                : ("per_player" as const);
+                            setReservationRules((prev) => ({
+                              ...prev,
+                              guestFeePerHour: euro,
+                              guestBillingMode: bMode,
+                            }));
+                            setGuestFeeString(euro.toFixed(2).replace(".", ","));
+                          }
+                        }}
+                        onValidationChange={setIsFeeSettingsValid}
+                      />
+                    </div>
+                  )}
+
                   {/* Tab Category Actions */}
                   <div className="border-t border-slate-100 pt-6 flex justify-end">
                     <button
                       type="button"
-                      disabled={!isTabDirty("rules")}
+                      disabled={!isTabDirty("rules") || !isFeeSettingsValid}
                       onClick={() => handleSaveTab("rules")}
                       className={`font-black uppercase text-xs tracking-wider px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 ${
-                        isTabDirty("rules")
+                        isTabDirty("rules") && isFeeSettingsValid
                           ? "bg-[var(--color-primary)] text-white hover:bg-black shadow-lg hover:shadow-xl"
                           : "bg-slate-200 text-slate-400 cursor-not-allowed"
                       }`}
@@ -4118,7 +4280,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex gap-2.5 sm:shrink-0 w-full sm:w-auto justify-end border-t sm:border-0 border-slate-200 sm:pt-0 pt-3">
+                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t sm:border-0 border-slate-200 sm:pt-0 pt-3">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -4179,7 +4341,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-2.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-slate-200 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-slate-200 sm:border-0 sm:pt-0 pt-3">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -4241,7 +4403,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-2.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-rose-100 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-rose-100 sm:border-0 sm:pt-0 pt-3">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -4328,7 +4490,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                       </div>
                                     </div>
-                                    <div className="flex gap-2.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -4385,7 +4547,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-2.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -4447,7 +4609,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-2.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -4540,7 +4702,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   ? "z.B. Freitagsdoppel, Training"
                                   : "z.B. Platzpflege, Regen..."
                               }
-                              className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white outline-none focus:border-slate-800 transition-colors py-2"
+                              className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             />
                           </div>
 
@@ -4556,14 +4718,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   value={newLockColor}
                                   onChange={(e) => setNewLockColor(e.target.value)}
                                   placeholder={settings.primaryColor || "#1b4332"}
-                                  className="flex-1 px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white outline-none focus:border-slate-800 transition-colors uppercase py-2"
+                                  className="flex-1 px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors uppercase py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <div className="relative flex items-center justify-center w-10 h-10 border border-slate-200 rounded-xl overflow-hidden cursor-pointer hover:border-slate-400 bg-white">
                                   <input
                                     type="color"
                                     value={newLockColor && /^#[0-9A-F]{6}$/i.test(newLockColor) ? newLockColor : (settings.primaryColor || "#1b4332")}
                                     onChange={(e) => setNewLockColor(e.target.value.toLowerCase())}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer animate-none"
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer animate-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
                                   <div 
                                     className="w-6 h-6 rounded-lg shadow-inner border border-black/10"
@@ -4658,7 +4820,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setNewLockDay(parseInt(e.target.value))
                                   }
-                                  className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2"
+                                  className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
                                 >
                                   <option value={1}>Montag</option>
                                   <option value={2}>Dienstag</option>
@@ -4710,7 +4872,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewLockEndTime(e.target.value)
                                     }
-                                    className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2"
+                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
                                   >
                                     {TIME_SLOTS.slice(
                                       TIME_SLOTS.indexOf(newLockStartTime) + 1,
@@ -4732,7 +4894,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewLockIsOngoing(e.target.checked)
                                     }
-                                    className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer"
+                                    className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
                                   <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
                                     Dauerhaft (Unbegrenzt)
@@ -4751,7 +4913,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onChange={(e) =>
                                           setNewLockStartDate(e.target.value)
                                         }
-                                        className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white font-bold outline-none focus:border-slate-800 transition-colors py-2"
+                                        className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       />
                                     </div>
                                     <div>
@@ -4764,7 +4926,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onChange={(e) =>
                                           setNewLockEndDate(e.target.value)
                                         }
-                                        className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white font-bold outline-none focus:border-slate-800 transition-colors py-2"
+                                        className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       />
                                     </div>
                                   </div>
@@ -4790,7 +4952,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewRangeStartDate(e.target.value)
                                     }
-                                    className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2"
+                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
                                 </div>
                                 <div>
@@ -4803,7 +4965,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewRangeEndDate(e.target.value)
                                     }
-                                    className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2"
+                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
                                 </div>
                               </div>
@@ -4817,7 +4979,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewRangeStartTime(e.target.value)
                                     }
-                                    className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2"
+                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
                                   >
                                     {TIME_SLOTS.map((t) => (
                                       <option key={t} value={t}>
@@ -4835,7 +4997,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewRangeEndTime(e.target.value)
                                     }
-                                    className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2"
+                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
                                   >
                                     {TIME_SLOTS.map((t) => (
                                       <option key={t} value={t}>
@@ -4902,9 +5064,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               Farben
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 checked={!isCustomColors}
                                 onChange={(e) => {
                                   if (e.target.checked) {
@@ -4948,7 +5108,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setPrimaryColor(e.target.value)
                                   }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors"
+                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <input 
                                   type="text"
@@ -4956,7 +5116,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setPrimaryColor(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2"
+                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                               </div>
                             </div>
@@ -4971,7 +5131,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setAccentColor(e.target.value)
                                   }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors"
+                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <input 
                                   type="text"
@@ -4979,7 +5139,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setAccentColor(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2"
+                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                               </div>
                             </div>
@@ -4994,7 +5154,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setAccentColor2(e.target.value)
                                   }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors"
+                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <input 
                                   type="text"
@@ -5002,7 +5162,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setAccentColor2(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2"
+                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                               </div>
                             </div>
@@ -5017,7 +5177,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setAccentColor3(e.target.value)
                                   }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors"
+                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <input 
                                   type="text"
@@ -5025,7 +5185,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setAccentColor3(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2"
+                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                               </div>
                             </div>
@@ -5040,9 +5200,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 Logo Anmelde- und Ladebildschirm
                               </label>
                               <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 accent-[var(--color-primary)]"
+                                <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   checked={logoUrl === DEFAULT_SETTINGS.logoUrl}
                                   onChange={(e) => {
                                     if (e.target.checked) {
@@ -5079,7 +5237,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setLogoUrl(e.target.value);
                                       setCustomLogoUrl(e.target.value);
                                     }}
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2"
+                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                     placeholder="https://example.com/logo.png"
                                   />
                                   <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
@@ -5088,9 +5246,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     ) : (
                                       <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                     )}
-                                    <input
-                                      type="file"
-                                      className="hidden p-2"
+                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "logo")
@@ -5110,9 +5266,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md">
                                       <i className="fa-solid fa-upload mr-1"></i>
                                       Ändern
-                                      <input
-                                        type="file"
-                                        className="hidden p-2"
+                                      <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                         accept="image/*"
                                         onChange={(e) =>
                                           handleImageUpload(e, "logo")
@@ -5147,9 +5301,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 Logo Kopfzeile
                               </label>
                               <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="w-4 h-4 accent-[var(--color-primary)]"
+                                <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   checked={
                                     headerLogoUrl ===
                                     (DEFAULT_SETTINGS.headerLogoUrl ||
@@ -5195,7 +5347,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setHeaderLogoUrl(e.target.value);
                                       setCustomHeaderLogoUrl(e.target.value);
                                     }}
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2"
+                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                     placeholder="https://example.com/header-logo.png"
                                   />
                                   <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
@@ -5204,9 +5356,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     ) : (
                                       <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                     )}
-                                    <input
-                                      type="file"
-                                      className="hidden p-2"
+                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "headerLogo")
@@ -5226,9 +5376,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md">
                                       <i className="fa-solid fa-upload mr-1"></i>
                                       Ändern
-                                      <input
-                                        type="file"
-                                        className="hidden p-2"
+                                      <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                         accept="image/*"
                                         onChange={(e) =>
                                           handleImageUpload(e, "headerLogo")
@@ -5268,9 +5416,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               </span>
                             </div>
                             <label className="flex items-center gap-2 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 checked={
                                   faviconUrl ===
                                   (DEFAULT_SETTINGS.faviconUrl ||
@@ -5423,9 +5569,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         <label className="text-[9px] font-black uppercase tracking-wider text-white bg-[var(--color-primary)] hover:bg-black px-3.5 py-2 rounded-lg cursor-pointer transition-colors shadow-sm inline-flex items-center gap-1.5">
                                           <i className="fa-solid fa-arrows-rotate"></i>
                                           <span>Anderes Bild hochladen</span>
-                                          <input
-                                            type="file"
-                                            className="hidden p-2"
+                                          <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                             accept="image/*"
                                             onChange={(e) =>
                                               handleImageUpload(e, "favicon")
@@ -5450,9 +5594,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   </div>
                                 ) : (
                                   <label className="border border-dashed border-slate-300 hover:border-[var(--color-primary)] bg-slate-50 hover:bg-slate-100/50 rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 relative group">
-                                    <input
-                                      type="file"
-                                      className="hidden p-2"
+                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "favicon")
@@ -5496,7 +5638,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setFaviconUrl(e.target.value);
                                       setCustomFaviconUrl(e.target.value);
                                     }}
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2"
+                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                     placeholder="Z.B. https://ihre-website.de/favicon.png"
                                   />
                                 </div>
@@ -5515,9 +5657,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               Vereinsbanner
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 checked={
                                   bannerUrl === DEFAULT_SETTINGS.bannerUrl
                                 }
@@ -5556,7 +5696,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     setBannerUrl(e.target.value);
                                     setCustomBannerUrl(e.target.value);
                                   }}
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   placeholder="https://example.com/banner.jpg"
                                 />
                                 <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
@@ -5565,9 +5705,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   ) : (
                                     <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                   )}
-                                  <input
-                                    type="file"
-                                    className="hidden p-2"
+                                  <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                     accept="image/*"
                                     onChange={(e) =>
                                       handleImageUpload(e, "banner")
@@ -5589,9 +5727,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md flex items-center">
                                       <i className="fa-solid fa-upload mr-1.5"></i>
                                       Bild ändern
-                                      <input
-                                        type="file"
-                                        className="hidden p-2"
+                                      <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                         accept="image/*"
                                         onChange={(e) =>
                                           handleImageUpload(e, "banner")
@@ -5636,9 +5772,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               Anmelde-Hintergrund (Grafik)
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 checked={
                                   loginBannerUrl ===
                                   (DEFAULT_SETTINGS.loginBannerUrl ||
@@ -5684,7 +5818,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     setLoginBannerUrl(e.target.value);
                                     setCustomLoginBannerUrl(e.target.value);
                                   }}
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2"
+                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   placeholder="https://example.com/login-banner.jpg"
                                 />
                                 <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
@@ -5693,9 +5827,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   ) : (
                                     <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                   )}
-                                  <input
-                                    type="file"
-                                    className="hidden p-2"
+                                  <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                     accept="image/*"
                                     onChange={(e) =>
                                       handleImageUpload(e, "loginBanner")
@@ -5715,9 +5847,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md flex items-center">
                                     <i className="fa-solid fa-upload mr-1.5"></i>
                                     Bild ändern
-                                    <input
-                                      type="file"
-                                      className="hidden p-2"
+                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "loginBanner")
@@ -5762,7 +5892,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               value={websiteUrl}
                               onChange={(e) => setWebsiteUrl(e.target.value)}
                               disabled={hideWebsiteLink}
-                              className="w-full px-2.5 border border-slate-200/80 rounded-xl font-bold bg-white focus:border-[var(--color-primary)] outline-none transition-all disabled:opacity-50 text-sm py-2"
+                              className="w-full px-2.5 border border-slate-200/80 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all disabled:opacity-50 text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               placeholder="https://www.tennis-club.local"
                             />
                             <label
@@ -5801,7 +5931,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={localNews}
                             onChange={(e) => setLocalNews(e.target.value)}
                             placeholder="Z.B. Die Plätze sind eröffnet!..."
-                            className="w-full p-2.5 rounded-xl bg-white border border-slate-200 font-bold text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[120px] resize-y"
+                            className="w-full h-8 px-3 py-1 rounded-xl bg-white border border-slate-200 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[120px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                           />
                         </div>
 
@@ -5846,7 +5976,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={welcomeMessage}
                             onChange={(e) => setWelcomeMessage(e.target.value)}
                             placeholder="Herzlich willkommen..."
-                            className="w-full p-2.5 rounded-b-xl bg-white border border-slate-200 border-t-0 font-bold text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[120px] resize-y"
+                            className="w-full h-8 px-3 py-1 rounded-b-xl bg-white border border-slate-200 border-t-0 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[120px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                           />
                           <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
                             Dieser Text wird auf dem Loginbildschirm angezeigt.
@@ -5888,7 +6018,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={helpText}
                             onChange={(e) => setHelpText(e.target.value)}
                             placeholder="Hilfe & Funktionen..."
-                            className="w-full p-2.5 rounded-b-xl bg-white border border-slate-200 border-t-0 font-bold text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[200px] resize-y"
+                            className="w-full h-8 px-3 py-1 rounded-b-xl bg-white border border-slate-200 border-t-0 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[200px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                           />
                           <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
                             Dieser Text wird auf der Hilfe-Seite angezeigt.
@@ -5930,7 +6060,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={impressum}
                             onChange={(e) => setImpressum(e.target.value)}
                             placeholder="Angaben gemäß § 5 TMG..."
-                            className="w-full p-2.5 rounded-b-xl bg-white border border-slate-200 border-t-0 font-bold text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[160px] resize-y"
+                            className="w-full h-8 px-3 py-1 rounded-b-xl bg-white border border-slate-200 border-t-0 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[160px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                           />
                           <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
                             Dieser Text wird unten in der Fußzeile (Impressum
@@ -5994,14 +6124,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             name: "",
                             password: "",
                             role: Role.USER,
+                            gender: "m",
                             firstName: "",
                             lastName: "",
                             email: "",
+                            phone: "",
+                            birthDate: "",
+                            showContactInfo: true,
+                            show_onboarding_hints: true,
+                            isSuspended: false,
                           });
                           setInlineEditingUserId(null);
                           setShowUserForm(!showUserForm);
                         }}
-                        className="bg-[var(--color-primary)] hover:bg-black text-white font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2"
+                        className="bg-[var(--color-primary)] hover:bg-black text-white font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
                       >
                         <i
                           className={`fa-solid ${showUserForm ? "fa-xmark" : "fa-user-plus"}`}
@@ -6012,175 +6148,361 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </button>
                     </div>
 
-                    {/* Inline Add / Edit Form */}
+                    {/* Inline Add Form */}
                     {showUserForm && (
-                      <div className="bg-white p-6 rounded-2xl border-none space-y-4 shadow-sm animate-in fade-in slide-in-from-top-4 mb-6">
-                        <h4 className="text-xs font-black text-[var(--color-primary)] uppercase mb-4">
-                          {editingUser.id
-                            ? "Mitglied bearbeiten"
-                            : "Neues Mitglied hinzufügen"}
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Vorname{" "}
-                              <span className="text-slate-300 font-normal">
-                                (optional)
-                              </span>
-                            </label>
-                            <input 
-                              type="text"
-                              value={editingUser.firstName || ""}
-                              onChange={(e) =>
-                                setEditingUser({
-                                  ...editingUser,
-                                  firstName: e.target.value,
-                                })
-                              }
-                              className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm py-2"
-                              placeholder="Z.B. Max"
-                            />
+                      <div className="bg-white p-6 rounded-2xl border-none space-y-6 shadow-sm animate-in fade-in slide-in-from-top-4 mb-6 text-left">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2 text-[var(--color-primary)] font-black text-xs uppercase tracking-wider">
+                            <i className="fa-solid fa-user-plus text-sm"></i>
+                            <span>Neues Mitglied hinzufügen</span>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Nachname{" "}
-                              <span className="text-slate-300 font-normal">
-                                (optional)
-                              </span>
-                            </label>
-                            <input 
-                              type="text"
-                              value={editingUser.lastName || ""}
-                              onChange={(e) =>
-                                setEditingUser({
-                                  ...editingUser,
-                                  lastName: e.target.value,
-                                })
-                              }
-                              className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm py-2"
-                              placeholder="Z.B. Mustermann"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Benutzername{" "}
-                              <span className="text-red-500">*</span>
-                            </label>
-                            <input 
-                              type="text"
-                              value={editingUser.name || ""}
-                              onChange={(e) =>
-                                setEditingUser({
-                                  ...editingUser,
-                                  name: e.target.value,
-                                })
-                              }
-                              className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm py-2"
-                              placeholder="Z.B. maxmustermann"
-                            />
-                          </div>
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                E-Mail {!editingUser.is_placeholder_email && <span className="text-red-500">*</span>}
+                        </div>
+
+                        {/* Profilbild & Avatar (Hard-Bandwidth-Protection & 0-Byte Fallback) */}
+                        <AvatarUploader
+                          user={editingUser}
+                          userId={editingUser.id || editingUser.name || "new_user"}
+                          avatarUrl={editingUser.avatarUrl}
+                          avatarIcon={editingUser.avatarIcon}
+                          onChange={({ avatarUrl, avatarIcon }) => {
+                            setEditingUser((prev) => ({
+                              ...prev,
+                              ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+                              ...(avatarIcon !== undefined ? { avatarIcon } : {}),
+                            }));
+                          }}
+                        />
+
+                        {/* 1. PERSÖNLICHE DATEN */}
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-address-card text-[11px]"></i>
+                            1. Persönliche Daten (Pflichtfelder)
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                Vorname <span className="text-red-500">*</span>
                               </label>
-                              <label className="flex items-center gap-1.5 cursor-pointer">
-                                <input 
-                                  type="checkbox"
-                                  checked={!!editingUser.is_placeholder_email}
-                                  onChange={(e) => {
-                                    const checked = e.target.checked;
+                              <input
+                                type="text"
+                                value={editingUser.firstName || ""}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    firstName: e.target.value,
+                                  })
+                                }
+                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                placeholder="Z.B. Max"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                Nachname <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editingUser.lastName || ""}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    lastName: e.target.value,
+                                  })
+                                }
+                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                placeholder="Z.B. Mustermann"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                Geschlecht <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                value={editingUser.gender || "m"}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    gender: e.target.value as "m" | "w",
+                                  })
+                                }
+                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-slate-50 focus:bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                              >
+                                <option value="m">männlich</option>
+                                <option value="w">weiblich</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                <span>Geburtsdatum</span>
+                                {editingUser.birthDate && calculateAge(editingUser.birthDate) !== null && (
+                                  <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                    {calculateAge(editingUser.birthDate)} J. {calculateAge(editingUser.birthDate)! < 18 ? "(Jugend/U18)" : "(Erwachsen)"}
+                                  </span>
+                                )}
+                              </label>
+                              <input
+                                type="date"
+                                min="1900-01-01"
+                                max="2099-12-31"
+                                value={editingUser.birthDate || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val.length <= 10) {
                                     setEditingUser({
                                       ...editingUser,
-                                      is_placeholder_email: checked,
-                                      email: checked ? "" : editingUser.email,
+                                      birthDate: val,
+                                    });
+                                  }
+                                }}
+                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm text-slate-800"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. KONTAKTINFORMATIONEN */}
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-address-book text-[11px]"></i>
+                            2. Kontaktinformationen (Optional)
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <div className="flex justify-between items-center mb-1.5">
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                  E-Mail-Adresse {!editingUser.is_placeholder_email && <span className="text-red-500">*</span>}
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!editingUser.is_placeholder_email}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setEditingUser({
+                                        ...editingUser,
+                                        is_placeholder_email: checked,
+                                        email: checked ? "" : editingUser.email,
+                                      });
+                                    }}
+                                    className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  />
+                                  <span className="text-[10px] font-bold text-slate-600">
+                                    Keine E-Mail vorhanden
+                                  </span>
+                                </label>
+                              </div>
+                              <input
+                                type="email"
+                                disabled={!!editingUser.is_placeholder_email}
+                                value={editingUser.is_placeholder_email ? "" : (editingUser.email || "")}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    email: e.target.value,
+                                    is_placeholder_email: false,
+                                  })
+                                }
+                                required={!editingUser.is_placeholder_email}
+                                className={`w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold outline-none focus:border-[var(--color-primary)] transition-all text-sm ${
+                                  editingUser.is_placeholder_email
+                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+                                    : "bg-slate-50 focus:bg-white text-slate-800"
+                                }`}
+                                placeholder={editingUser.is_placeholder_email ? "[Keine E-Mail hinterlegt]" : "name@beispiel.de"}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                Telefonnummer <span className="text-slate-400 font-normal normal-case">(optional)</span>
+                              </label>
+                              <input
+                                type="tel"
+                                value={editingUser.phone || ""}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    phone: e.target.value,
+                                  })
+                                }
+                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                placeholder="+49 170 1234567"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3. ZUGANGSDATEN & PASSWORT */}
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-key text-[11px]"></i>
+                            3. Zugangsdaten & Passwort
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                Benutzername (Login) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editingUser.name || ""}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    name: e.target.value,
+                                  })
+                                }
+                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                placeholder="z. B. maxmustermann"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                Rolle <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                value={editingUser.role || Role.USER}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    role: e.target.value as Role,
+                                  })
+                                }
+                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-slate-50 focus:bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                              >
+                                <option value={Role.MITGLIED}>Mitglied (Standard)</option>
+                                <option value={Role.ADMIN}>Vereins-Administrator</option>
+                              </select>
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                Passwort <span className="text-red-500">*</span>
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={editingUser.password || ""}
+                                  onChange={(e) =>
+                                    setEditingUser({
+                                      ...editingUser,
+                                      password: e.target.value,
+                                      mustChangePassword: false,
+                                    })
+                                  }
+                                  className="flex-1 h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm font-mono text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  placeholder="Passwort eingeben..."
+                                  required
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                                    let pwd = "";
+                                    for (let i = 0; i < 8; i++) {
+                                      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+                                    }
+                                    setEditingUser({
+                                      ...editingUser,
+                                      password: pwd,
+                                      mustChangePassword: true,
                                     });
                                   }}
-                                  className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded"
-                                />
-                                <span className="text-[10px] font-bold text-slate-600">
-                                  Keine E-Mail-Adresse vorhanden
-                                </span>
-                              </label>
+                                  className="h-10 px-4 bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold text-xs rounded-xl hover:bg-[var(--color-primary)]/20 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+                                  title="Einmal-Passwort generieren"
+                                >
+                                  <i className="fa-solid fa-key"></i>
+                                  <span>Generieren</span>
+                                </button>
+                              </div>
+                              {editingUser.mustChangePassword && (
+                                <p className="text-[10px] text-amber-600 mt-1.5 font-bold flex items-center gap-1">
+                                  <i className="fa-solid fa-circle-info text-[9px]"></i>
+                                  Benutzer wird beim nächsten Login zur Passwortänderung aufgefordert.
+                                </p>
+                              )}
                             </div>
-                            <input 
-                              type="email"
-                              disabled={!!editingUser.is_placeholder_email}
-                              value={editingUser.is_placeholder_email ? "" : (editingUser.email || "")}
-                              onChange={(e) =>
-                                setEditingUser({
-                                  ...editingUser,
-                                  email: e.target.value,
-                                  is_placeholder_email: false,
-                                })
-                              }
-                              required={!editingUser.is_placeholder_email}
-                              className={`w-full px-2.5 border border-slate-200 rounded-xl font-bold outline-none focus:border-[var(--color-primary)] transition-all text-sm py-2 ${
-                                editingUser.is_placeholder_email
-                                  ? "bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
-                                  : "bg-slate-50 focus:bg-white text-slate-800"
-                              }`}
-                              placeholder={editingUser.is_placeholder_email ? "[Keine E-Mail hinterlegt]" : "Z.B. max@beispiel.de"}
-                            />
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Telefonnummer{" "}
-                              <span className="text-slate-300 font-normal">
-                                (optional)
-                              </span>
+                        </div>
+
+                        {/* 4. PRIVATSPHÄRE & APP-ANZEIGE */}
+                        <div className="space-y-3">
+                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-user-shield text-[11px]"></i>
+                            4. Privatsphäre & App-Anzeige
+                          </h4>
+                          <div className="space-y-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/60">
+                            <label className="flex items-center gap-3 cursor-pointer group select-none">
+                              <input
+                                type="checkbox"
+                                checked={editingUser.showContactInfo !== false}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    showContactInfo: e.target.checked,
+                                  })
+                                }
+                                className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              />
+                              <div>
+                                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
+                                  Kontaktdaten freigeben
+                                </span>
+                                <span className="text-[10px] text-slate-400 block font-medium">
+                                  Meine E-Mail und Telefonnummer in Börse/Rangliste für Vereinsmitglieder anzeigen
+                                </span>
+                              </div>
                             </label>
-                            <input 
-                              type="text"
-                              value={editingUser.phone || ""}
-                              onChange={(e) =>
-                                setEditingUser({
-                                  ...editingUser,
-                                  phone: e.target.value,
-                                })
-                              }
-                              className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm py-2"
-                              placeholder="Z.B. +49 170 1234567"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Passwort <span className="text-red-500">*</span>
+                            <label className="flex items-center gap-3 cursor-pointer group select-none">
+                              <input
+                                type="checkbox"
+                                checked={editingUser.show_onboarding_hints !== false}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    show_onboarding_hints: e.target.checked,
+                                  })
+                                }
+                                className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              />
+                              <div>
+                                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
+                                  Tipps anzeigen
+                                </span>
+                                <span className="text-[10px] text-slate-400 block font-medium">
+                                  Hilfreiche Onboarding-Hinweise und Bedienungstipps in der App einblenden
+                                </span>
+                              </div>
                             </label>
-                            <input 
-                              type="text"
-                              value={editingUser.password || ""}
-                              onChange={(e) =>
-                                setEditingUser({
-                                  ...editingUser,
-                                  password: e.target.value,
-                                })
-                              }
-                              className="w-full px-2.5 border border-slate-200 rounded-xl font-bold bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm py-2"
-                              placeholder="Z.B. tennis123"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Rolle <span className="text-red-500">*</span>
+                            <label className="flex items-center gap-3 cursor-pointer group select-none">
+                              <input
+                                type="checkbox"
+                                id="user-form-onboarding-pending"
+                                checked={!!editingUser.onboarding_pending}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    onboarding_pending: e.target.checked,
+                                  })
+                                }
+                                className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)]"
+                              />
+                              <div>
+                                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block flex items-center gap-1.5">
+                                  <span>Onboarding ausstehend</span>
+                                  {editingUser.onboarding_pending && (
+                                    <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
+                                      Aktiv
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[10px] text-slate-400 block font-medium">
+                                  Beim nächsten Login des Mitglieds wird das Onboarding-Modal automatisch angezeigt
+                                </span>
+                              </div>
                             </label>
-                            <select 
-                              value={editingUser.role || Role.USER}
-                              onChange={(e) =>
-                                setEditingUser({
-                                  ...editingUser,
-                                  role: e.target.value as Role,
-                                })
-                              }
-                              className="w-full px-2.5 border border-slate-200 bg-slate-50 focus:bg-white rounded-xl font-bold outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm py-2"
-                            >
-                              <option value={Role.USER}>
-                                Spieler (Standard-User)
-                              </option>
-                              <option value={Role.ADMIN}>
-                                Vereins-Administrator
-                              </option>
-                            </select>
                           </div>
                         </div>
 
@@ -6232,7 +6554,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         try {
                                           await addExistingPersonToClub(
                                             cand.personId,
-                                            currentUser.vereinsId || "sv-neuhausen",
+                                            currentClubId,
                                             Role.MITGLIED
                                           );
                                           setMessage({
@@ -6242,11 +6564,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           setEditingUser({
                                             name: "",
                                             password: "",
-                                            role: Role.MITGLIED,
+                                            role: Role.USER,
+                                            gender: "m",
                                             firstName: "",
                                             lastName: "",
                                             email: "",
                                             phone: "",
+                                            birthDate: "",
+                                            showContactInfo: true,
+                                            show_onboarding_hints: true,
+                                            isSuspended: false,
                                           });
                                           setShowUserForm(false);
                                           setLiveDuplicateCandidates([]);
@@ -6280,23 +6607,21 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                         )}
 
-                        <div className="flex gap-2 pt-2 justify-end">
+                        <div className="flex gap-2 pt-3 justify-end border-t border-slate-100">
                           <button
                             type="button"
                             onClick={() => setShowUserForm(false)}
-                            className="px-6 bg-slate-100 text-slate-600 hover:bg-slate-200 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors"
+                            className="px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 h-10 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors cursor-pointer"
                           >
                             Abbrechen
                           </button>
                           <button
                             type="button"
-                            onClick={handleSaveUser}
-                            className="px-8 bg-[var(--color-primary)] text-white hover:bg-black rounded-xl uppercase tracking-wide shadow-md transition-all active:scale-95 flex items-center gap-2 h-10 text-sm font-semibold"
+                            onClick={() => handleSaveUser()}
+                            className="px-8 bg-[var(--color-primary)] text-white hover:bg-black rounded-xl uppercase tracking-wide shadow-md transition-all active:scale-95 flex items-center gap-2 h-10 text-xs font-black cursor-pointer"
                           >
-                            <i className="fa-solid fa-floppy-disk"></i>{" "}
-                            {editingUser.id
-                              ? "Änderung Speichern"
-                              : "Mitglied hinzufügen"}
+                            <i className="fa-solid fa-user-plus"></i>
+                            <span>Mitglied hinzufügen</span>
                           </button>
                         </div>
                       </div>
@@ -6311,7 +6636,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           placeholder="Mitglieder durchsuchen (Name oder Rolle)..."
                           value={userSearchQuery}
                           onChange={(e) => setUserSearchQuery(e.target.value)}
-                          className="w-full pl-12 pr-4 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none font-bold text-sm transition-all shadow-sm py-2"
+                          className="w-full pl-12 pr-4 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none text-sm transition-all shadow-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                         {userSearchQuery && (
                           <button
@@ -6366,7 +6691,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             ? "Aufsteigend sortieren"
                             : "Absteigend sortieren"
                         }
-                        className="flex items-center gap-1.5 bg-slate-50 border-2 border-slate-200 hover:bg-slate-100 rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-600 cursor-pointer shadow-sm active:scale-95 transition-all self-start sm:self-auto h-[48px]"
+                        className="flex items-center gap-1.5 bg-slate-50 border-2 border-slate-200 hover:bg-slate-100 rounded-xl h-10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600 cursor-pointer shadow-sm active:scale-95 transition-all self-start sm:self-auto h-[48px]"
                       >
                         {userSortOrder === "asc" ? (
                           <>
@@ -6400,249 +6725,439 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             return (
                               <div
                                 key={u.id || u.name + "-" + idx}
-                                className="p-5 bg-emerald-50/50 border-2 border-[#10b981]/20 rounded-2xl my-2.5 space-y-4 animate-in zoom-in-95 duration-200 text-left"
+                                className="p-5 bg-emerald-50/40 border-2 border-[#10b981]/30 rounded-2xl my-3 space-y-5 animate-in zoom-in-95 duration-200 text-left shadow-sm"
                               >
-                                <div className="flex justify-between items-center pb-2 border-b border-emerald-100/60">
-                                  <span className="text-[10px] font-black uppercase text-[var(--color-primary)] tracking-wider">
-                                    Mitglied inline bearbeiten
-                                  </span>
+                                <div className="flex justify-between items-center pb-3 border-b border-emerald-100">
+                                  <div className="flex items-center gap-2 text-[var(--color-primary)] font-black text-xs uppercase tracking-wider">
+                                    <i className="fa-solid fa-user-pen text-sm"></i>
+                                    <span>Mitglied bearbeiten: {u.klarname || u.name}</span>
+                                  </div>
                                   <div className="flex gap-2">
                                     <button
                                       type="button"
-                                      onClick={handleSaveUser}
-                                      className="px-3.5 bg-[var(--color-primary)] text-white rounded-lg uppercase tracking-wider shadow hover:bg-black transition-colors py-2.5 text-sm font-medium"
-                                    >
-                                      Sichern
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setInlineEditingUserId(null)
-                                      }
-                                      className="px-3 py-2 bg-white border border-slate-300 rounded-lg font-black uppercase text-[9px] tracking-wider text-slate-600 hover:bg-slate-100 transition-colors"
+                                      onClick={() => setInlineEditingUserId(null)}
+                                      className="px-4 py-2 bg-white border border-slate-300 rounded-xl font-black uppercase text-[10px] tracking-wider text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                                     >
                                       Abbrechen
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveUser()}
+                                      className="px-5 bg-[var(--color-primary)] text-white rounded-xl uppercase tracking-wide shadow-md hover:bg-black transition-colors py-2 text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <i className="fa-solid fa-floppy-disk"></i>
+                                      <span>Sichern</span>
+                                    </button>
                                   </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                  <div>
-                                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                      Vorname
-                                    </label>
-                                    <input 
-                                      type="text"
-                                      value={editingUser.firstName || ""}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          firstName: e.target.value,
-                                        })
-                                      }
-                                      className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold py-2"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                      Nachname
-                                    </label>
-                                    <input 
-                                      type="text"
-                                      value={editingUser.lastName || ""}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          lastName: e.target.value,
-                                        })
-                                      }
-                                      className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold py-2"
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="flex justify-between items-center mb-1">
-                                      <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                                        E-Mail {!editingUser.is_placeholder_email && <span className="text-red-500">*</span>}
+
+                                {/* Profilbild & Avatar (Hard-Bandwidth-Protection & 0-Byte Fallback) */}
+                                <AvatarUploader
+                                  user={editingUser}
+                                  userId={editingUser.id || editingUser.name || u.name}
+                                  avatarUrl={editingUser.avatarUrl}
+                                  avatarIcon={editingUser.avatarIcon}
+                                  onChange={({ avatarUrl, avatarIcon }) => {
+                                    setEditingUser((prev) => ({
+                                      ...prev,
+                                      ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+                                      ...(avatarIcon !== undefined ? { avatarIcon } : {}),
+                                    }));
+                                  }}
+                                />
+
+                                {/* 1. PERSÖNLICHE DATEN */}
+                                <div className="space-y-3">
+                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-address-card text-[11px]"></i>
+                                    1. Persönliche Daten (Pflichtfelder)
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        Vorname <span className="text-red-500">*</span>
                                       </label>
-                                      <label className="flex items-center gap-1 cursor-pointer">
-                                        <input 
-                                          type="checkbox"
-                                          checked={!!editingUser.is_placeholder_email}
-                                          onChange={(e) => {
-                                            const checked = e.target.checked;
+                                      <input
+                                        type="text"
+                                        value={editingUser.firstName || ""}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            firstName: e.target.value,
+                                          })
+                                        }
+                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        placeholder="Z.B. Max"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        Nachname <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editingUser.lastName || ""}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            lastName: e.target.value,
+                                          })
+                                        }
+                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        placeholder="Z.B. Mustermann"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        Geschlecht <span className="text-red-500">*</span>
+                                      </label>
+                                      <select
+                                        value={editingUser.gender || "m"}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            gender: e.target.value as "m" | "w",
+                                          })
+                                        }
+                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                                      >
+                                        <option value="m">männlich</option>
+                                        <option value="w">weiblich</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        <span>Geburtsdatum</span>
+                                        {editingUser.birthDate && calculateAge(editingUser.birthDate) !== null && (
+                                          <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                            {calculateAge(editingUser.birthDate)} J. {calculateAge(editingUser.birthDate)! < 18 ? "(Jugend/U18)" : "(Erwachsen)"}
+                                          </span>
+                                        )}
+                                      </label>
+                                      <input
+                                        type="date"
+                                        min="1900-01-01"
+                                        max="2099-12-31"
+                                        value={editingUser.birthDate || ""}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          if (val.length <= 10) {
                                             setEditingUser({
                                               ...editingUser,
-                                              is_placeholder_email: checked,
-                                              email: checked ? "" : editingUser.email,
+                                              birthDate: val,
                                             });
-                                          }}
-                                          className="w-3 h-3 accent-[var(--color-primary)] rounded"
-                                        />
-                                        <span className="text-[8px] font-bold text-slate-600">
-                                          Keine E-Mail
-                                        </span>
+                                          }
+                                        }}
+                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold bg-white outline-none focus:border-[var(--color-primary)] transition-all text-sm text-slate-800"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* 2. KONTAKTINFORMATIONEN */}
+                                <div className="space-y-3">
+                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-address-book text-[11px]"></i>
+                                    2. Kontaktinformationen (Optional)
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <div className="flex justify-between items-center mb-1.5">
+                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                          E-Mail-Adresse {!editingUser.is_placeholder_email && <span className="text-red-500">*</span>}
+                                        </label>
+                                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                          <input
+                                            type="checkbox"
+                                            checked={!!editingUser.is_placeholder_email}
+                                            onChange={(e) => {
+                                              const checked = e.target.checked;
+                                              setEditingUser({
+                                                ...editingUser,
+                                                is_placeholder_email: checked,
+                                                email: checked ? "" : editingUser.email,
+                                              });
+                                            }}
+                                            className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                          />
+                                          <span className="text-[10px] font-bold text-slate-600">
+                                            Keine E-Mail vorhanden
+                                          </span>
+                                        </label>
+                                      </div>
+                                      <input
+                                        type="email"
+                                        disabled={!!editingUser.is_placeholder_email}
+                                        value={editingUser.is_placeholder_email ? "" : (editingUser.email || "")}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            email: e.target.value,
+                                            is_placeholder_email: false,
+                                          })
+                                        }
+                                        required={!editingUser.is_placeholder_email}
+                                        className={`w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold outline-none focus:border-[var(--color-primary)] transition-all text-sm ${
+                                          editingUser.is_placeholder_email
+                                            ? "bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+                                            : "bg-white text-slate-800"
+                                        }`}
+                                        placeholder={editingUser.is_placeholder_email ? "[Keine E-Mail hinterlegt]" : "name@beispiel.de"}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        Telefonnummer <span className="text-slate-400 font-normal normal-case">(optional)</span>
                                       </label>
+                                      <input
+                                        type="tel"
+                                        value={editingUser.phone || ""}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            phone: e.target.value,
+                                          })
+                                        }
+                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        placeholder="+49 170 1234567"
+                                      />
                                     </div>
-                                    <input 
-                                      type="email"
-                                      disabled={!!editingUser.is_placeholder_email}
-                                      value={editingUser.is_placeholder_email ? "" : (editingUser.email || "")}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          email: e.target.value,
-                                          is_placeholder_email: false,
-                                        })
-                                      }
-                                      className={`w-full px-1.5 border border-slate-200 rounded-lg text-xs font-bold py-2 ${
-                                        editingUser.is_placeholder_email ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-white"
-                                      }`}
-                                      placeholder={editingUser.is_placeholder_email ? "[Keine E-Mail hinterlegt]" : "E-Mail..."}
-                                    />
                                   </div>
-                                  <div>
-                                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                      Telefonnummer
-                                    </label>
-                                    <input 
-                                      type="text"
-                                      value={editingUser.phone || ""}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          phone: e.target.value,
-                                        })
-                                      }
-                                      className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold py-2"
-                                      placeholder="optional"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                      Login (Benutzername) *
-                                    </label>
-                                    <input 
-                                      type="text"
-                                      value={editingUser.name || ""}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          name: e.target.value,
-                                        })
-                                      }
-                                      className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold text-slate-800 py-2"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                      Passwort *
-                                    </label>
-                                    <input 
-                                      type="text"
-                                      value={editingUser.password || ""}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          password: e.target.value,
-                                        })
-                                      }
-                                      disabled={u.name === "superadmin"}
-                                      className={`w-full p-2 border-2 rounded-lg text-xs font-bold ${u.name === "superadmin" ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed" : "border-slate-200 bg-white"}`}
-                                      title={
-                                        u.name === "superadmin"
-                                          ? "Das Passwort des Super-Admins kann hier nicht geändert werden."
-                                          : ""
-                                      }
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                      Geschlecht *
-                                    </label>
-                                    <select 
-                                      value={editingUser.gender || "m"}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          gender: e.target.value as "m" | "w",
-                                        })
-                                      }
-                                      className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold cursor-pointer py-2"
-                                    >
-                                      <option value="m">Herren ('m')</option>
-                                      <option value="w">Damen ('w')</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                      Rolle *
-                                    </label>
-                                    <select 
-                                      value={editingUser.role || Role.USER}
-                                      onChange={(e) =>
-                                        setEditingUser({
-                                          ...editingUser,
-                                          role: e.target.value as Role,
-                                        })
-                                      }
-                                      className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold cursor-pointer py-2"
-                                    >
-                                      <option value={Role.USER}>
-                                        Mitglied
-                                      </option>
-                                      <option value={Role.ADMIN}>Admin</option>
-                                    </select>
-                                  </div>
-                                  <div className="md:col-span-3 mt-3 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-3">
-                                    <h4 className="text-[10px] font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1.5">
-                                      <i className="fa-solid fa-trophy"></i> Hobbyliga & Rangliste
-                                    </h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                      <div>
-                                        <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                          Manuelle Punkteanpassung / Startwert
-                                        </label>
-                                        <input 
-                                          type="number"
-                                          value={manualPointsOverride}
-                                          onChange={(e) => setManualPointsOverride(e.target.value === "" ? "" : Number(e.target.value))}
-                                          className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold text-slate-800 py-2"
-                                          placeholder="Z.B. 100"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                                          Begründung {manualPointsOverride !== "" && <span className="text-red-500">*</span>}
-                                        </label>
-                                        <input 
+                                </div>
+
+                                {/* 3. ZUGANGSDATEN & PASSWORT */}
+                                <div className="space-y-3">
+                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-key text-[11px]"></i>
+                                    3. Zugangsdaten & Passwort
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        Benutzername (Login) <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editingUser.name || ""}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            name: e.target.value,
+                                          })
+                                        }
+                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        placeholder="z. B. maxmustermann"
+                                        required
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        Rolle <span className="text-red-500">*</span>
+                                      </label>
+                                      <select
+                                        value={editingUser.role || Role.USER}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            role: e.target.value as Role,
+                                          })
+                                        }
+                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                                      >
+                                        <option value={Role.MITGLIED}>Mitglied (Standard)</option>
+                                        <option value={Role.ADMIN}>Vereins-Administrator</option>
+                                      </select>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                        Passwort <span className="text-red-500">*</span>
+                                      </label>
+                                      <div className="flex items-center gap-2">
+                                        <input
                                           type="text"
-                                          value={manualPointsReason}
-                                          onChange={(e) => setManualPointsReason(e.target.value)}
-                                          className="w-full px-1.5 border border-slate-200 rounded-lg text-xs bg-white font-bold text-slate-800 py-2"
-                                          placeholder="Z.B. Profil-Wiederherstellung"
+                                          value={editingUser.password || ""}
+                                          onChange={(e) =>
+                                            setEditingUser({
+                                              ...editingUser,
+                                              password: e.target.value,
+                                              mustChangePassword: false,
+                                            })
+                                          }
+                                          disabled={u.name === "superadmin"}
+                                          className={`flex-1 h-10 px-3 py-2 border-2 rounded-xl font-bold transition-all text-sm font-mono ${
+                                            u.name === "superadmin"
+                                              ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                                              : "bg-white border-slate-200 focus:border-[var(--color-primary)] text-slate-800"
+                                          }`}
+                                          placeholder="Passwort eingeben..."
+                                          title={
+                                            u.name === "superadmin"
+                                              ? "Das Passwort des Super-Admins kann hier nicht geändert werden."
+                                              : ""
+                                          }
+                                          required
                                         />
+                                        {u.name !== "superadmin" && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                                              let pwd = "";
+                                              for (let i = 0; i < 8; i++) {
+                                                pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+                                              }
+                                              setEditingUser({
+                                                ...editingUser,
+                                                password: pwd,
+                                                mustChangePassword: true,
+                                              });
+                                            }}
+                                            className="h-10 px-4 bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold text-xs rounded-xl hover:bg-[var(--color-primary)]/20 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+                                            title="Einmal-Passwort generieren"
+                                          >
+                                            <i className="fa-solid fa-key"></i>
+                                            <span>Generieren</span>
+                                          </button>
+                                        )}
                                       </div>
+                                      {editingUser.mustChangePassword && (
+                                        <p className="text-[10px] text-amber-600 mt-1.5 font-bold flex items-center gap-1">
+                                          <i className="fa-solid fa-circle-info text-[9px]"></i>
+                                          Benutzer wird beim nächsten Login zur Passwortänderung aufgefordert.
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
-                                  <div className="md:col-span-3 flex items-center pt-2 mt-1 border-t border-emerald-100/60">
-                                    <label className="flex items-center gap-2 cursor-pointer w-full p-2 bg-red-50 hover:bg-red-100 transition-colors rounded-lg border border-red-100">
+                                </div>
+
+                                {/* 4. PRIVATSPHÄRE & APP-ANZEIGE */}
+                                <div className="space-y-3">
+                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-user-shield text-[11px]"></i>
+                                    4. Privatsphäre & App-Anzeige
+                                  </h4>
+                                  <div className="space-y-3 bg-white p-3.5 rounded-xl border border-slate-200">
+                                    <label className="flex items-center gap-3 cursor-pointer group select-none">
                                       <input
                                         type="checkbox"
-                                        checked={
-                                          editingUser.isSuspended || false
+                                        checked={editingUser.showContactInfo !== false}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            showContactInfo: e.target.checked,
+                                          })
                                         }
+                                        className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                      />
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
+                                          Kontaktdaten freigeben
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 block font-medium">
+                                          Meine E-Mail und Telefonnummer in Börse/Rangliste für Vereinsmitglieder anzeigen
+                                        </span>
+                                      </div>
+                                    </label>
+                                    <label className="flex items-center gap-3 cursor-pointer group select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={editingUser.show_onboarding_hints !== false}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            show_onboarding_hints: e.target.checked,
+                                          })
+                                        }
+                                        className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                      />
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
+                                          Tipps anzeigen
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 block font-medium">
+                                          Hilfreiche Onboarding-Hinweise und Bedienungstipps in der App einblenden
+                                        </span>
+                                      </div>
+                                    </label>
+                                    <label className="flex items-center gap-3 cursor-pointer group select-none">
+                                      <input
+                                        type="checkbox"
+                                        id="inline-user-onboarding-pending"
+                                        checked={!!editingUser.onboarding_pending}
+                                        onChange={(e) =>
+                                          setEditingUser({
+                                            ...editingUser,
+                                            onboarding_pending: e.target.checked,
+                                          })
+                                        }
+                                        className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)]"
+                                      />
+                                      <div>
+                                        <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block flex items-center gap-1.5">
+                                          <span>Onboarding ausstehend</span>
+                                          {editingUser.onboarding_pending && (
+                                            <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
+                                              Aktiv
+                                            </span>
+                                          )}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 block font-medium">
+                                          Beim nächsten Login des Mitglieds wird das Onboarding-Modal automatisch angezeigt
+                                        </span>
+                                      </div>
+                                    </label>
+                                  </div>
+                                </div>
+
+                                {/* 5. SYSTEM & KONTO-STATUS */}
+                                <div className="space-y-3">
+                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-shield-halved text-[11px]"></i>
+                                    5. System & Konto-Status
+                                  </h4>
+                                  <div className="bg-red-50/80 p-3.5 rounded-xl border border-red-200/80">
+                                    <label className="flex items-center gap-3 cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        checked={!!editingUser.isSuspended}
                                         onChange={(e) =>
                                           setEditingUser({
                                             ...editingUser,
                                             isSuspended: e.target.checked,
                                           })
                                         }
-                                        className="w-4 h-4 text-red-600 bg-white border-red-300 rounded focus:ring-red-600"
+                                        className="w-4 h-4 text-red-600 bg-white border-red-300 rounded focus:ring-red-600 accent-red-600 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       />
-                                      <span className="text-[10px] font-black uppercase text-red-700 tracking-wider">
-                                        Benutzerkonto sperren (Login verhindern)
-                                      </span>
+                                      <div>
+                                        <span className="text-xs font-bold text-red-700 block">
+                                          Benutzerkonto sperren (Login verhindern)
+                                        </span>
+                                        <span className="text-[10px] text-red-600/80 block font-medium">
+                                          Der Benutzer kann sich vorübergehend nicht mehr im System anmelden.
+                                        </span>
+                                      </div>
                                     </label>
                                   </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-3 justify-end border-t border-emerald-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => setInlineEditingUserId(null)}
+                                    className="px-5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 h-10 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors cursor-pointer"
+                                  >
+                                    Abbrechen
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveUser()}
+                                    className="px-6 bg-[var(--color-primary)] text-white hover:bg-black rounded-xl uppercase tracking-wide shadow-md transition-all active:scale-95 flex items-center gap-2 h-10 text-xs font-black cursor-pointer"
+                                  >
+                                    <i className="fa-solid fa-floppy-disk"></i>
+                                    <span>Änderungen sichern</span>
+                                  </button>
                                 </div>
                               </div>
                             );
@@ -6666,13 +7181,55 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 )}
                               </div>
                               <div
-                                className={`md:col-span-7 text-base font-semibold break-words flex flex-col justify-center ${u.isSuspended ? "text-slate-400 line-through" : "text-slate-800"}`}
+                                className={`md:col-span-7 text-base font-semibold break-words flex items-center gap-3 ${u.isSuspended ? "text-slate-400 line-through" : "text-slate-800"}`}
                               >
-                                {u.lastName || u.firstName
-                                  ? `${u.lastName || ""}, ${u.firstName || ""}`
-                                      .trim()
-                                      .replace(/^,|,$/, "")
-                                  : u.name}
+                                <UserAvatar user={u} size="md" />
+                                <div className="flex flex-col justify-center min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span>
+                                      {u.lastName || u.firstName
+                                        ? `${u.lastName || ""}, ${u.firstName || ""}`
+                                            .trim()
+                                            .replace(/^,|,$/, "")
+                                        : u.name}
+                                    </span>
+                                  <span
+                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                      u.gender === "w"
+                                        ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                        : "bg-blue-50 text-blue-700 border border-blue-200"
+                                    }`}
+                                  >
+                                    {u.gender === "w" ? "♀ Damen" : "♂ Herren"}
+                                  </span>
+                                  {(() => {
+                                    const age = calculateAge(u.birthDate);
+                                    if (age !== null) {
+                                      return (
+                                        <span
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                            age < 18
+                                              ? "bg-amber-100 text-amber-900 border border-amber-300 font-extrabold"
+                                              : "bg-slate-100 text-slate-700 border border-slate-200"
+                                          }`}
+                                          title={`Geburtsdatum: ${u.birthDate}`}
+                                        >
+                                          <i className="fa-solid fa-cake-candles text-[9px] text-amber-600"></i>
+                                          {age} J. {age < 18 ? `(U${age < 14 ? "14" : "18"})` : ""}
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-50 text-slate-400 border border-slate-200/60"
+                                        title="Kein Geburtsdatum gepflegt. Für U18-Ligen erforderlich."
+                                      >
+                                        <i className="fa-regular fa-calendar text-[8px]"></i>
+                                        Kein Alter
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
                                 <div className="text-xs text-slate-400 font-normal mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                                   <span>
                                     Login:{" "}
@@ -6686,6 +7243,12 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     <span>• {u.email}</span>
                                   ) : (
                                     <span className="text-slate-400 italic">• [Keine E-Mail hinterlegt]</span>
+                                  )}
+                                  {u.onboarding_pending && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200" title="Onboarding beim nächsten Login erforderlich">
+                                      <i className="fa-solid fa-user-clock text-[9px]"></i>
+                                      Onboarding ausstehend
+                                    </span>
                                   )}
                                   <span>•</span>
                                   <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-md px-1.5 py-0.5 shadow-sm">
@@ -6720,6 +7283,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   </span>
                                 </div>
                               </div>
+                            </div>
                               <div className="md:col-span-3 flex justify-end items-center gap-1.5">
                                 {((u.id !== currentUser.id &&
                                   u.name !== currentUser.name) ||
@@ -6741,9 +7305,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setEditingUser({ ...u });
-                                    setManualPointsOverride("");
-                                    setManualPointsReason("");
+                                    setEditingUser({
+                                      ...u,
+                                      showContactInfo: u.showContactInfo !== false,
+                                      show_onboarding_hints: u.show_onboarding_hints !== false,
+                                      onboarding_pending: !!u.onboarding_pending,
+                                      gender: u.gender || "m",
+                                    });
                                     setInlineEditingUserId(u.name);
                                   }}
                                   className="w-8 h-8 rounded-lg bg-slate-100 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center shadow-sm shrink-0"
@@ -6772,7 +7340,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </div>
 
                       {totalUserPages > 1 && (
-                        <div className="flex justify-between items-center bg-slate-50 px-4 py-3 border-t border-slate-100">
+                        <div className="flex justify-between items-center bg-slate-50 h-8 px-3 py-1 border-t border-slate-100 font-sans font-medium">
                           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                             Seite {userPage} von {totalUserPages} (
                             {sortedAndFilteredUsers.length} Mitglieder gesamt)
@@ -6839,7 +7407,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             onClick={async () => {
                               if (window.confirm("Möchtest du die Onboarding-Tipps für ALLE Benutzer wieder aktivieren?")) {
                                 try {
-                                  await resetOnboardingHintsForAllUsers(currentUser.vereinsId || "sv-neuhausen");
+                                  await resetOnboardingHintsForAllUsers(currentClubId);
                                   const updatedUsers = { ...users };
                                   Object.keys(updatedUsers).forEach((k) => {
                                     updatedUsers[k] = { ...updatedUsers[k], show_onboarding_hints: true };
@@ -6876,12 +7444,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       )}
 
                       <div className="relative">
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          accept=".csv,.txt"
-                          onChange={handleFileUpload}
-                          className="hidden p-2"
+                        <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           id="csv-upload"
                         />
                         <label
@@ -6942,7 +7505,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </p>
                       Die Datei muss eine Tabellen-CSV sein mit dem Header{" "}
                       <code className="bg-white/70 px-1 py-0.5 rounded text-black">
-                        Name;Passwort;Rolle
+                        Benutzername;Passwort;Rolle;Vorname;Nachname;Email;Telefon;Geschlecht
                       </code>{" "}
                       (Spaltentrennung via Komma oder Semikolon). Als Rolle sind{" "}
                       <code className="bg-white/70 px-1 py-0.5 rounded text-black">
@@ -6955,6 +7518,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       erlaubt.
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* TAB: MITGLIEDER-ONBOARDING */}
+              {currentTab === "onboarding" && (
+                <div className="animate-in fade-in duration-300">
+                  <AdminOnboardingTab
+                    settings={settings}
+                    currentClubId={currentClubId}
+                    users={users}
+                    onUpdateSettings={onUpdateSettings}
+                    onUpdateUsers={onUpdateUsers}
+                    primaryColor={primaryColor}
+                  />
                 </div>
               )}
 
@@ -6997,7 +7574,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               setBookingSearchQuery(e.target.value)
                             }
                             placeholder="Spieler, Plätze, Kommentare, Datum..."
-                            className="w-full pl-8 pr-4 bg-white border border-slate-300 rounded-xl font-bold text-xs outline-none focus:border-emerald-600 py-2"
+                            className="w-full pl-8 pr-4 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-emerald-600 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <i className="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-xs"></i>
                         </div>
@@ -7013,7 +7590,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           onChange={(e: any) =>
                             setBookingFilterType(e.target.value)
                           }
-                          className="w-full px-3 bg-white border border-slate-300 rounded-xl font-semibold text-xs text-slate-700 outline-none focus:border-emerald-600 cursor-pointer py-2"
+                          className="w-full px-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 outline-none focus:border-emerald-600 cursor-pointer py-2 font-sans font-medium"
                         >
                           <option value="all">Alle Belegungen</option>
                           <option value="future">Nur Zukünftige</option>
@@ -7035,7 +7612,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           onChange={(e) =>
                             setBookingFilterCourt(e.target.value)
                           }
-                          className="w-full px-3 bg-white border border-slate-300 rounded-xl font-semibold text-xs text-slate-700 outline-none focus:border-emerald-600 cursor-pointer py-2"
+                          className="w-full px-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 outline-none focus:border-emerald-600 cursor-pointer py-2 font-sans font-medium"
                         >
                           <option value="all">Alle Plätze</option>
                           {settings.courts?.map((court) => (
@@ -7191,7 +7768,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                       {/* Pagination control block */}
                       {bkTotalPages > 1 && (
-                        <div className="flex justify-between items-center bg-slate-50 px-4 py-3 border-t border-slate-100">
+                        <div className="flex justify-between items-center bg-slate-50 h-8 px-3 py-1 border-t border-slate-100 font-sans font-medium">
                           <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-left">
                             Seite {bookingPage} von {bkTotalPages} (
                             {filteredAppointments.length} gefundene Termine)
@@ -7230,7 +7807,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   {/* EDIT SINGLE BOOKING MODAL */}
                   {editingAdminBooking && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
-                      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm w-full max-w-lg overflow-hidden animate-in zoom-in duration-300 border border-slate-200 text-left my-8">
+                      <div className="border-none outline-none bg-white rounded-2xl -200/80 shadow-sm w-full max-w-lg overflow-hidden animate-in zoom-in duration-300 -200 text-left my-8">
                         {/* Header */}
                         <div className="bg-[var(--color-primary)] p-6 text-white flex justify-between items-center">
                           <div className="text-left">
@@ -7300,7 +7877,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 required
                                 value={editBkDate}
                                 onChange={(e) => setEditBkDate(e.target.value)}
-                                className="w-full px-3 border-2 border-slate-200 rounded-xl font-bold text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 text-slate-800 py-2"
+                                className="w-full px-3 border-2 border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                             </div>
 
@@ -7312,7 +7889,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <select 
                                 value={editBkTime}
                                 onChange={(e) => setEditBkTime(e.target.value)}
-                                className="w-full px-3 border-2 border-slate-200 rounded-xl font-bold text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 cursor-pointer text-slate-800 py-2"
+                                className="w-full px-3 border-2 border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 cursor-pointer text-slate-800 py-2 font-sans font-medium"
                               >
                                 {TIME_SLOTS.map((slot) => (
                                   <option key={slot} value={slot}>
@@ -7330,7 +7907,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <select 
                                 value={editBkCourt}
                                 onChange={(e) => setEditBkCourt(e.target.value)}
-                                className="w-full px-3 border-2 border-slate-200 rounded-xl font-bold text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 cursor-pointer text-slate-800 py-2"
+                                className="w-full px-3 border-2 border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 cursor-pointer text-slate-800 py-2 font-sans font-medium"
                               >
                                 {settings.courts?.map((c) => (
                                   <option key={c} value={c}>
@@ -7356,7 +7933,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   setEditBkReason(e.target.value)
                                 }
                                 placeholder="z.B. Verbandspiel, Training, Platzpflege"
-                                className="w-full px-3 border border-red-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-red-500 py-2"
+                                className="w-full px-3 border border-red-200 rounded-xl text-sm bg-white outline-none focus:border-red-500 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                             </div>
                           ) : (
@@ -7408,7 +7985,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setEditBkShowSuggestions(true)
                                     }
                                     placeholder="Spielernamen eingeben oder suchen..."
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-emerald-600 text-slate-800 py-2"
+                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-emerald-600 text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
                                   <button
                                     type="button"
@@ -7427,7 +8004,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 {/* Suggestion list overlay */}
                                 {editBkShowSuggestions &&
                                   editPlayerSuggestions.length > 0 && (
-                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden divide-y divide-slate-100">
+                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-[100] overflow-hidden divide-y divide-slate-100">
                                       {editPlayerSuggestions.map((u, idx) => {
                                         const fullName =
                                           u.lastName || u.firstName
@@ -7469,7 +8046,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setEditBkComment(e.target.value)
                                     }
                                     placeholder="z.B. Gastspieler"
-                                    className="w-full px-2.5 border border-slate-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-emerald-600 text-slate-800 py-2"
+                                    className="w-full px-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-emerald-600 text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
                                 </div>
 
@@ -7486,7 +8063,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           e.target.checked,
                                         )
                                       }
-                                      className="w-4.5 h-4.5 text-emerald-600 border-2 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                                      className="w-4.5 h-4.5 text-emerald-600 border-2 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                     />
                                     <label
                                       htmlFor="editBkHasBallMachine"
@@ -7551,9 +8128,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
+                          <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             checked={settings?.publicCalendar?.enabled || false}
                             onChange={(e) => {
                               let token = settings?.publicCalendar?.token;
@@ -7589,9 +8164,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
+                          <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             checked={settings?.publicCalendar?.showNames || false}
                             onChange={(e) => {
                               onUpdateSettings({
@@ -7624,11 +8197,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 Testen <i className="fa-solid fa-arrow-up-right-from-square text-[8px]"></i>
                               </a>
                             </div>
-                            <input
-                              type="text"
-                              readOnly
-                              value={`${window.location.origin}/public/calendar/woche/${settings.publicCalendar.token}`}
-                              className="w-full px-3 py-2 bg-white border border-emerald-200 rounded-lg text-xs font-mono text-emerald-900 select-all outline-none"
+                            <input className="w-full h-8 px-3 py-1 bg-white border border-emerald-200 rounded-lg text-sm font-mono text-emerald-900 select-all outline-none placeholder: placeholder: placeholder: placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                             />
                           </div>
                           <div>
@@ -7644,7 +8213,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-slate-100/80 p-4 rounded-xl border border-slate-200 text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2.5">
+                        <div className="bg-slate-100/80 p-4 rounded-xl border border-slate-200 text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-3">
                           <i className="fa-solid fa-eye-slash text-slate-400 text-base shrink-0"></i>
                           <p className="normal-case font-medium text-slate-500 text-xs">
                             Öffentliche Freigabe ist aktuell <span className="font-bold text-slate-700">deaktiviert</span>. Aktiviere den Schalter oben, um den Direktlink und iFrame-Code zu generieren.
@@ -7731,7 +8300,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             type="date"
                             value={exportStartDate}
                             onChange={(e) => setExportStartDate(e.target.value)}
-                            className="w-full px-3 border border-slate-200 rounded-xl font-bold text-sm bg-slate-50 focus:bg-white focus:border-[var(--color-accent-2)] outline-none text-slate-800 py-2"
+                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:border-[var(--color-accent-2)] outline-none text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
 
@@ -7743,7 +8312,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             type="date"
                             value={exportEndDate}
                             onChange={(e) => setExportEndDate(e.target.value)}
-                            className="w-full px-3 border border-slate-200 rounded-xl font-bold text-sm bg-slate-50 focus:bg-white focus:border-[var(--color-accent-2)] outline-none text-slate-800 py-2"
+                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:border-[var(--color-accent-2)] outline-none text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
                       </div>
@@ -7815,12 +8384,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 importFileInputRef.current?.click()
                               }
                             >
-                              <input
-                                type="file"
-                                ref={importFileInputRef}
-                                onChange={handleImportFileChange}
-                                accept=".csv,.json"
-                                className="hidden p-2"
+                              <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
                               <p className="text-xs font-bold text-slate-700">
@@ -8026,7 +8590,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     type: "success",
                                   });
                                 }}
-                                className="sr-only peer"
+                                className="sr-only peer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                             </label>
@@ -8047,11 +8611,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 REST-Schnittstellen URL
                               </label>
                               <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  readOnly
-                                  value={getPublicFeedURL()}
-                                  className="flex-1 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono text-slate-600 outline-none select-all cursor-text truncate p-2 text-sm font-medium"
+                                <input className="flex-1 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono text-slate-600 outline-none select-all cursor-text truncate p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <button
                                   type="button"
@@ -8109,7 +8669,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     type: "success",
                                   });
                                 }}
-                                className="sr-only peer"
+                                className="sr-only peer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
                             </label>
@@ -8130,11 +8690,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 REST-Schnittstellen URL
                               </label>
                               <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  readOnly
-                                  value={getClearFeedURL()}
-                                  className="flex-1 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono text-slate-600 outline-none select-all cursor-text truncate p-2 text-sm font-medium"
+                                <input className="flex-1 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono text-slate-600 outline-none select-all cursor-text truncate p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <button
                                   type="button"
@@ -8199,9 +8755,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             </p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              className="sr-only peer"
+                            <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               checked={settings.collectEmail !== false}
                               onChange={(e) => {
                                 onUpdateSettings({
@@ -8230,9 +8784,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             </p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              className="sr-only peer"
+                            <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               checked={settings.collectPhone !== false}
                               onChange={(e) => {
                                 onUpdateSettings({
@@ -8306,7 +8858,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={eventTitle}
                             onChange={(e) => setEventTitle(e.target.value)}
                             placeholder="z.B. Sommerfest, Schleiferlturnier"
-                            className="w-full px-3 border border-slate-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-[var(--color-primary)] py-2"
+                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
 
@@ -8319,7 +8871,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             type="date"
                             value={eventDate}
                             onChange={(e) => setEventDate(e.target.value)}
-                            className="w-full px-3 border border-slate-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2"
+                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
 
@@ -8335,7 +8887,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               onChange={(e) =>
                                 setEventStartTime(e.target.value)
                               }
-                              className="w-full px-3 border border-slate-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2"
+                              className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             />
                           </div>
                           <div className="space-y-1">
@@ -8346,7 +8898,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               type="time"
                               value={eventEndTime}
                               onChange={(e) => setEventEndTime(e.target.value)}
-                              className="w-full px-3 border border-slate-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2"
+                              className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             />
                           </div>
                         </div>
@@ -8363,7 +8915,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             }
                             placeholder="Details, Ablauf, Verpflegung..."
                             rows={3}
-                            className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl font-bold text-xs bg-white outline-none focus:border-[var(--color-primary)] resize-y"
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-xl text-xs bg-white outline-none focus:border-[var(--color-primary)] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                           />
                         </div>
 
@@ -8383,7 +8935,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 name="eventHideExpired"
                                 checked={eventHideExpired === true}
                                 onChange={() => setEventHideExpired(true)}
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span>Ja (Standard)</span>
                             </label>
@@ -8393,7 +8945,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 name="eventHideExpired"
                                 checked={eventHideExpired === false}
                                 onChange={() => setEventHideExpired(false)}
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span>Nein</span>
                             </label>
@@ -8413,7 +8965,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 name="eventAllowComment"
                                 checked={eventAllowComment === true}
                                 onChange={() => setEventAllowComment(true)}
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span>Ja</span>
                             </label>
@@ -8423,7 +8975,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 name="eventAllowComment"
                                 checked={eventAllowComment === false}
                                 onChange={() => setEventAllowComment(false)}
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span>Nein (Standard)</span>
                             </label>
@@ -8443,7 +8995,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             onChange={(e) =>
                               setEventMaxParticipants(e.target.value)
                             }
-                            className="w-full max-w-[200px] px-3 border border-slate-200 rounded-xl font-bold text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2"
+                            className="w-full max-w-[200px] px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         </div>
 
@@ -8465,7 +9017,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onChange={() =>
                                   setEventIsRegistrationBlocked(true)
                                 }
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span>Ja</span>
                             </label>
@@ -8477,7 +9029,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onChange={() =>
                                   setEventIsRegistrationBlocked(false)
                                 }
-                                className="w-4 h-4 accent-[var(--color-primary)]"
+                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                               <span>Nein (Standard)</span>
                             </label>
@@ -8485,7 +9037,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         </div>
 
                         {/* Actions */}
-                        <div className="flex gap-2.5 pt-4 border-t border-slate-200">
+                        <div className="flex gap-3 pt-4 border-t border-slate-200">
                           <button
                             type="submit"
                             className="flex-1 bg-[var(--color-primary)] text-white rounded-xl uppercase tracking-wider shadow-sm hover:shadow-md hover:bg-black transition-all flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium"
@@ -8589,7 +9141,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       </div>
 
                                       {t.description && (
-                                        <p className="text-slate-600 text-[11px] font-semibold leading-relaxed pt-1 bg-white/50 p-2.5 rounded-lg border border-slate-100">
+                                        <p className="text-slate-600 text-[11px] leading-relaxed pt-1 bg-white/50 h-8 px-3 py-1 rounded-lg border border-slate-100 font-sans font-medium">
                                           {t.description}
                                         </p>
                                       )}
@@ -8665,7 +9217,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             return (
                                               <div
                                                 key={idx}
-                                                className="bg-white p-2.5 rounded-2xl border-none shadow-md text-[10px] font-bold text-slate-700 flex flex-col gap-1"
+                                                className="bg-white h-8 px-3 py-1 rounded-2xl border-none shadow-md text-[10px] text-slate-700 flex flex-col gap-1 font-sans font-medium"
                                               >
                                                 <div className="flex items-center gap-1.5 text-slate-800">
                                                   <span>{player}</span>
@@ -8700,6 +9252,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   rankings={rankings || null}
                   users={users}
                   onUpdateRankings={onUpdateRankings || (() => {})}
+                  settings={settings}
+                  onUpdateSettings={onUpdateSettings}
                 />
               )}
 
@@ -8720,7 +9274,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       {/* WARNING POPUP: CHANGING TABS WITH UNSAVED CHANGES */}
       {pendingTab && (
         <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-sm border border-slate-200/80 border-orange-500 animate-in zoom-in duration-300">
+          <div className="border-none outline-none bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-sm -200/80 -500 animate-in zoom-in duration-300">
             <h3 className="text-orange-600 font-extrabold text-lg uppercase tracking-tight flex items-center gap-2">
               <i className="fa-solid fa-circle-exclamation"></i> Ungespeicherte
               Änderungen
@@ -8767,7 +9321,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       {/* POPUP: RESERVATIONS PURGE */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm w-full max-w-md overflow-hidden animate-in zoom-in duration-300 border-4 border-red-600">
+          <div className="border-none outline-none bg-white rounded-2xl -200/80 shadow-sm w-full max-w-md overflow-hidden animate-in zoom-in duration-300 -600">
             <div className="bg-red-600 p-8 text-white">
               <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
                 <i className="fa-solid fa-shield-virus"></i>{" "}
@@ -8805,7 +9359,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           start: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs font-black outline-none focus:border-red-500"
+                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs outline-none focus:border-red-500 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                   <div>
@@ -8821,7 +9375,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           end: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs font-black outline-none focus:border-red-500"
+                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs outline-none focus:border-red-500 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                   <div className="col-span-2">
@@ -8836,7 +9390,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           court: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs font-black outline-none focus:border-red-500 bg-white"
+                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs outline-none focus:border-red-500 bg-white font-sans font-medium"
                     >
                       <option value="all">Alle Plätze</option>
                       {courtsList.map((court, i) => (
@@ -8861,7 +9415,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
                   placeholder="LÖSCHEN"
-                  className="w-full px-4 border-2 border-red-200 rounded-2xl text-center font-black text-red-600 tracking-[0.5em] outline-none focus:border-red-600 focus:bg-red-50 transition-all uppercase py-2"
+                  className="w-full px-4 border-2 border-red-200 rounded-2xl text-center text-red-600 tracking-[0.5em] outline-none focus:border-red-600 focus:bg-red-50 transition-all uppercase py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
 
@@ -9035,8 +9589,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       )}
 
       {showBannerPositionModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-sm max-w-4xl w-full border border-slate-200/80 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="border-none outline-none bg-white rounded-2xl shadow-sm max-w-4xl w-full -200/80 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-[var(--color-primary)] text-white p-6 flex justify-between items-center z-10 shadow-md">
               <h3 className="font-black tracking-widest uppercase text-lg flex items-center gap-3">
                 <i className="fa-solid fa-crop-simple"></i> Banner-Ausschnitt
@@ -9108,8 +9662,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       )}
 
       {duplicateCandidatesModal && (
-        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
-          <div className="bg-white rounded-2xl w-full max-w-xl shadow-xl p-6 sm:p-8 border border-slate-200 space-y-5">
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-xl shadow-xl p-6 sm:p-8 -200 space-y-5">
             <h2 className="text-base font-black text-[#1b4332] uppercase tracking-tight flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <i className="fa-solid fa-user-shield text-amber-600"></i>
@@ -9157,7 +9711,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       try {
                         await addExistingPersonToClub(
                           cand.personId,
-                          currentUser.vereinsId || "sv-neuhausen",
+                          currentClubId,
                           Role.MITGLIED
                         );
                         setMessage({

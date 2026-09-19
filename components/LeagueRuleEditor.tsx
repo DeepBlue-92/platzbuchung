@@ -20,7 +20,8 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
     base_points_loss: 1,
     max_bonus: 25,
     logistic_factor: 0.05,
-    inactivity_deduction_per_week: 1
+    inactivity_deduction_per_week: 0,
+    initial_ranking_points: 0
   });
 
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
@@ -63,7 +64,8 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
         base_points_loss: ver.base_points_loss ?? 1,
         max_bonus: ver.max_bonus ?? 25,
         logistic_factor: ver.logistic_factor ?? 0.05,
-        inactivity_deduction_per_week: ver.inactivity_deduction_per_week ?? 1,
+        inactivity_deduction_per_week: ver.inactivity_deduction_per_week ?? 0,
+        initial_ranking_points: ver.initial_ranking_points ?? 0,
       });
       return;
     }
@@ -77,7 +79,8 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
       base_points_loss: ver.base_points_loss ?? 1,
       max_bonus: ver.max_bonus ?? 25,
       logistic_factor: ver.logistic_factor ?? 0.05,
-      inactivity_deduction_per_week: ver.inactivity_deduction_per_week ?? 1,
+      inactivity_deduction_per_week: ver.inactivity_deduction_per_week ?? 0,
+      initial_ranking_points: ver.initial_ranking_points ?? 0,
     });
   };
 
@@ -91,7 +94,8 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
       base_points_loss: 1,
       max_bonus: 25,
       logistic_factor: 0.05,
-      inactivity_deduction_per_week: 1
+      inactivity_deduction_per_week: 0,
+      initial_ranking_points: 0,
     });
     setStatusMessage(null);
   };
@@ -109,7 +113,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
         base_points_win: Number(formData.base_points_win),
         base_points_loss: Number(formData.base_points_loss),
         max_bonus: Number(formData.max_bonus),
-        logistic_factor: Number(formData.logistic_factor),
+        logistic_factor: Math.round((parseFloat(String(formData.logistic_factor).replace(',', '.')) || 0.05) * 10000) / 10000,
         inactivity_deduction_per_week: Number(formData.inactivity_deduction_per_week),
         created_by: 'super-admin',
       };
@@ -173,7 +177,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
   const simEven = calcWinPoints(100, 100);
   const simFavorite = calcWinPoints(120, 80);
   const lossPoints = Number(formData.base_points_loss) || 1;
-  const decay4Weeks = (Number(formData.inactivity_deduction_per_week) || 1) * 4;
+  const decay4Weeks = 0;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl overflow-hidden text-slate-800">
@@ -338,7 +342,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
                   required
                   value={formData.effective_date}
                   onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm font-semibold focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Regel gilt für alle Spiele ab diesem Datum.
@@ -358,10 +362,30 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
                   required
                   value={formData.base_points_win}
                   onChange={(e) => setFormData({ ...formData, base_points_win: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm font-semibold focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Garantierte Punkte bei Sieg (z. B. 5).
+                </p>
+              </div>
+
+              {/* Initial Ranking Points */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Startpunktzahl <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5000"
+                  required
+                  value={formData.initial_ranking_points}
+                  onChange={(e) => setFormData({ ...formData, initial_ranking_points: Number(e.target.value) })}
+                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Punkte, mit denen neue Spieler starten (Standard: 0).
                 </p>
               </div>
 
@@ -378,7 +402,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
                   required
                   value={formData.base_points_loss}
                   onChange={(e) => setFormData({ ...formData, base_points_loss: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm font-semibold focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Teilnahmepunkte bei Niederlage (z. B. 1).
@@ -398,7 +422,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
                   required
                   value={formData.max_bonus}
                   onChange={(e) => setFormData({ ...formData, max_bonus: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm font-semibold focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
+                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Maximaler Zusatzbonus bei Überraschungssieg (z. B. 25).
@@ -412,38 +436,25 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
                 </label>
                 <input
                   type="number"
-                  step="0.005"
-                  min="0.001"
+                  step="any"
+                  min="0.0001"
                   max="1"
                   required
                   value={formData.logistic_factor}
-                  onChange={(e) => setFormData({ ...formData, logistic_factor: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm font-semibold focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono"
+                  onChange={(e) => {
+                    const rawVal = e.target.value.replace(',', '.');
+                    const parsed = parseFloat(rawVal);
+                    const rounded = isNaN(parsed) ? 0 : Math.round(parsed * 10000) / 10000;
+                    setFormData({ ...formData, logistic_factor: rounded });
+                  }}
+                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden font-mono font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
                   Sensitivität auf Ranglisten-Differenz (z. B. 0.05).
                 </p>
               </div>
 
-              {/* Inactivity Deduction */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Inaktivitätsabzug / Woche <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="50"
-                  required
-                  value={formData.inactivity_deduction_per_week}
-                  onChange={(e) => setFormData({ ...formData, inactivity_deduction_per_week: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-sm font-semibold focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-hidden"
-                />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Punkteverlust pro inaktiver Woche (z. B. 1).
-                </p>
-              </div>
+
             </div>
           </div>
 
@@ -488,13 +499,10 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
               </div>
 
               <div className="bg-white p-3 rounded-lg border border-emerald-100 shadow-2xs">
-                <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Niederlage / Inaktivität</div>
+                <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Niederlage</div>
                 <div className="text-[11px] text-slate-600">Niederlage: <strong className="text-slate-800">+{lossPoints} Pkt.</strong></div>
-                <div className="text-sm font-black text-rose-700 mt-1">
-                  -{decay4Weeks} Pkt. <span className="text-[10px] font-normal text-slate-500">(nach 4 Wo.)</span>
-                </div>
-                <div className="text-[10px] text-slate-400">
-                  Abzug: -{formData.inactivity_deduction_per_week} Pkt. / Woche
+                <div className="text-[10px] text-slate-400 mt-1">
+                  (Rein akkumulativ)
                 </div>
               </div>
             </div>

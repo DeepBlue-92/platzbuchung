@@ -242,7 +242,7 @@ export const AdminDocumentation: React.FC = () => {
             id="chapter-select"
             value={activeChapterId}
             onChange={(e) => setActiveChapterId(e.target.value)}
-            className="w-full h-11 px-4 bg-white text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] cursor-pointer shadow-sm"
+            className="w-full h-11 px-4 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] cursor-pointer shadow-sm font-sans font-medium"
           >
             {documentationData.map((chapter) => (
               <option key={chapter.id} value={chapter.id}>

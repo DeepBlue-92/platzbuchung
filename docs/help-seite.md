@@ -31,3 +31,10 @@ Für Partnervereine (wie z. B. die **DJK Furth**) steht eine optimierte, öffent
 - **Suchfunktion:** Findet man im normalen Tab "Platzbuchung" keinen Mitspieler (weil dieser nur Hobbyliga-Mitglied ist), wird ein Hinweis eingeblendet, um direkt zur Hobbyliga-Buchung zu wechseln.
 - **Rangliste:** Die reguläre Vereins-Rangliste ist streng von der Hobbyliga getrennt. Hobbyliga-Filter und der Punkteverlauf erscheinen ausschließlich auf der dedizierten Hobbyliga-Seite.
 
+### Mitglieder-Onboarding (Begrüßungsfenster)
+Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Mitglieder-Onboarding** festlegen, was Mitglieder beim ersten oder nächsten Einloggen sehen.
+- **Hauptschalter (Master Switch):** Bestimmt, ob das Begrüßungsfenster für Mitglieder beim Login überhaupt aufgerufen wird.
+- **Felder anpassen:** Für jedes persönliche Profilfeld (wie Vorname, Nachname, Telefon, Geschlecht, Geburtsdatum, Passwort) kann der Verein einstellen, ob das Feld frei bearbeitbar, nur lesbar oder komplett ausgeblendet sein soll.
+- **Stapelverarbeitung (Onboarding zurücksetzen):** Mit dem Knopf *Für alle Mitglieder zurücksetzen* können Administratoren mit einem Klick veranlassen, dass alle Mitglieder des Vereins beim nächsten Einloggen erneut durch den Datenabgleich und das Begrüßungsfenster geführt werden.
+- **Erfolgs- und Fehlermeldungen:** Nach dem Speichern oder Zurücksetzen zeigt ein klarer Infobalken direkt an, ob die Aktion erfolgreich war oder ob fehlende Berechtigungen vorliegen.
+

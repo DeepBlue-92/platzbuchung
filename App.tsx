@@ -1,5 +1,23 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  Calendar,
+  PartyPopper,
+  Medal,
+  Trophy,
+  UserPlus,
+  Briefcase,
+  BarChart3,
+  Settings,
+  ChevronDown,
+  HelpCircle,
+  Scale,
+  ExternalLink,
+  MoreHorizontal,
+  CalendarRange,
+  ArrowLeft,
+  UserCog,
+} from "lucide-react";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
 import AdminReports from "./components/AdminReports";
@@ -12,10 +30,15 @@ import Help from "./components/Help";
 import Impressum from "./components/Impressum";
 import Arbeitseinsaetze from "./components/Arbeitseinsaetze";
 import ProfileModal from "./components/ProfileModal";
+import MemberOnboardingModal from "./components/MemberOnboardingModal";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
+import { UserAvatar } from "./components/UserAvatar";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { LeagueDashboard } from "./components/LeagueDashboard";
 import { RichTextRenderer } from "./components/RichText";
 import { User, Booking, Role, Tournament, RankingState, UserClub } from "./types";
+import { getUserClubs, isClubAdmin, isSuperAdmin } from "./lib/userUtils";
+import { calculateBookingFee, buildBookingFeeContext } from "./utils/guestFeeCalculator";
 import { TIME_SLOTS } from "./constants";
 import { loginWithUsername, logout, auth, db } from "./lib/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
@@ -44,6 +67,7 @@ import {
   saveClearBookings,
 } from "./services/db";
 import { getVereinsIdByPublicToken } from "./services/db";
+import { checkPlayerCollisionAsync } from "./services/collisionService";
 
 const generateTestData = (): Booking[] => {
   return []; // We don't generate test data for Firebase automatically to avoid spamming
@@ -106,9 +130,6 @@ const App: React.FC = () => {
     });
     return unsub;
   }, []);
-
-  const isAdmin =
-    currentUser?.role === Role.ADMIN || currentUser?.hauptAdmin === true;
 
   useEffect(() => {
     if (currentUser) {
@@ -259,18 +280,8 @@ const App: React.FC = () => {
     }
   });
   const [rankings, setRankings] = useState<RankingState | null>(null);
-  const [globalLeagueEnabled, setGlobalLeagueEnabled] = useState<boolean>(true);
 
-  useEffect(() => {
-    const unsub = listenToSystemUpdates((updates) => {
-      if (updates && updates.globalLeagueEnabled !== undefined) {
-        setGlobalLeagueEnabled(updates.globalLeagueEnabled);
-      }
-    });
-    return () => unsub();
-  }, []);
-
-  const isLeagueEnabled = globalLeagueEnabled && settings.modules?.league === true;
+  const isLeagueEnabled = settings.modules?.league === true;
 
   const getInitialView = () => {
     let hash = window.location.hash.toLowerCase().replace("#", "") as any;
@@ -532,16 +543,19 @@ const App: React.FC = () => {
       const clubMap = new Map<string, UserClub>();
 
       const resolveCleanName = (vId: string, matched: any, rawItem?: any): string => {
+        const isUserDoc = rawItem && typeof rawItem === "object" && ('email' in rawItem || 'personId' in rawItem || 'username' in rawItem || 'firstName' in rawItem || ('role' in rawItem && !('clubName' in rawItem) && !('vereinsName' in rawItem)));
+        
         const candidates = [
           matched?.name,
           matched?.shortName,
           matched?.abbreviation,
           matched?.clubName,
           matched?.vereinsName,
-          typeof rawItem === "object" ? rawItem?.name : null,
-          typeof rawItem === "object" ? rawItem?.shortName : null,
-          typeof rawItem === "object" ? rawItem?.abbreviation : null,
           typeof rawItem === "object" ? rawItem?.clubName : null,
+          typeof rawItem === "object" ? rawItem?.vereinsName : null,
+          (typeof rawItem === "object" && !isUserDoc) ? rawItem?.name : null,
+          (typeof rawItem === "object" && !isUserDoc) ? rawItem?.shortName : null,
+          (typeof rawItem === "object" && !isUserDoc) ? rawItem?.abbreviation : null,
         ];
 
         if (vId === currentVereinsId && settings?.clubName) {
@@ -577,11 +591,17 @@ const App: React.FC = () => {
         if (!normKey || normKey === "super-admin" || normKey === "system") return;
 
         if (!clubMap.has(normKey)) {
+          const isHomeClub = normKey === (activeUser.vereinsId || "").toLowerCase().replace(/\s/g, "");
+          const resolvedRole = overrideRole || 
+            (typeof rawItem === "object" ? rawItem?.role : undefined) || 
+            (isHomeClub ? activeUser.role : Role.MITGLIED) || 
+            Role.MITGLIED;
+
           clubMap.set(normKey, {
             id: vId,
             vereinsId: vId,
             clubName: resolveCleanName(vId, matched, rawItem),
-            role: overrideRole || (typeof rawItem === "object" ? rawItem?.role : activeUser.role) || Role.MITGLIED,
+            role: resolvedRole,
             is_tenant: !!matched,
             type: matched ? 'club' : 'unknown'
           });
@@ -605,7 +625,18 @@ const App: React.FC = () => {
         });
       }
 
-      // C. Search Firestore 'users' collection across all tenants for matching username, email, or personId
+      // B2. Explicit user.clubIds property (array of strings or objects)
+      if (Array.isArray((activeUser as any).clubIds)) {
+        (activeUser as any).clubIds.forEach((vId: any) => {
+          const rawId = typeof vId === "string" ? vId : (vId?.id || vId?.vereinsId);
+          if (rawId) {
+            const matched = allClubs.find((ac) => ac.vereinsId === rawId || ac.id === rawId);
+            addClubToMap(rawId, matched, typeof vId === "object" ? vId : undefined);
+          }
+        });
+      }
+
+      // C. Search Firestore 'users' and 'memberships' collections across all tenants
       try {
         const searchTasks = [];
         const normUsername = activeUser.name ? activeUser.name.toLowerCase().replace(/\s/g, "") : "";
@@ -615,10 +646,13 @@ const App: React.FC = () => {
         const cleanEmail = activeUser.email && !activeUser.is_placeholder_email && !activeUser.email.startsWith("no-email.") ? activeUser.email.trim() : "";
         if (cleanEmail) {
           searchTasks.push(getDocs(query(collection(db, "users"), where("email", "==", cleanEmail))));
+          searchTasks.push(getDocs(query(collection(db, "memberships"), where("email", "==", cleanEmail))));
         }
         const pId = (activeUser as any).personId || activeUser.id;
         if (pId && !pId.includes("_")) {
           searchTasks.push(getDocs(query(collection(db, "users"), where("personId", "==", pId))));
+          searchTasks.push(getDocs(query(collection(db, "memberships"), where("personId", "==", pId))));
+          searchTasks.push(getDocs(query(collection(db, "memberships"), where("userId", "==", pId))));
         }
 
         if (searchTasks.length > 0) {
@@ -626,7 +660,7 @@ const App: React.FC = () => {
           querySnaps.forEach((snap) => {
             snap.docs.forEach((docSnap) => {
               const d = docSnap.data();
-              const tenantId = d.tenantId || d.vereinsId;
+              const tenantId = d.tenantId || d.vereinsId || d.vereinId || d.clubId;
               if (tenantId) {
                 const matched = allClubs.find((ac) => ac.vereinsId === tenantId || ac.id === tenantId);
                 addClubToMap(tenantId, matched, d, d.role === "admin" ? Role.ADMIN : Role.MITGLIED);
@@ -647,52 +681,67 @@ const App: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.vereinsId, proxyUser?.id, proxyUser?.name, proxyUser?.email, proxyUser?.vereinsId, allClubs]);
+  }, [currentUser?.id, currentUser?.name, currentUser?.email, currentUser?.vereinsId, (currentUser as any)?.clubIds, proxyUser?.id, proxyUser?.name, proxyUser?.email, proxyUser?.vereinsId, (proxyUser as any)?.clubIds, allClubs]);
 
-  const uniqueUserClubs = useMemo(() => {
-    const raw = userClubs.length > 0 ? userClubs : (currentUser?.clubs || proxyUser?.clubs || []);
-    if (!Array.isArray(raw)) return [];
-    
-    // Group & deduplicate strictly by normalized club id
-    const clubMap = new Map<string, UserClub>();
-    raw.forEach((c: any) => {
-      if (!c) return;
-      const rawId = typeof c === "string" ? c : (c.id || c.vereinsId);
-      if (!rawId) return;
-      const normKey = String(rawId).trim().toLowerCase().replace(/\s/g, "");
-      if (!normKey || ["super-admin", "system"].includes(normKey)) return;
+  const uniqueUserClubsRaw = useMemo(() => {
+    const activeUser = proxyUser || currentUser;
+    if (!activeUser) return [];
 
-      if (!clubMap.has(normKey)) {
-        const cleanId = typeof c === "string" ? c : (c.id || c.vereinsId || normKey);
-        const cleanVereinsId = typeof c === "string" ? c : (c.vereinsId || c.id || normKey);
-        const cleanName = typeof c === "object" ? (c.clubName || c.vereinsName || c.name) : undefined;
-        clubMap.set(normKey, {
-          id: String(cleanId),
-          vereinsId: String(cleanVereinsId),
-          clubName: cleanName || String(cleanVereinsId),
-          role: typeof c === "object" ? c.role : Role.MITGLIED,
-          type: typeof c === "object" ? c.type : undefined,
-          is_tenant: typeof c === "object" ? c.is_tenant : undefined,
-        });
-      }
-    });
+    const baseList = getUserClubs(activeUser, allClubs);
 
-    const uniqueMap = new Map();
-    Array.from(clubMap.values())
-      .forEach((c: any) => {
-        const uniqueKey = String(c.vereinsId || c.id || c.clubName || c.name || "").toLowerCase().replace(/\s/g, "");
-        if (!uniqueMap.has(uniqueKey)) {
-          uniqueMap.set(uniqueKey, c);
+    // Merge any dynamically resolved clubs from Firestore queries
+    if (userClubs && userClubs.length > 0) {
+      userClubs.forEach((c) => {
+        const cId = c.vereinsId || c.id;
+        if (cId) {
+          const normKey = String(cId).toLowerCase().replace(/\s/g, '');
+          if (!baseList.some((existing) => String(existing.vereinsId).toLowerCase().replace(/\s/g, '') === normKey)) {
+            baseList.push(c);
+          }
         }
       });
+    }
 
-    return Array.from(uniqueMap.values())
-      .sort((a: any, b: any) => {
-        const nameA = String(a.clubName || a.name || a.id || "").toLowerCase();
-        const nameB = String(b.clubName || b.name || b.id || "").toLowerCase();
-        return nameA.localeCompare(nameB, 'de', { sensitivity: 'base' });
-      });
-  }, [userClubs, currentUser?.clubs, proxyUser?.clubs]);
+    return baseList.sort((a: any, b: any) => {
+      const nameA = String(a.clubName || a.name || a.id || "").toLowerCase();
+      const nameB = String(b.clubName || b.name || b.id || "").toLowerCase();
+      return nameA.localeCompare(nameB, 'de', { sensitivity: 'base' });
+    });
+  }, [userClubs, currentUser, proxyUser, allClubs]);
+
+  const uniqueUserClubs = useMemo(() => {
+    const isDirectSuperAdmin = !proxyUser && !superAdminContext && (
+      currentUser?.role === Role.SUPER_ADMIN || 
+      (currentUser as any)?.role === 'super-admin' || 
+      currentUser?.vereinsId === 'super-admin'
+    );
+
+    // 1. Direct Super-Admin (when NOT in proxy mode): full access to ALL clubs in system
+    if (isDirectSuperAdmin) {
+      if (allClubs && allClubs.length > 0) {
+        return allClubs.map((c) => {
+          const vId = c.vereinsId || c.id;
+          const cName = c.clubName || c.vereinsName || c.name || vId;
+          const logo = c.customHeaderLogoUrl || c.headerLogoUrl || c.customLogoUrl || c.logoUrl;
+          return {
+            id: String(vId),
+            vereinsId: String(vId),
+            clubName: String(cName),
+            logoUrl: logo,
+            role: Role.SUPER_ADMIN,
+            type: 'club',
+            is_tenant: true,
+          };
+        }).sort((a, b) => a.clubName.localeCompare(b.clubName, 'de', { sensitivity: 'base' }));
+      }
+      return uniqueUserClubsRaw;
+    }
+
+    // 2. Normal user or Proxy User (Super-Admin impersonating a specific user):
+    // In proxy mode, the app must strictly reflect the simulated user's actual clubs!
+    return uniqueUserClubsRaw;
+  }, [uniqueUserClubsRaw, currentUser, proxyUser, superAdminContext, allClubs]);
+
   const [loginForm, setLoginForm] = useState(() => {
     const segments = window.location.pathname.split("/").filter(Boolean);
     const firstSegment = segments[0]?.toLowerCase() || "";
@@ -728,6 +777,10 @@ const App: React.FC = () => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tenant") ? params.get("tenant")!.toLowerCase().replace(/\s/g, "") : null;
+  });
 
   const isSuperadminRoute = useMemo(() => {
     const segments = window.location.pathname.split("/").filter(Boolean);
@@ -736,6 +789,18 @@ const App: React.FC = () => {
   }, []);
 
   const anonymizedBookings = useMemo(() => {
+    // Non-authenticated visitors strictly receive anonymized bookings (Option A)
+    if (!currentUser) {
+      return bookings.map((b) => ({
+        ...b,
+        title: "Belegt",
+        players: Array.isArray(b.players) ? b.players.map(() => "Belegt") : ["Belegt"],
+        comment: "",
+        reason: "Belegt",
+        type: "booking",
+      }));
+    }
+
     if (!isPublicWochenplanRoute) return bookings;
     if (settings?.publicCalendar?.showNames) return bookings;
     
@@ -747,7 +812,7 @@ const App: React.FC = () => {
       reason: "Belegt",
       type: "booking"
     }));
-  }, [bookings, isPublicWochenplanRoute, settings?.publicCalendar?.showNames]);
+  }, [bookings, isPublicWochenplanRoute, settings?.publicCalendar?.showNames, currentUser]);
 
   const calendarDays = useMemo(() => {
     const year = calendarMonth.getFullYear();
@@ -801,7 +866,22 @@ const App: React.FC = () => {
 
   const currentVereinsId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    const tenantParam = params.get("tenant");
+    const tenantParam = selectedTenantId || params.get("tenant");
+
+    // If a regular user is logged in (not in SuperAdmin proxy session), ensure tenant matches user's clubs
+    if (currentUser && currentUser.vereinsId && currentUser.vereinsId !== "super-admin" && !superAdminContext) {
+      const userClubIds = (currentUser.clubs || []).map((c: any) => (c.vereinsId || c.id || "").toLowerCase().replace(/\s/g, ""));
+      if (currentUser.vereinsId) {
+        userClubIds.push(currentUser.vereinsId.toLowerCase().replace(/\s/g, ""));
+      }
+      if (tenantParam) {
+        const cleanParam = tenantParam.toLowerCase().replace(/\s/g, "");
+        if (userClubIds.includes(cleanParam)) {
+          return cleanParam;
+        }
+      }
+      return currentUser.vereinsId.toLowerCase().replace(/\s/g, "");
+    }
 
     if (tenantParam) {
       return tenantParam.toLowerCase().replace(/\s/g, "");
@@ -850,7 +930,50 @@ const App: React.FC = () => {
       return path.replace(/\s/g, "");
     }
     return "sv-neuhausen";
-  }, [currentUser, publicWochenplanToken, publicTokenVereinsId, window.location.search]);
+  }, [currentUser, superAdminContext, publicWochenplanToken, publicTokenVereinsId, window.location.search]);
+
+  const miniCalClubsList = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    if (allClubs && allClubs.length > 0) {
+      allClubs.forEach((c) => {
+        const cId = c.vereinsId || c.id;
+        if (cId && !["super-admin", "system"].includes(String(cId).toLowerCase())) {
+          map.set(String(cId).toLowerCase().replace(/\s/g, ""), {
+            id: String(cId),
+            name: c.clubName || c.vereinsName || c.name || String(cId),
+          });
+        }
+      });
+    }
+    if (uniqueUserClubsRaw && uniqueUserClubsRaw.length > 0) {
+      uniqueUserClubsRaw.forEach((c) => {
+        const cId = c.vereinsId || c.id;
+        if (cId && !["super-admin", "system"].includes(String(cId).toLowerCase())) {
+          const key = String(cId).toLowerCase().replace(/\s/g, "");
+          if (!map.has(key)) {
+            map.set(key, {
+              id: String(cId),
+              name: c.clubName || c.vereinsName || c.name || String(cId),
+            });
+          }
+        }
+      });
+    }
+    if (currentVereinsId) {
+      const key = currentVereinsId.toLowerCase().replace(/\s/g, "");
+      if (!map.has(key)) {
+        map.set(key, {
+          id: currentVereinsId,
+          name: settings?.clubName || currentVereinsId,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base" }));
+  }, [allClubs, uniqueUserClubsRaw, currentVereinsId, settings?.clubName]);
+
+  const isAdmin = useMemo(() => {
+    return isClubAdmin(currentUser, currentVereinsId, allClubs);
+  }, [currentUser, currentVereinsId, allClubs]);
 
   // Initial Fallback
   useEffect(() => {
@@ -865,7 +988,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentVereinsId && currentVereinsId !== "super-admin") {
-      setMobileViewType("day");
+      setMobileViewType(window.innerWidth < 1024 ? "day" : "week");
     }
   }, [currentVereinsId]);
 
@@ -961,7 +1084,11 @@ const App: React.FC = () => {
     if (
       currentUser &&
       currentUser.vereinsId &&
-      currentUser.vereinsId !== "super-admin"
+      currentUser.vereinsId !== "super-admin" &&
+      currentUser.vereinsId !== "system" &&
+      currentUser.role !== Role.SUPER_ADMIN &&
+      (currentUser as any).role !== "super-admin" &&
+      !superAdminContext
     ) {
       const path = window.location.pathname
         .replace(/^\/+/g, "")
@@ -990,10 +1117,18 @@ const App: React.FC = () => {
         "",
       ].includes(path);
 
+      // Check if user belongs to this path's club (multi-club membership)
+      const userClubList = Array.isArray(userClubs) && userClubs.length > 0 ? userClubs : (currentUser.clubs || []);
+      const isMemberOfPathClub = Array.isArray(userClubList) && userClubList.some((c: any) => {
+        const v = typeof c === "string" ? c : (c.id || c.vereinsId);
+        return v && String(v).toLowerCase().replace(/\s/g, "") === path;
+      });
+
       if (
         path &&
         !isSystemRoute &&
-        path !== currentUser.vereinsId.toLowerCase().trim()
+        path !== currentUser.vereinsId.toLowerCase().trim() &&
+        !isMemberOfPathClub
       ) {
         console.warn(
           `Tenant mismatch: Logged in as ${currentUser.vereinsId}, but URL is /${path}. Forcing logout.`,
@@ -1010,7 +1145,7 @@ const App: React.FC = () => {
           });
       }
     }
-  }, [currentUser]);
+  }, [currentUser, superAdminContext, userClubs]);
 
   useEffect(() => {
     let unsubs: Array<() => void> = [];
@@ -1125,6 +1260,7 @@ const App: React.FC = () => {
       };
 
       const syncPublicFeed = async () => {
+        if (!auth.currentUser) return; // Prevent syncing if user logged out during timeout
         try {
           if (settings.feedAnonEnabled) {
             const list = getAnonymizedBookingsList();
@@ -1207,6 +1343,21 @@ const App: React.FC = () => {
       setError("");
       setShowPublicHelp(false);
 
+      // Synchronize tenant URL param with logged in user's club
+      if (u.vereinsId && u.role !== Role.SUPER_ADMIN) {
+        const params = new URLSearchParams(window.location.search);
+        const currentParam = params.get("tenant");
+        const userClubIds = (u.clubs || []).map((c: any) => (c.vereinsId || c.id || '').toLowerCase().replace(/\s/g, ""));
+        const targetTenant = (currentParam && userClubIds.includes(currentParam.toLowerCase().replace(/\s/g, "")))
+          ? currentParam.toLowerCase().replace(/\s/g, "")
+          : u.vereinsId.toLowerCase().replace(/\s/g, "");
+        
+        if (params.get("tenant") !== targetTenant) {
+          params.set("tenant", targetTenant);
+          window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+        }
+      }
+
       // Deep Link Redirection
       const hash = window.location.hash;
       let targetPath = redirectTo;
@@ -1246,6 +1397,27 @@ const App: React.FC = () => {
     if (!newVereinsId || newVereinsId === currentVereinsId) return;
 
     const normNewId = newVereinsId.toLowerCase().replace(/\s/g, "");
+
+    // Security check: In proxy mode or as regular user, strictly allow switching ONLY to assigned clubs!
+    const isDirectSuperAdmin = !superAdminContext && !proxyUser && (
+      currentUser?.role === Role.SUPER_ADMIN || 
+      (currentUser as any)?.role === 'super-admin' || 
+      currentUser?.vereinsId === 'super-admin'
+    );
+
+    if (!isDirectSuperAdmin) {
+      const allowedClubs = (uniqueUserClubs || []).map((c: any) => (c.vereinsId || c.id || "").toLowerCase().replace(/\s/g, ""));
+      const userObjClubs = (currentUser?.clubs || []).map((c: any) => (c.vereinsId || c.id || "").toLowerCase().replace(/\s/g, ""));
+      if (currentUser?.vereinsId) {
+        userObjClubs.push(currentUser.vereinsId.toLowerCase().replace(/\s/g, ""));
+      }
+      const allAllowed = Array.from(new Set([...allowedClubs, ...userObjClubs]));
+      if (!allAllowed.includes(normNewId)) {
+        console.warn("Blocked attempt to switch to unassigned club in proxy/user mode:", normNewId);
+        return;
+      }
+    }
+
     const isNeuhausen = normNewId.includes("neuhausen");
 
     // Lookup target club metadata
@@ -1258,7 +1430,7 @@ const App: React.FC = () => {
     });
 
     const targetLogo = targetClub?.customHeaderLogoUrl || targetClub?.headerLogoUrl || targetClub?.customLogoUrl || targetClub?.logoUrl || (isNeuhausen ? DEFAULT_SETTINGS.logoUrl : "");
-    const targetName = targetClub?.clubName || targetClub?.vereinsName || targetClub?.name || (isNeuhausen ? "SV Neuhausen" : normNewId);
+    const targetName = targetClub?.clubName || targetClub?.vereinsName || targetClub?.name || resolveClubName(normNewId, isNeuhausen ? "SV Neuhausen" : undefined, allClubs);
     const targetColor = targetClub?.primaryColor || "#1b4332";
 
     try {
@@ -1299,34 +1471,48 @@ const App: React.FC = () => {
     }));
     setIsLoading(true);
 
+    setSelectedTenantId(normNewId);
     const params = new URLSearchParams(window.location.search);
     params.set("tenant", normNewId);
-    window.location.search = params.toString();
+    window.history.pushState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+    setIsLoading(false);
   };
 
   const handleSuperAdminLoginAs = (tenantAdmin: User, targetClubId?: string) => {
     setSuperAdminContext(currentUser);
-    const userToSet = targetClubId ? { ...tenantAdmin, vereinsId: targetClubId } : tenantAdmin;
+
+    // Validate and sanitize targetClubId against user's actual database clubs
+    const assignedClubIds = (tenantAdmin.clubs || []).map((c: any) => (c.vereinsId || c.id || "").toLowerCase().replace(/\s/g, ""));
+    if (tenantAdmin.vereinsId) assignedClubIds.push(tenantAdmin.vereinsId.toLowerCase().replace(/\s/g, ""));
+
+    let safeTargetClubId = targetClubId;
+    if (safeTargetClubId) {
+      const normSafe = safeTargetClubId.toLowerCase().replace(/\s/g, "");
+      if (assignedClubIds.length > 0 && !assignedClubIds.includes(normSafe)) {
+        safeTargetClubId = tenantAdmin.vereinsId || assignedClubIds[0];
+      }
+    } else {
+      safeTargetClubId = tenantAdmin.vereinsId || assignedClubIds[0] || "sv-neuhausen";
+    }
+
+    const userToSet = safeTargetClubId ? { ...tenantAdmin, vereinsId: safeTargetClubId } : tenantAdmin;
     setCurrentUser(userToSet);
     
     // Clubs des Proxy-Users laden, damit das Header-Dropdown korrekt aktualisiert wird
-    if (userToSet.clubs) {
-      setUserClubs(userToSet.clubs);
-    } else {
-      setUserClubs([]);
-    }
+    const resolvedProxyClubs = getUserClubs(userToSet, allClubs);
+    setUserClubs(resolvedProxyClubs);
 
     setProxyUser(null);
     setView("reservation");
 
     // Synchronisiere Tenant State für Proxy-Sitzung
-    const targetTenantId = targetClubId || tenantAdmin.vereinsId;
+    const targetTenantId = safeTargetClubId || tenantAdmin.vereinsId;
     if (targetTenantId) {
       const normId = targetTenantId.toLowerCase().replace(/\s/g, "");
       const isNeuhausen = normId.includes("neuhausen");
       const targetClub = allClubs.find((c) => (c.vereinsId || c.id || "").toLowerCase().replace(/\s/g, "") === normId);
       const targetLogo = targetClub?.customHeaderLogoUrl || targetClub?.headerLogoUrl || targetClub?.customLogoUrl || targetClub?.logoUrl || (isNeuhausen ? DEFAULT_SETTINGS.logoUrl : "");
-      const targetName = targetClub?.clubName || targetClub?.vereinsName || targetClub?.name || (isNeuhausen ? "SV Neuhausen" : targetTenantId);
+      const targetName = targetClub?.clubName || targetClub?.vereinsName || targetClub?.name || resolveClubName(targetTenantId, isNeuhausen ? "SV Neuhausen" : undefined, allClubs);
       const targetColor = targetClub?.primaryColor || "#1b4332";
 
       try {
@@ -1366,6 +1552,25 @@ const App: React.FC = () => {
     const bookingUser = proxyUser || currentUser;
     const editingBooking = deleteId ? bookings.find((b) => b.id === deleteId) : null;
     const editingGroupToken = editingBooking?.group_token;
+
+    // -------------------------------------------------------------------------
+    // Player-Level Collision Detection (Cross-Facility & Cross-League Overlap Check)
+    // -------------------------------------------------------------------------
+    const playerCollision = await checkPlayerCollisionAsync({
+      date,
+      startTime,
+      endTime,
+      players: [bookingUser, ...(players || [])].filter(Boolean),
+      editingBookingId: deleteId,
+      editingGroupToken,
+      currentClubId: currentVereinsId,
+      currentClubBookings: bookings,
+      knownClubIds: (allClubs || []).map((c: any) => c.vereinsId || c.id).filter(Boolean),
+    });
+
+    if (playerCollision) {
+      return playerCollision.errorMessage;
+    }
 
     const getSlotDateTime = (dStr: string, tStr: string): Date => {
       const [yr, mon, day] = dStr.split("-").map(Number);
@@ -1412,9 +1617,12 @@ const App: React.FC = () => {
         }
       }
 
+      const isLeagueGame = comment?.includes("[Ligaspiel]");
+      const bypassLimits = isLeagueGame && (settings.reservationRules.bypassRestrictionsForLeagueGames === true);
+
       // Check max weeks in advance
       const maxWeeks = settings.reservationRules?.maxAdvanceWeeks ?? 2;
-      if (maxWeeks > 0) {
+      if (!bypassLimits && maxWeeks > 0) {
         const maxDaysInAdvance = maxWeeks * 7;
         const limitDate = new Date();
         limitDate.setDate(limitDate.getDate() + maxDaysInAdvance);
@@ -1466,6 +1674,7 @@ const App: React.FC = () => {
       const maxActive = settings.reservationRules.maxActiveBookings;
       if (
         !deleteId &&
+        !bypassLimits &&
         maxActive > 0 &&
         activeUserBookings.length + slotsToBook.length > maxActive
       ) {
@@ -1486,6 +1695,7 @@ const App: React.FC = () => {
       const maxPerDay = settings.reservationRules.maxBookingsPerDay ?? 2;
       if (
         !deleteId &&
+        !bypassLimits &&
         maxPerDay > 0 &&
         bookingsOnTargetDay.length + slotsToBook.length > maxPerDay
       ) {
@@ -1494,7 +1704,7 @@ const App: React.FC = () => {
 
       // Check weekly booking limit for target week
       const maxPerWeek = settings.reservationRules.maxBookingsPerWeek ?? 0;
-      if (!deleteId && maxPerWeek > 0) {
+      if (!deleteId && !bypassLimits && maxPerWeek > 0) {
         // Calculate Monday and Sunday of target date's week
         const targetD = new Date(date);
         const dayOfWeek = targetD.getDay(); // 0 is Sunday, 1 is Monday...
@@ -1638,9 +1848,21 @@ const App: React.FC = () => {
         group_token: groupToken,
       };
       if (isGuest) {
-        b.guestFee = settings.reservationRules?.guestFeePerHour ?? 2.5;
-        b.guestBillingMode =
-          settings.reservationRules?.guestBillingMode || "per_player";
+        const feeCtx = buildBookingFeeContext({
+          court,
+          players,
+          guestCount,
+          date,
+          time,
+          durationMinutes: 60,
+        });
+        const feeRes = calculateBookingFee(feeCtx, settings.feeSettings, settings.reservationRules);
+        b.guestFee = feeRes.ratePerUnitEuro;
+        b.guestBillingMode = feeRes.action.type === "PER_COURT_HOUR" ? "per_court" : "per_player";
+        b.calculatedFeeCents = feeRes.totalCents;
+        b.appliedFeeRuleId = feeRes.matchedRuleId;
+        b.appliedFeeRuleName = feeRes.matchedRuleName;
+        b.feeCalculationMode = feeRes.mode;
       }
       if (superAdminContext) {
         b.createdBy = bookingUser
@@ -1659,20 +1881,15 @@ const App: React.FC = () => {
       return b;
     });
 
+    const savedNewBookingIds: string[] = [];
     try {
-      // Zuerst die alte Buchung löschen, wenn es sich um ein Verschieben/Bearbeiten handelt
-      if (deleteId) {
-        if (editingGroupToken) {
-          const groupToCancel = bookings.filter((b) => b.group_token === editingGroupToken);
-          for (const b of groupToCancel) {
-            await deleteBooking(currentVereinsId, b.id);
-          }
-        } else {
-          await deleteBooking(currentVereinsId, deleteId);
-        }
+      // 1. Alle neuen Slots nacheinander speichern
+      for (const b of newBookings) {
+        await saveBooking(currentVereinsId, b);
+        savedNewBookingIds.push(b.id);
       }
 
-      // Falls der Admin über manuell erstellte DB-Sperren drüber bucht, löschen wir diese manuellen Sperren aus der DB
+      // 2. Falls der Admin über manuell erstellte DB-Sperren drüber bucht, löschen wir diese manuellen Sperren aus der DB
       if (isPrivilegedUser) {
         const locksToDelete = bookings.filter(
           (b) =>
@@ -1687,11 +1904,24 @@ const App: React.FC = () => {
         }
       }
 
-      // Alle Slots nacheinander transaktionssicher speichern
-      for (const b of newBookings) {
-        await saveBooking(currentVereinsId, b);
+      // 3. Erst NACH erfolgreichem Speichern der neuen Slots die alte Buchung löschen (Transaktions- & Rollback-Sicherheit)
+      if (deleteId) {
+        if (editingGroupToken) {
+          const groupToCancel = bookings.filter((b) => b.group_token === editingGroupToken);
+          for (const b of groupToCancel) {
+            await deleteBooking(currentVereinsId, b.id);
+          }
+        } else {
+          await deleteBooking(currentVereinsId, deleteId);
+        }
       }
     } catch (err: any) {
+      // Rollback neu gespeicherter Buchungsslots im Fehlerfall
+      for (const rollbackId of savedNewBookingIds) {
+        try {
+          await deleteBooking(currentVereinsId, rollbackId);
+        } catch (_) {}
+      }
       return (
         err.message ||
         "Die Buchung konnte wegen eines Konflikts nicht gespeichert werden."
@@ -2391,36 +2621,50 @@ const App: React.FC = () => {
                 className="fa-solid fa-baseball text-[96px] tinder-pulse-logo"
                 style={{ color: splashPrimaryColor }}
               ></i>
-              <span className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                {splashClubName}
-              </span>
             </div>
           )}
+          <div className="flex flex-col items-center gap-1 mt-4 text-center px-4">
+            <span className="text-sm md:text-base font-medium text-slate-500 font-sans">
+              Wechsle zu
+            </span>
+            <span 
+              className="text-2xl md:text-3xl font-bold text-slate-800"
+              style={{ fontFamily: "Georgia, Cambria, 'Times New Roman', Times, serif" }}
+            >
+              {splashClubName}
+            </span>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (
-    currentUser && (
-      currentUser.vereinsId === "super-admin" ||
-      currentUser.vereinsId === "system" ||
-      currentUser.role === Role.SUPER_ADMIN
-    )
-  ) {
+  if (currentUser && currentUser.role === Role.SUPER_ADMIN) {
     return (
-      <SuperAdminDashboard
-        onLogout={handleLogout}
-        onLoginAs={handleSuperAdminLoginAs}
-      />
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50 top-0 mt-0">
+        <ErrorBoundary fallbackTitle="Super-Admin Dashboard Fehler" fallbackMessage="Beim Laden des Super-Admin Dashboards ist ein unerwarteter Fehler aufgetreten.">
+          <SuperAdminDashboard
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            onLoginAs={handleSuperAdminLoginAs}
+          />
+        </ErrorBoundary>
+      </div>
     );
   }
 
-  const desktopNavItems = [
+  const desktopNavItems: Array<{
+    id: string;
+    label: string;
+    IconComponent: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+    show: boolean;
+    barClass: string;
+    dropdownClass: string;
+  }> = [
     {
       id: "reservation",
       label: "Plätze",
-      icon: "fa-calendar-check",
+      IconComponent: Calendar,
       show: true,
       barClass: "flex",
       dropdownClass: "hidden",
@@ -2428,7 +2672,7 @@ const App: React.FC = () => {
     {
       id: "tournaments",
       label: "Veranstaltungen",
-      icon: "fa-trophy",
+      IconComponent: PartyPopper,
       show: settings.modules?.events !== false,
       barClass: "flex",
       dropdownClass: "hidden",
@@ -2436,15 +2680,15 @@ const App: React.FC = () => {
     {
       id: "ranking",
       label: "Rangliste",
-      icon: "fa-medal",
+      IconComponent: Medal,
       show: settings.modules?.ranking !== false,
       barClass: "flex",
       dropdownClass: "hidden",
     },
     {
       id: "league",
-      label: "Hobbyliga",
-      icon: "fa-bolt",
+      label: "Liga",
+      IconComponent: Trophy,
       show: isLeagueEnabled,
       barClass: "flex",
       dropdownClass: "hidden",
@@ -2452,7 +2696,7 @@ const App: React.FC = () => {
     {
       id: "guests",
       label: "Gastspiele",
-      icon: "fa-file-invoice-dollar",
+      IconComponent: UserPlus,
       show: isAdmin || (settings.modules?.guests !== false && !!currentUser),
       barClass: "hidden xl:flex",
       dropdownClass: "block xl:hidden",
@@ -2460,7 +2704,7 @@ const App: React.FC = () => {
     {
       id: "arbeitseinsaetze",
       label: "Arbeitseinsätze",
-      icon: "fa-briefcase",
+      IconComponent: Briefcase,
       show: settings.modules?.arbeitseinsaetze === true,
       barClass: "hidden 2xl:flex",
       dropdownClass: "block 2xl:hidden",
@@ -2468,7 +2712,7 @@ const App: React.FC = () => {
     {
       id: "reports",
       label: "Statistik",
-      icon: "fa-chart-pie",
+      IconComponent: BarChart3,
       show: isAdmin,
       barClass: "hidden 2xl:flex",
       dropdownClass: "block 2xl:hidden",
@@ -2476,7 +2720,7 @@ const App: React.FC = () => {
     {
       id: "adminSettings",
       label: "System",
-      icon: "fa-gears",
+      IconComponent: Settings,
       show: isAdmin,
       barClass: "hidden 2xl:flex",
       dropdownClass: "block 2xl:hidden",
@@ -2492,11 +2736,16 @@ const App: React.FC = () => {
   );
 
   const desktopNav = (
-    <div className="hidden lg:flex bg-white/10 p-0.5 rounded-full shadow-sm gap-0.5 backdrop-blur-sm border border-white/10 relative items-center transition-all duration-300 ease-in-out">
+    <motion.nav 
+      layout 
+      transition={{ layout: { duration: 0.3, ease: "easeInOut" } }} 
+      className="hidden lg:flex bg-white/10 p-0.5 rounded-full shadow-sm gap-0.5 backdrop-blur-sm border border-white/10 relative items-center h-8 transition-all duration-300 ease-in-out"
+    >
       {desktopNavItems
         .filter((item) => item.show)
         .map((item) => {
           const isActive = view === item.id;
+          const IconComp = item.IconComponent;
           return (
             <button
               key={item.id}
@@ -2504,7 +2753,7 @@ const App: React.FC = () => {
                 handleSetView(item.id as typeof view);
                 closeMehrDropdown();
               }}
-              className={`relative flex items-center justify-center py-1 px-3 text-[10px] font-medium tracking-wide rounded-full transition-colors cursor-pointer outline-none shrink-0 ${
+              className={`relative flex items-center justify-center px-3 h-[26px] text-[10px] font-medium tracking-wide rounded-full transition-colors cursor-pointer outline-none shrink-0 ${
                 isActive
                   ? "text-white font-bold"
                   : "text-white/70 hover:text-white/90 hover:bg-white/5"
@@ -2518,7 +2767,12 @@ const App: React.FC = () => {
                 />
               )}
               <span className="relative z-10 flex items-center justify-center gap-1.5">
-                <i className={`fa-solid ${item.icon}`}></i>
+                <IconComp
+                  className={`w-3.5 h-3.5 shrink-0 transition-colors ${
+                    isActive ? "text-white" : "text-white/70"
+                  }`}
+                  strokeWidth={isActive ? 2.25 : 1.8}
+                />
                 <span>{item.label}</span>
               </span>
             </button>
@@ -2539,7 +2793,7 @@ const App: React.FC = () => {
                 handleMehrMouseEnter();
               }
             }}
-            className={`relative flex items-center justify-center py-1 px-3 text-[10px] font-medium tracking-wide rounded-full transition-colors cursor-pointer outline-none shrink-0 ${
+            className={`relative flex items-center justify-center px-3 h-[26px] text-[10px] font-medium tracking-wide rounded-full transition-colors cursor-pointer outline-none shrink-0 ${
               desktopNavItems.some(
                 (i) => i.show && i.dropdownClass.includes("2xl:hidden")
               )
@@ -2560,11 +2814,12 @@ const App: React.FC = () => {
             )}
             <span className="relative z-10 flex items-center justify-center gap-1.5">
               <span>Mehr</span>
-              <i
-                className={`fa-solid fa-chevron-down text-[8px] transition-transform duration-200 ${
+              <ChevronDown
+                className={`w-3 h-3 transition-transform duration-200 ${
                   isMehrDropdownOpen ? "rotate-180" : ""
                 }`}
-              ></i>
+                strokeWidth={1.8}
+              />
             </span>
           </button>
 
@@ -2590,6 +2845,7 @@ const App: React.FC = () => {
                       .filter((item) => item.show && item.dropdownClass !== "hidden")
                       .map((item) => {
                         const isActive = view === item.id;
+                        const DropdownIconComp = item.IconComponent;
                         return (
                           <button
                             key={item.id}
@@ -2603,11 +2859,12 @@ const App: React.FC = () => {
                                 : "text-white/80 hover:text-white hover:bg-white/10"
                             }`}
                           >
-                            <i
-                              className={`fa-solid ${item.icon} text-[11px] w-4 text-center ${
+                            <DropdownIconComp
+                              className={`w-3.5 h-3.5 shrink-0 ${
                                 isActive ? "text-white" : "text-white/70"
                               }`}
-                            ></i>
+                              strokeWidth={isActive ? 2.25 : 1.8}
+                            />
                             <span>{item.label}</span>
                           </button>
                         );
@@ -2619,20 +2876,47 @@ const App: React.FC = () => {
           </AnimatePresence>
         </div>
       )}
-    </div>
+    </motion.nav>
   );
 
   let mobileHeaderTitle = "";
-  let mobileHeaderIcon = "";
-  if (view === "tournaments") { mobileHeaderTitle = "Veranstaltungen"; mobileHeaderIcon = "fa-trophy"; }
-  else if (view === "ranking") { mobileHeaderTitle = "Rangliste"; mobileHeaderIcon = "fa-medal"; }
-  else if (view === "arbeitseinsaetze") { mobileHeaderTitle = "Arbeitseinsätze"; mobileHeaderIcon = "fa-briefcase"; }
-  else if (view === "league") { mobileHeaderTitle = "Hobbyliga"; mobileHeaderIcon = "fa-bolt"; }
-  else if (view === "reports") { mobileHeaderTitle = "Statistik"; mobileHeaderIcon = "fa-chart-pie"; }
-  else if (view === "guests") { mobileHeaderTitle = "Gästebuchungen"; mobileHeaderIcon = "fa-book-open"; }
-  else if (view === "adminSettings") { mobileHeaderTitle = "Einstellungen"; mobileHeaderIcon = "fa-cog"; }
-  else if (view === "help") { mobileHeaderTitle = "Hilfe & FAQ"; mobileHeaderIcon = "fa-question-circle"; }
-  else if (view === "impressum") { mobileHeaderTitle = "Impressum"; mobileHeaderIcon = "fa-info-circle"; }
+  let MobileHeaderIconComp: React.ComponentType<{ className?: string; strokeWidth?: number }> | null = null;
+  if (view === "tournaments") { 
+    mobileHeaderTitle = "Veranstaltungen"; 
+    MobileHeaderIconComp = PartyPopper; 
+  }
+  else if (view === "ranking") { 
+    mobileHeaderTitle = "Rangliste"; 
+    MobileHeaderIconComp = Medal; 
+  }
+  else if (view === "arbeitseinsaetze") { 
+    mobileHeaderTitle = "Arbeitseinsätze"; 
+    MobileHeaderIconComp = Briefcase; 
+  }
+  else if (view === "league") { 
+    mobileHeaderTitle = "Liga"; 
+    MobileHeaderIconComp = Trophy; 
+  }
+  else if (view === "reports") { 
+    mobileHeaderTitle = "Statistik"; 
+    MobileHeaderIconComp = BarChart3; 
+  }
+  else if (view === "guests") { 
+    mobileHeaderTitle = "Gastspiele"; 
+    MobileHeaderIconComp = UserPlus; 
+  }
+  else if (view === "adminSettings") { 
+    mobileHeaderTitle = "Einstellungen"; 
+    MobileHeaderIconComp = Settings; 
+  }
+  else if (view === "help") { 
+    mobileHeaderTitle = "Hilfe & FAQ"; 
+    MobileHeaderIconComp = HelpCircle; 
+  }
+  else if (view === "impressum") { 
+    mobileHeaderTitle = "Impressum"; 
+    MobileHeaderIconComp = Scale; 
+  }
 
 
   return (
@@ -2680,7 +2964,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="text-left">
                   <h4 className="font-black text-xs uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-                    <span>⚠️ Proxy-Modus Aktiv</span>
+                    <span>⚠️ Proxy-Modus Aktiv (Super-Admin)</span>
                   </h4>
                   <p className="text-xs font-bold text-slate-700">
                     Du agierst aktuell als Proxy für:{" "}
@@ -2689,36 +2973,42 @@ const App: React.FC = () => {
                         ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim()
                         : currentUser?.klarname || currentUser?.name}
                     </span>{" "}
-                    (<span className="font-bold text-slate-800">{currentUser?.vereinsId}</span>)
+                    im Verein{" "}
+                    <span className="font-black text-slate-900">
+                      {uniqueUserClubs.find((c) => (c.vereinsId || c.id) === currentVereinsId || String(c.vereinsId || c.id).toLowerCase().replace(/\s/g, "") === String(currentVereinsId).toLowerCase().replace(/\s/g, ""))?.clubName || settings?.clubName || currentVereinsId}
+                    </span>
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setCurrentUser(superAdminContext);
-                  
-                  if (superAdminContext?.clubs) {
-                    setUserClubs(superAdminContext.clubs);
-                  } else {
-                    setUserClubs([]);
-                  }
 
-                  setSuperAdminContext(null);
-                  setProxyUser(null);
-                  localStorage.setItem("superadmin_active_tab", "accounts");
-                  setView("superadmin");
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  onClick={() => {
+                    setCurrentUser(superAdminContext);
+                    
+                    if (superAdminContext?.clubs) {
+                      setUserClubs(superAdminContext.clubs);
+                    } else {
+                      setUserClubs([]);
+                    }
 
-                  // Clean up Tenant State
-                  if (superAdminContext?.vereinsId) {
-                    const params = new URLSearchParams(window.location.search);
-                    params.set("tenant", superAdminContext.vereinsId);
-                    window.location.search = params.toString();
-                  }
-                }}
-                className="px-4 py-2 bg-rose-600 hover:bg-slate-900 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all shadow-sm shrink-0 active:scale-95 flex items-center gap-1.5 cursor-pointer"
-              >
-                <i className="fa-solid fa-right-from-bracket"></i> Proxy-Sitzung beenden
-              </button>
+                    setSuperAdminContext(null);
+                    setProxyUser(null);
+                    localStorage.setItem("superadmin_active_tab", "accounts");
+                    setView("superadmin");
+
+                    // Clean up Tenant State
+                    if (superAdminContext?.vereinsId) {
+                      const params = new URLSearchParams(window.location.search);
+                      params.set("tenant", superAdminContext.vereinsId);
+                      window.location.search = params.toString();
+                    }
+                  }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-slate-900 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all shadow-sm shrink-0 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fa-solid fa-right-from-bracket"></i> Proxy-Sitzung beenden
+                </button>
+              </div>
             </div>
           )}
           {proxyUser && (
@@ -2760,7 +3050,9 @@ const App: React.FC = () => {
           {window.innerWidth < 1024 && view !== "reservation" && !isMoreMenuOpen && mobileHeaderTitle && (
             <div className="lg:hidden bg-[var(--color-primary)] px-4 h-12 flex items-center justify-between text-white shadow-md relative shrink-0 select-none mb-1 rounded-xl font-sans z-50">
               <h3 className="text-white font-black tracking-widest uppercase text-xs flex items-center gap-2">
-                <i className={`fa-solid ${mobileHeaderIcon} text-sm`}></i>
+                {MobileHeaderIconComp && (
+                  <MobileHeaderIconComp className="w-4 h-4 shrink-0 text-white" strokeWidth={1.8} />
+                )}
                 {mobileHeaderTitle}
               </h3>
               <button
@@ -2771,7 +3063,7 @@ const App: React.FC = () => {
                 }}
                 className="h-8 px-3 rounded-lg bg-white/10 hover:bg-white/20 active:scale-90 transition-all flex items-center gap-1.5 font-black uppercase text-[9px] tracking-wider cursor-pointer outline-none border border-white/15"
               >
-                <i className="fa-solid fa-arrow-left text-[9px]"></i>{" "}
+                <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2} />{" "}
                 Zurück
               </button>
             </div>
@@ -2781,10 +3073,27 @@ const App: React.FC = () => {
           {window.innerWidth < 1024 && view === "reservation" && !isMoreMenuOpen && (
             <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-1.5 shadow-sm flex flex-col gap-1.5 sticky top-[10px] z-[1000] lg:hidden mb-1.5 shrink-0">
               {showMobileCalendar ? (
-                <div className="flex items-center justify-center h-7 gap-2">
-                  <span className="text-[11px] font-black text-[var(--color-primary)] uppercase tracking-wide text-center truncate select-none leading-none pt-0.5">
+                <div className="flex items-center justify-between h-7 px-1 gap-2">
+                  <span className="text-[11px] font-black text-[var(--color-primary)] uppercase tracking-wide truncate select-none leading-none pt-0.5">
                     DATUM AUSWÄHLEN
                   </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1">
+                      <i className="fa-solid fa-location-dot text-[var(--color-primary)] text-[10px]"></i>
+                      <span>Anlage:</span>
+                    </span>
+                    <select
+                      value={currentVereinsId}
+                      onChange={(e) => handleSwitchClub(e.target.value)}
+                      className="text-[10px] font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 outline-none focus:border-[var(--color-primary)] cursor-pointer max-w-[150px] truncate"
+                    >
+                      {miniCalClubsList.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between h-7 gap-2">
@@ -2855,6 +3164,33 @@ const App: React.FC = () => {
                 <div className="w-full lg:animate-in lg:fade-in lg:duration-500 pb-0 md:pb-3 select-none space-y-4">
                   {/* Content area */}
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-md w-full h-auto flex flex-col select-none mb-0">
+                    {/* Facility / Vereinsauswahl Header */}
+                    <div className="p-2.5 px-3 border-b border-slate-100 bg-slate-50/90 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <i className="fa-solid fa-building-columns text-[var(--color-primary)] text-xs shrink-0"></i>
+                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider shrink-0">
+                          Anlage:
+                        </span>
+                        <span className="text-xs font-black text-slate-800 truncate">
+                          {settings.clubName || currentVereinsId}
+                        </span>
+                      </div>
+                      <div className="relative shrink-0">
+                        <select
+                          value={currentVereinsId}
+                          onChange={(e) => handleSwitchClub(e.target.value)}
+                          className="pl-2.5 pr-7 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 shadow-2xs outline-none focus:border-[var(--color-primary)] appearance-none cursor-pointer max-w-[170px] truncate"
+                        >
+                          {miniCalClubsList.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                        <i className="fa-solid fa-chevron-down absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[8px]"></i>
+                      </div>
+                    </div>
+
                     {/* Month Navigator */}
                     <div className="p-2.5 px-3 sm:p-3.5 flex items-center justify-between border-b border-slate-100 bg-slate-50/80 shrink-0 w-full">
                       <button
@@ -3051,11 +3387,21 @@ const App: React.FC = () => {
                               p.toLowerCase().includes("gast"),
                           ));
                       if (isGuest && bookingToSave.guestFee === undefined) {
-                        bookingToSave.guestFee =
-                          settings.reservationRules?.guestFeePerHour ?? 2.5;
-                        bookingToSave.guestBillingMode =
-                          settings.reservationRules?.guestBillingMode ||
-                          "per_player";
+                        const feeCtx = buildBookingFeeContext({
+                          court: bookingToSave.court,
+                          players: bookingToSave.players,
+                          guestCount: bookingToSave.guestCount,
+                          date: bookingToSave.date,
+                          time: bookingToSave.time,
+                          durationMinutes: 60,
+                        });
+                        const feeRes = calculateBookingFee(feeCtx, settings.feeSettings, settings.reservationRules);
+                        bookingToSave.guestFee = feeRes.ratePerUnitEuro;
+                        bookingToSave.guestBillingMode = feeRes.action.type === "PER_COURT_HOUR" ? "per_court" : "per_player";
+                        bookingToSave.calculatedFeeCents = feeRes.totalCents;
+                        bookingToSave.appliedFeeRuleId = feeRes.matchedRuleId;
+                        bookingToSave.appliedFeeRuleName = feeRes.matchedRuleName;
+                        bookingToSave.feeCalculationMode = feeRes.mode;
                       }
                       if (superAdminContext) {
                         bookingToSave.createdBy =
@@ -3160,6 +3506,7 @@ const App: React.FC = () => {
                       data={rankings}
                       users={users}
                       currentUser={proxyUser || currentUser}
+                      settings={settings}
                       onUpdate={(r) =>
                         saveRankings(
                           currentVereinsId,
@@ -3195,14 +3542,20 @@ const App: React.FC = () => {
                       currentUser={proxyUser || currentUser}
                       clubId={currentVereinsId}
                       users={users}
+                      settings={settings}
+                      bookings={bookings}
+                      onBook={handleBook}
+                      userClubs={uniqueUserClubs}
+                      onSwitchClub={handleSwitchClub}
+                      allClubs={allClubs}
                     />
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-500">
                     <i className="fa-solid fa-lock text-4xl text-slate-300 mb-3"></i>
-                    <h3 className="text-base font-bold text-slate-700">Hobby-Liga nicht aktiv</h3>
+                    <h3 className="text-base font-bold text-slate-700">Liga nicht aktiv</h3>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                      Die Hobby-Liga ist aktuell für diesen Verein oder systemweit vom Superadministrator nicht freigeschaltet.
+                      Die Liga ist aktuell für diesen Verein oder systemweit vom Superadministrator nicht freigeschaltet.
                     </p>
                   </div>
                 )
@@ -3248,7 +3601,7 @@ const App: React.FC = () => {
                               : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                           }`}
                         >
-                          <i className="fa-solid fa-trophy text-lg text-[var(--color-primary)]"></i>
+                          <PartyPopper className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                           <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                             Veranstaltungen
                           </span>
@@ -3267,7 +3620,7 @@ const App: React.FC = () => {
                               : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                           }`}
                         >
-                          <i className="fa-solid fa-medal text-lg text-[var(--color-primary)]"></i>
+                          <Medal className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                           <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                             Rangliste
                           </span>
@@ -3286,9 +3639,9 @@ const App: React.FC = () => {
                               : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                           }`}
                         >
-                          <i className="fa-solid fa-bolt text-lg text-[var(--color-primary)]"></i>
+                          <Trophy className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                           <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
-                            Hobbyliga
+                            Liga
                           </span>
                         </button>
                       )}
@@ -3305,7 +3658,7 @@ const App: React.FC = () => {
                               : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                           }`}
                         >
-                          <i className="fa-solid fa-briefcase text-lg text-[var(--color-primary)]"></i>
+                          <Briefcase className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                           <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                             Arbeitseinsätze
                           </span>
@@ -3323,7 +3676,7 @@ const App: React.FC = () => {
                             : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                         }`}
                       >
-                        <i className="fa-solid fa-circle-question text-lg text-[var(--color-primary)]"></i>
+                        <HelpCircle className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                         <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                           Hilfe
                         </span>
@@ -3339,7 +3692,7 @@ const App: React.FC = () => {
                           rel="noopener noreferrer"
                           className="flex flex-col items-center justify-center gap-1 p-1 rounded-xl border-2 border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700 font-bold text-center transition-all active:scale-[0.97] duration-150 h-16 w-full"
                         >
-                          <i className="fa-solid fa-external-link text-lg text-[var(--color-primary)]"></i>
+                          <ExternalLink className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                           <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                             Website
                           </span>
@@ -3357,7 +3710,7 @@ const App: React.FC = () => {
                             : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                         }`}
                       >
-                        <i className="fa-solid fa-scale-balanced text-lg text-[var(--color-primary)]"></i>
+                        <Scale className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                         <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                           Impressum
                         </span>
@@ -3377,7 +3730,7 @@ const App: React.FC = () => {
                               : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                           }`}
                         >
-                          <i className="fa-solid fa-file-invoice-dollar text-lg text-[var(--color-primary)]"></i>
+                          <UserPlus className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                           <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                             Gastspiele
                           </span>
@@ -3391,7 +3744,7 @@ const App: React.FC = () => {
                         }}
                         className="flex flex-col items-center justify-center gap-1 p-1 rounded-xl border-2 border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700 font-bold text-center transition-all active:scale-[0.97] duration-150 h-16 w-full"
                       >
-                        <i className="fa-solid fa-user-gear text-lg text-[var(--color-primary)]"></i>
+                        <UserCog className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                         <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                           Konto
                         </span>
@@ -3410,7 +3763,7 @@ const App: React.FC = () => {
                                 : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                             }`}
                           >
-                            <i className="fa-solid fa-chart-pie text-lg text-[var(--color-primary)]"></i>
+                            <BarChart3 className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                             <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                               Statistik
                             </span>
@@ -3427,7 +3780,7 @@ const App: React.FC = () => {
                                 : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                             }`}
                           >
-                            <i className="fa-solid fa-gears text-lg text-[var(--color-primary)]"></i>
+                            <Settings className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                             <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                               System
                             </span>
@@ -3509,16 +3862,18 @@ const App: React.FC = () => {
 
                   {/* Fixed bottom Profile Card / Logout Area */}
                   <div className="fixed bottom-16 left-0 right-0 z-[1900] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-6 flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none">
-                    <div className="text-left">
-                      <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">
-                        Angemeldet als
-                      </span>
-                      <span className="block text-xs font-bold text-slate-800 truncate max-w-[160px]">
-                        {currentUser.klarname ||
-                          (currentUser.firstName || currentUser.lastName
+                    <div className="flex items-center gap-3 text-left min-w-0">
+                      <UserAvatar user={currentUser} size="sm" />
+                      <div className="min-w-0">
+                        <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">
+                          Angemeldet als
+                        </span>
+                        <span className="block text-xs font-bold text-slate-800 truncate max-w-[150px]">
+                          {(currentUser.firstName || currentUser.lastName)
                             ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim()
-                            : currentUser.name)}
-                      </span>
+                            : (currentUser.klarname || currentUser.name)}
+                        </span>
+                      </div>
                     </div>
                     <button
                       onClick={() => {
@@ -3544,6 +3899,8 @@ const App: React.FC = () => {
                   onCancel={handleCancel}
                   onLockRange={handleLockRange}
                   settings={settings}
+                  userClubs={uniqueUserClubs}
+                  onSwitchClub={handleSwitchClub}
                   mobileViewType={mobileViewType}
                   onMobileViewTypeChange={setMobileViewType}
                   mobileSelectedDate={mobileSelectedDate}
@@ -3618,9 +3975,10 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {showProfile && currentUser && (
+        {showProfile && (proxyUser || currentUser) && (
           <ProfileModal
-            currentUser={currentUser}
+            currentUser={(proxyUser || currentUser)!}
+            loggedInUser={currentUser}
             allUsers={users}
             settings={settings}
             onCloseStart={() => {
@@ -3632,12 +3990,34 @@ const App: React.FC = () => {
               setShowProfile(false);
             }}
             onSuccess={(updatedUser) => {
-              setCurrentUser(updatedUser);
+              if (proxyUser) {
+                setProxyUser(updatedUser);
+              } else {
+                setCurrentUser(updatedUser);
+              }
               // also update users list state so it immediately propagates on screens
-              setUsers((prev) => ({ ...prev, [updatedUser.id]: updatedUser }));
+              const key = updatedUser.name.toLowerCase().replace(/\s/g, '');
+              setUsers((prev) => ({ ...prev, [key]: updatedUser }));
             }}
             primaryColor={settings.primaryColor}
           />
+        )}
+
+        {/* Multi-Tenant Member Onboarding Modal on Login */}
+        {settings.club_onboarding_settings?.enable_onboarding &&
+          currentUser &&
+          currentUser.onboarding_pending &&
+          !proxyUser && (
+            <MemberOnboardingModal
+              currentUser={currentUser}
+              settings={settings}
+              currentClubId={currentVereinsId}
+              onSuccess={(updatedUser) => {
+                setCurrentUser(updatedUser);
+                const key = (updatedUser.id || updatedUser.name).toLowerCase().replace(/\s/g, '');
+                setUsers((prev) => ({ ...prev, [key]: updatedUser }));
+              }}
+            />
         )}
 
         {/* Mobile Bottom Navigation Bar (YouTube style) */}
@@ -3665,7 +4045,7 @@ const App: React.FC = () => {
                 : "text-slate-400 hover:text-slate-600"
             }`}
           >
-            <i className="fa-solid fa-calendar-day text-lg"></i>
+            <Calendar className="w-5 h-5" strokeWidth={view === "reservation" && mobileViewType === "day" && !showMobileCalendar ? 2.25 : 1.8} />
             <span className="text-[9px] font-black mt-1 uppercase tracking-wide">
               Tag
             </span>
@@ -3686,7 +4066,7 @@ const App: React.FC = () => {
                 : "text-slate-400 hover:text-slate-600"
             }`}
           >
-            <i className="fa-solid fa-calendar-week text-lg"></i>
+            <CalendarRange className="w-5 h-5" strokeWidth={view === "reservation" && mobileViewType === "week" && !showMobileCalendar ? 2.25 : 1.8} />
             <span className="text-[9px] font-black mt-1 uppercase tracking-wide">
               Woche
             </span>
@@ -3711,7 +4091,7 @@ const App: React.FC = () => {
                 : "text-slate-400 hover:text-slate-600"
             }`}
           >
-            <i className="fa-solid fa-calendar-alt text-lg"></i>
+            <Calendar className="w-5 h-5" strokeWidth={showMobileCalendar ? 2.25 : 1.8} />
             <span className="text-[9px] font-black mt-1 uppercase tracking-wide">
               Datum
             </span>
@@ -3735,7 +4115,7 @@ const App: React.FC = () => {
                 : "text-slate-400 hover:text-slate-600"
             }`}
           >
-            <i className="fa-solid fa-ellipsis text-lg"></i>
+            <MoreHorizontal className="w-5 h-5" strokeWidth={(isMoreMenuOpen || view !== "reservation") && !showMobileCalendar ? 2.25 : 1.8} />
             <span className="text-[9px] font-black mt-1 uppercase tracking-wide">
               Weiteres
             </span>

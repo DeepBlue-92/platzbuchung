@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { User, LeaguePartnerSearch } from '../types';
+import { User, LeaguePartnerSearch } from '../../types';
 
-interface PartnerSearchModalProps {
+interface CreateAdModalProps {
   currentUser: User;
   userRank?: number;
   existingSearch?: LeaguePartnerSearch | null;
@@ -11,7 +11,7 @@ interface PartnerSearchModalProps {
   onDelete?: () => Promise<void>;
 }
 
-export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
+export const CreateAdModal: React.FC<CreateAdModalProps> = ({
   currentUser,
   userRank,
   existingSearch,
@@ -19,8 +19,34 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
   onSave,
   onDelete,
 }) => {
+  const [isAnimatingIn, setIsAnimatingIn] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    // Ensure initial off-screen render occurs before sliding in
+    const frameId = requestAnimationFrame(() => {
+      const timer = setTimeout(() => {
+        setIsAnimatingIn(true);
+      }, 30);
+      return () => clearTimeout(timer);
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setIsAnimatingIn(false);
+    setTimeout(() => {
+      onClose();
+    }, 250);
+  };
+
   const [availabilityText, setAvailabilityText] = useState(existingSearch?.availabilityText || '');
-  const [showContactInfo, setShowContactInfo] = useState<boolean>(currentUser.showContactInfo || false);
+  const [showContactInfo, setShowContactInfo] = useState<boolean>(
+    existingSearch && existingSearch.showContactInfo !== undefined
+      ? existingSearch.showContactInfo
+      : false
+  );
   
   // Calculate default expiration (14 days from today)
   const getDefaultExpiry = (days: number) => {
@@ -48,12 +74,6 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fullName =
-    `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() ||
-    currentUser.klarname ||
-    currentUser.name ||
-    'Spieler';
-
   const handleApplyPreset = (days: number) => {
     setPresetDays(days);
     if (days >= 36500) {
@@ -73,7 +93,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
     setSaving(true);
     try {
       await onSave(availabilityText.trim(), expiresAt, showContactInfo);
-      onClose();
+      handleClose();
     } catch (err) {
       console.error(err);
       setError('Fehler beim Speichern der Anzeige.');
@@ -91,7 +111,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
     setDeleting(true);
     try {
       await onDelete();
-      onClose();
+      handleClose();
     } catch (err) {
       console.error(err);
       setError('Fehler beim Löschen der Anzeige.');
@@ -102,12 +122,26 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[99999] flex justify-end bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
-      onClick={onClose}
+      className="fixed inset-0 z-[99999] flex justify-end bg-slate-900/60 backdrop-blur-[2px] transition-opacity"
+      onClick={handleClose}
+      style={{
+        opacity: !isAnimatingIn || isClosing ? 0 : 1,
+        transitionDuration: isClosing ? "200ms" : "250ms",
+        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+        pointerEvents: isClosing ? "none" : "auto",
+      }}
     >
       <div
-        className="w-full md:w-[450px] md:max-w-[100vw] h-[100dvh] bg-white shadow-2xl flex flex-col animate-in slide-in-from-bottom md:slide-in-from-right duration-300 pointer-events-auto z-10 text-left overflow-hidden"
+        className="w-full sm:w-[450px] max-w-[100vw] h-[100dvh] bg-white shadow-2xl flex flex-col transform transition-transform pointer-events-auto z-10 text-left overflow-hidden"
         onClick={(e) => e.stopPropagation()}
+        style={{
+          transform:
+            !isAnimatingIn || isClosing
+              ? "translateX(100%)"
+              : "translateX(0)",
+          transitionDuration: isClosing ? "200ms" : "250ms",
+          transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
       >
         {/* Drawer Header (Matching Court Booking Drawer style) */}
         <div className="bg-[var(--color-primary)] p-4 px-5 text-white flex justify-between items-start relative shrink-0 shadow-md overflow-hidden">
@@ -139,7 +173,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-sm shrink-0 relative z-10 text-base font-medium"
             title="Schließen"
           >
@@ -157,37 +191,6 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
               </div>
             )}
 
-            {/* Automatic Information Box */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Automatisch aus deinem Profil übernommen
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className="flex items-center gap-2">
-                  <i className="fa-solid fa-user text-slate-400 text-xs"></i>
-                  <span className="font-bold text-slate-800 text-sm">{fullName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {userRank ? (
-                    <span className="px-2.5 py-1 bg-amber-100 text-amber-800 text-xs font-black rounded-lg border border-amber-200">
-                      <i className="fa-solid fa-trophy mr-1 text-amber-600"></i>
-                      Rang {userRank}
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-1 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg">
-                      In der Liga
-                    </span>
-                  )}
-                  {currentUser.vereinsId && (
-                    <span className="px-2.5 py-1 bg-white text-slate-600 border border-slate-200 text-xs font-bold rounded-lg">
-                      <i className="fa-solid fa-building-columns mr-1 text-slate-400"></i>
-                      {currentUser.vereinsId}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
             {/* Availability Text */}
             <div className="space-y-1.5">
               <label className="block text-xs font-black text-slate-700 uppercase tracking-wider">
@@ -198,7 +201,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
                 value={availabilityText}
                 onChange={(e) => setAvailabilityText(e.target.value)}
                 placeholder="z. B. Meistens Samstagvormittag oder unter der Woche ab 18 Uhr."
-                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 transition resize-none"
+                className="w-full h-8 px-3 py-1 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 transition resize-none placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                 required
               />
               <p className="text-[11px] font-medium text-slate-400">
@@ -241,7 +244,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
               </div>
 
               {isUnlimited(expiresAt) ? (
-                <div className="px-3.5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <div className="h-8 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2 font-sans font-medium">
                   <i className="fa-solid fa-infinity text-[var(--color-primary)] text-sm" />
                   <span>Daueranzeige aktiv (kein verfallsdatum)</span>
                 </div>
@@ -254,7 +257,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
                     setPresetDays(0);
                   }}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:border-[var(--color-primary)]"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
               )}
               <p className="text-[11px] font-medium text-slate-400">
@@ -266,9 +269,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
             <div className="space-y-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
               <label className="flex items-start gap-3 cursor-pointer select-none">
                 <div className="relative flex items-center justify-center mt-0.5">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
+                  <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     checked={showContactInfo}
                     onChange={(e) => setShowContactInfo(e.target.checked)}
                   />
@@ -331,7 +332,7 @@ export const PartnerSearchModal: React.FC<PartnerSearchModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
               >
                 Abbrechen

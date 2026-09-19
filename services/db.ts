@@ -1,6 +1,9 @@
 import { collection, doc, query, where, onSnapshot, getDoc, getDocs, setDoc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore';
 import { db, auth, testConnection, handleFirestoreError, OperationType, waitForAuth } from '../lib/firebase';
-import { Booking, Tournament, RankingState, User, Role, RegularLock, RangeLock, ArbeitsEinsatz, PlannedWorkShift, Gender, Person, Mitgliedschaft, Verein } from '../types';
+import { Booking, Tournament, RankingState, User, Role, RegularLock, RangeLock, ArbeitsEinsatz, PlannedWorkShift, Gender, Person, Mitgliedschaft, Verein, UserClub, ClubFeeSettings, ClubOnboardingSettings } from '../types';
+import { getUserClubs, isUserMemberOfClub } from '../lib/userUtils';
+
+export { getUserClubs, isUserMemberOfClub };
 
 export function getNormalizedVereinsId(vereinsId?: string): string {
   const norm = (vereinsId || 'sv-neuhausen').toLowerCase().trim().replace(/\s/g, '');
@@ -102,18 +105,28 @@ export interface DynamicLeague {
   id: string;
   name: string;
   active: boolean;
+  isActive?: boolean;
+  status?: string;
   description?: string;
   displayOrder?: number;
+  allowedGenders?: ("m" | "w" | "u")[];
+  minAge?: number | null;
+  maxAge?: number | null;
 }
 
 export const DEFAULT_DYNAMIC_LEAGUES: DynamicLeague[] = [
-  { id: "open_mixed", name: "Open / Mixed", active: true },
-  { id: "herren_einzel", name: "Herren Einzel", active: true },
-  { id: "damen_einzel", name: "Damen Einzel", active: true },
+  { id: "herren_einzel", name: "Herren Einzel", active: true, isActive: true, status: "active", description: "Hobbyliga Herren", allowedGenders: ["m"], minAge: 18, displayOrder: 1 },
+  { id: "damen_einzel", name: "Damen Einzel", active: true, isActive: true, status: "active", description: "Hobbyliga Damen", allowedGenders: ["w"], minAge: 18, displayOrder: 2 },
+  { id: "open_mixed", name: "Offen", active: true, isActive: true, status: "active", description: "Hobbyliga Offen", displayOrder: 3 },
 ];
 
 export interface ClubSettings {
   clubName: string;
+  street?: string;
+  zip?: string;
+  city?: string;
+  facilityPhotoUrl?: string;
+  customFacilityPhotoUrl?: string;
   collectEmail?: boolean;
   collectPhone?: boolean;
   feedAnonEnabled?: boolean;
@@ -147,6 +160,7 @@ export interface ClubSettings {
     arbeitseinsaetze?: boolean;
     league?: boolean;
   };
+  rankingViewMode?: "pyramid" | "list";
   leagueSettings?: {
     enabled: boolean;
     minMatchDurationMinutes: number;
@@ -176,6 +190,7 @@ export interface ClubSettings {
     guestBillingMode?: 'per_player' | 'per_court';
     maxBookingsPerDay?: number; // Added per-day booking limit
     maxBookingsPerWeek?: number; // Added per-week booking limit
+    bypassRestrictionsForLeagueGames?: boolean; // Ligaspiel-Buchungen von Limits ausnehmen
     cancellationDeadlineMinutes?: number;
     maxDurationMinutesSingle?: number;
     maxDurationMinutesDouble?: number;
@@ -201,8 +216,10 @@ export interface ClubSettings {
     gebuehr_pro_stunde: number;
     berechnungsmodus: "PLATZBASIS" | "SPIELERBASIS";
   }[];
+  feeSettings?: ClubFeeSettings;
   recurringLocks?: RegularLock[];
   rangeLocks?: RangeLock[];
+  club_onboarding_settings?: ClubOnboardingSettings;
   geloescht?: boolean;
   deletedAt?: string;
   lastEditedBy?: string;
@@ -210,8 +227,27 @@ export interface ClubSettings {
   impersonatedBy?: string;
 }
 
+export const DEFAULT_ONBOARDING_SETTINGS: ClubOnboardingSettings = {
+  enable_onboarding: false,
+  auto_enable_for_new_users: true,
+  welcome_title: "Willkommen in unserem Tennis-Club!",
+  welcome_description: "Wir freuen uns, dich auf unserer modernen Plattform zu begrüßen. Bitte nimm dir kurz Zeit, deine Stammdaten zu überprüfen und bei Bedarf zu aktualisieren.",
+  show_animation: true,
+  field_name: "EDITABLE",
+  field_birthdate: "READ_ONLY",
+  field_gender: "READ_ONLY",
+  field_demographics: "READ_ONLY",
+  field_avatar: "EDITABLE",
+  field_password: "EDITABLE",
+};
+
 export const DEFAULT_SETTINGS: ClubSettings = {
   clubName: "Tennis-Club",
+  street: "Sportweg 4",
+  zip: "84030",
+  city: "Ergolding",
+  facilityPhotoUrl: "",
+  customFacilityPhotoUrl: "",
   collectEmail: true,
   collectPhone: true,
   feedAnonEnabled: false,
@@ -264,6 +300,7 @@ Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz a
     arbeitseinsaetze: false,
     league: false,
   },
+  rankingViewMode: "pyramid",
   leagueSettings: {
     enabled: false,
     minMatchDurationMinutes: 120,
@@ -288,6 +325,7 @@ Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz a
     guestBillingMode: 'per_player',
     maxBookingsPerDay: 2, // Default booking limit per day
     maxBookingsPerWeek: 0, // Default weekly booking limit (0 = no limit)
+    bypassRestrictionsForLeagueGames: false,
     cancellationDeadlineMinutes: 30,
     maxDurationMinutesSingle: 90,
     maxDurationMinutesDouble: 120,
@@ -308,8 +346,23 @@ Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz a
     enabled: false,
     showNames: false
   },
+  feeSettings: {
+    fee_calculation_mode: 'SIMPLE',
+    simple_config: {
+      rate_type: 'PER_GUEST_HOUR',
+      amount_cents: 250,
+    },
+    advanced_config: {
+      rules: [],
+      default_rule: {
+        type: 'PER_GUEST_HOUR',
+        amount_cents: 250,
+      },
+    },
+  },
   recurringLocks: [],
-  rangeLocks: []
+  rangeLocks: [],
+  club_onboarding_settings: DEFAULT_ONBOARDING_SETTINGS
 };
 
 // --- Hooks and Listeners ---
@@ -319,14 +372,26 @@ Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz a
 export function listenToBookings(vereinsId: string, callback: (bookings: Booking[]) => void) {
   const normalizedId = getNormalizedVereinsId(vereinsId);
   const path = `vereine/${normalizedId}/bookings`;
-  return onSnapshot(
+
+  // Sliding time window: Load all future bookings plus recent bookings from the last 30 days
+  // Format of booking.date is 'YYYY-MM-DD'
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const minDateStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+  const q = query(
     collection(db, 'vereine', normalizedId, 'bookings'),
+    where('date', '>=', minDateStr)
+  );
+
+  return onSnapshot(
+    q,
     (snapshot) => {
       const data = snapshot.docs.map(d => d.data() as Booking);
       callback(data);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      handleFirestoreError(error, OperationType.LIST, path, false);
     }
   );
 }
@@ -346,7 +411,7 @@ export function listenToPublicBookings(vereinsId: string, type: "anonymisiert" |
       }
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      handleFirestoreError(error, OperationType.GET, path, false);
     }
   );
 }
@@ -375,7 +440,7 @@ export function listenToTournaments(vereinsId: string, callback: (t: Tournament[
       callback(purgedData);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      handleFirestoreError(error, OperationType.LIST, path, false);
     }
   );
 }
@@ -414,11 +479,21 @@ export function listenToSettings(vereinsId: string, callback: (s: ClubSettings) 
     doc(db, 'vereine', normalizedId),
     (docSnap) => {
       const isNeuhausen = normalizedId.includes("neuhausen");
+      const isFurth = normalizedId.includes("furth");
+      const isSportsgeist = normalizedId.includes("sportsgeist");
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const resolvedLogo = data.customHeaderLogoUrl || data.headerLogoUrl || data.customLogoUrl || data.logoUrl || (isNeuhausen ? DEFAULT_SETTINGS.logoUrl : "");
-        const resolvedHeaderLogo = data.customHeaderLogoUrl || data.headerLogoUrl || data.customLogoUrl || data.logoUrl || (isNeuhausen ? DEFAULT_SETTINGS.headerLogoUrl : "");
-        const resolvedClubName = data.clubName || data.vereinsName || (isNeuhausen ? "SV Neuhausen" : DEFAULT_SETTINGS.clubName);
+        const defaultClubLoginLogo = isNeuhausen
+          ? "/images/wappen_svn_login.png"
+          : isFurth
+          ? "/images/wappen_djk_furth_login.png"
+          : isSportsgeist
+          ? "/images/wappen_tc_sportsgeist_login.png"
+          : DEFAULT_SETTINGS.logoUrl;
+
+        const resolvedLogo = data.customLogoUrl || data.logoUrl || defaultClubLoginLogo;
+        const resolvedHeaderLogo = data.customHeaderLogoUrl || data.headerLogoUrl || resolvedLogo || (isNeuhausen ? DEFAULT_SETTINGS.headerLogoUrl : "");
+        const resolvedClubName = data.clubName || data.vereinsName || (isNeuhausen ? "SV Neuhausen" : isFurth ? "DJK Furth" : isSportsgeist ? "TC Sportsgeist" : DEFAULT_SETTINGS.clubName);
         const merged: ClubSettings = {
           ...DEFAULT_SETTINGS,
           ...data,
@@ -433,19 +508,33 @@ export function listenToSettings(vereinsId: string, callback: (s: ClubSettings) 
             ...DEFAULT_SETTINGS.reservationRules,
             ...(data.reservationRules || {})
           },
+          club_onboarding_settings: {
+            ...DEFAULT_ONBOARDING_SETTINGS,
+            ...(data.club_onboarding_settings || {}),
+            field_birthdate: data.club_onboarding_settings?.field_birthdate || data.club_onboarding_settings?.field_demographics || DEFAULT_ONBOARDING_SETTINGS.field_birthdate,
+            field_gender: data.club_onboarding_settings?.field_gender || data.club_onboarding_settings?.field_demographics || DEFAULT_ONBOARDING_SETTINGS.field_gender
+          },
           recurringLocks: data.recurringLocks || [],
           rangeLocks: data.rangeLocks || []
         };
         callback(merged);
       } else {
-        const resolvedClubName = normalizedId === 'djk-furth' ? 'DJK Furth' : (isNeuhausen ? 'SV Neuhausen' : 'Tennis Club');
+        const resolvedClubName = normalizedId === 'djk-furth' ? 'DJK Furth' : (isNeuhausen ? 'SV Neuhausen' : isSportsgeist ? 'TC Sportsgeist' : 'Tennis Club');
+        const defaultClubLoginLogo = isNeuhausen
+          ? "/images/wappen_svn_login.png"
+          : isFurth
+          ? "/images/wappen_djk_furth_login.png"
+          : isSportsgeist
+          ? "/images/wappen_tc_sportsgeist_login.png"
+          : DEFAULT_SETTINGS.logoUrl;
+
         callback({
           ...DEFAULT_SETTINGS,
           clubName: resolvedClubName,
           vereinsName: resolvedClubName,
           vereinsId: normalizedId,
-          logoUrl: isNeuhausen ? DEFAULT_SETTINGS.logoUrl : "",
-          headerLogoUrl: isNeuhausen ? DEFAULT_SETTINGS.headerLogoUrl : "",
+          logoUrl: defaultClubLoginLogo,
+          headerLogoUrl: isNeuhausen ? DEFAULT_SETTINGS.headerLogoUrl : defaultClubLoginLogo,
           courts: ["Platz 1", "Platz 2"],
           aktiv: true,
           websiteUrl: isNeuhausen ? "https://www.svneuhausen1947.de/tennis" : "",
@@ -456,7 +545,29 @@ export function listenToSettings(vereinsId: string, callback: (s: ClubSettings) 
       }
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      handleFirestoreError(error, OperationType.GET, path, false);
+      const isNeuhausen = normalizedId.includes("neuhausen");
+      const isFurth = normalizedId.includes("furth");
+      const isSportsgeist = normalizedId.includes("sportsgeist");
+      const resolvedClubName = isFurth ? 'DJK Furth' : (isNeuhausen ? 'SV Neuhausen' : isSportsgeist ? 'TC Sportsgeist' : 'Tennis Club');
+      const defaultClubLoginLogo = isNeuhausen
+        ? "/images/wappen_svn_login.png"
+        : isFurth
+        ? "/images/wappen_djk_furth_login.png"
+        : isSportsgeist
+        ? "/images/wappen_tc_sportsgeist_login.png"
+        : DEFAULT_SETTINGS.logoUrl;
+
+      callback({
+        ...DEFAULT_SETTINGS,
+        clubName: resolvedClubName,
+        vereinsName: resolvedClubName,
+        vereinsId: normalizedId,
+        logoUrl: defaultClubLoginLogo,
+        headerLogoUrl: isNeuhausen ? DEFAULT_SETTINGS.headerLogoUrl : defaultClubLoginLogo,
+        courts: ["Platz 1", "Platz 2"],
+        aktiv: true
+      } as any);
     }
   );
 }
@@ -490,7 +601,14 @@ export function listenToRankings(vereinsId: string, callback: (r: RankingState) 
       }
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      handleFirestoreError(error, OperationType.GET, path, false);
+      callback({
+        categories: [
+          { id: 'herren', name: 'Herren', entries: [] },
+          { id: 'damen', name: 'Damen', entries: [] },
+          { id: 'jugend', name: 'Jugend', entries: [] }
+        ]
+      } as RankingState);
     }
   );
 }
@@ -506,11 +624,26 @@ export function listenToUsers(vereinsId: string, callback: (u: Record<string, Us
       const username = docData.username || docData.name;
       if (!username) return;
       const key = username.toLowerCase().replace(/\s/g, '');
+      const rawRole = (docData.role || '').toString().toLowerCase();
+      let resolvedRole: Role = Role.MITGLIED;
+      if (rawRole === 'admin' || rawRole === Role.ADMIN) {
+        resolvedRole = Role.ADMIN;
+      } else if (
+        (rawRole === 'super-admin' || rawRole === Role.SUPER_ADMIN || rawRole === 'superadmin') &&
+        (normalizedId === 'super-admin' || normalizedId === 'system' || d.id === 'superadmin' || key === 'superadmin')
+      ) {
+        resolvedRole = Role.SUPER_ADMIN;
+      } else {
+        resolvedRole = Role.MITGLIED;
+      }
+
+      const userClubs = getUserClubs(docData);
       data[key] = {
         id: d.id,
         name: username,
-        role: docData.role === 'spieler' ? Role.MITGLIED : (docData.role === 'admin' ? Role.ADMIN : Role.SUPER_ADMIN),
+        role: resolvedRole,
         vereinsId: docData.tenantId || docData.vereinsId || normalizedId,
+        clubs: userClubs.length > 0 ? userClubs : [{ vereinsId: normalizedId, clubName: normalizedId, role: resolvedRole }],
         password: docData.password || docData.passwort || '',
         klarname: docData.klarname || `${docData.firstName || ''} ${docData.lastName || ''}`.trim() || username,
         firstName: docData.firstName || '',
@@ -523,6 +656,8 @@ export function listenToUsers(vereinsId: string, callback: (u: Record<string, Us
         hauptAdmin: !!docData.hauptAdmin,
         createdAt: docData.createdAt || new Date().toISOString(),
         show_onboarding_hints: docData.show_onboarding_hints !== false,
+        onboarding_pending: !!docData.onboarding_pending,
+        birthDate: docData.birthDate || null,
         is_placeholder_email: docData.is_placeholder_email !== undefined 
           ? !!docData.is_placeholder_email 
           : (!!docData.email && docData.email.startsWith('no-email.') && docData.email.endsWith('@internal.app'))
@@ -530,7 +665,8 @@ export function listenToUsers(vereinsId: string, callback: (u: Record<string, Us
     });
     callback(data);
   }, (err) => {
-    handleFirestoreError(err, OperationType.LIST, path);
+    handleFirestoreError(err, OperationType.LIST, path, false);
+    callback({});
   });
 }
 
@@ -652,31 +788,60 @@ export async function saveRankings(vereinsId: string, rankings: RankingState) {
   }
 }
 
+export async function isUsernameTakenGlobally(username: string, excludeUserId?: string): Promise<boolean> {
+  const normalizedUsername = username.toLowerCase().replace(/\s/g, '');
+  if (!normalizedUsername) return false;
+  const q = query(collection(db, 'users'), where('username', '==', normalizedUsername));
+  const snap = await getDocs(q);
+  if (snap.empty) return false;
+  if (!excludeUserId) return true;
+  return snap.docs.some(d => d.id !== excludeUserId);
+}
+
 export async function saveUser(vereinsId: string, user: User) {
   const normalizedId = getNormalizedVereinsId(vereinsId);
   const normalizedUsername = user.name.toLowerCase().replace(/\s/g, '');
 
+  let docId = '';
+  let existingData: any = {};
+
+  if (user.id) {
+    const directDoc = await getDoc(doc(db, 'users', user.id));
+    if (directDoc.exists()) {
+      docId = user.id;
+      existingData = directDoc.data();
+    }
+  }
+
   const q = query(
     collection(db, 'users'),
-    where('username', '==', normalizedUsername),
-    where('tenantId', '==', normalizedId)
+    where('username', '==', normalizedUsername)
   );
   const snap = await getDocs(q);
 
-  let docId = '';
-  let existingData: any = {};
-  if (!snap.empty) {
-    docId = snap.docs[0].id;
-    existingData = snap.docs[0].data();
+  if (!docId) {
+    if (!snap.empty) {
+      // Username exists globally (Option A: Global uniqueness)
+      const matchedDoc = snap.docs[0];
+      docId = matchedDoc.id;
+      existingData = matchedDoc.data();
+    } else {
+      docId = `${normalizedUsername}_${normalizedId}`;
+    }
   } else {
-    docId = `${normalizedUsername}_${normalizedId}`;
+    // If editing existing user by ID, verify username isn't stolen from a different account in this tenant
+    if (!snap.empty && snap.docs.some(d => d.id !== docId && (d.data().tenantId === normalizedId || d.data().vereinsId === normalizedId))) {
+      throw new Error(`Der Benutzername "${user.name}" ist bereits an einen anderen Account vergeben.`);
+    }
   }
 
-  let backendRole = 'spieler';
-  if (user.role === Role.SUPER_ADMIN || (user.role as any) === 'super-admin') {
+  let backendRole = 'mitglied';
+  if (user.role === Role.SUPER_ADMIN || (user.role as any) === 'super-admin' || (user.role as any) === 'SUPER_ADMIN') {
     backendRole = 'super-admin';
   } else if (user.role === Role.ADMIN || (user.role as any) === 'admin') {
     backendRole = 'admin';
+  } else {
+    backendRole = 'mitglied';
   }
 
   const finalDoc: any = {
@@ -684,16 +849,24 @@ export async function saveUser(vereinsId: string, user: User) {
     username: normalizedUsername,
     name: normalizedUsername,
     role: backendRole,
-    tenantId: normalizedId,
-    vereinsId: normalizedId,
-    password: user.password || existingData.password || '',
-    passwort: user.password || existingData.password || '',
+    tenantId: existingData.tenantId || normalizedId,
+    vereinsId: existingData.vereinsId || normalizedId,
+    password: user.password || existingData.password || existingData.passwort || '',
+    passwort: user.password || existingData.passwort || existingData.password || '',
     createdAt: user.createdAt || existingData.createdAt || new Date().toISOString()
   };
 
-  if (user.firstName !== undefined) finalDoc.firstName = user.firstName;
+  if (user.firstName !== undefined) {
+    finalDoc.firstName = user.firstName;
+  } else if (!existingData.firstName) {
+    finalDoc.firstName = user.name || normalizedUsername;
+  }
   if (user.lastName !== undefined) finalDoc.lastName = user.lastName;
-  if (user.klarname !== undefined) finalDoc.klarname = user.klarname;
+  if (user.klarname !== undefined) {
+    finalDoc.klarname = user.klarname;
+  } else if (!existingData.klarname) {
+    finalDoc.klarname = user.name || normalizedUsername;
+  }
 
   const isPlaceholder = user.is_placeholder_email === true || 
     (!user.email && user.is_placeholder_email !== false) || 
@@ -701,7 +874,7 @@ export async function saveUser(vereinsId: string, user: User) {
 
   if (isPlaceholder) {
     finalDoc.is_placeholder_email = true;
-    finalDoc.email = `no-email.${normalizedId}.${user.id || docId}@internal.app`;
+    finalDoc.email = existingData.email || `no-email.${normalizedId}.${user.id || docId}@internal.app`;
   } else {
     finalDoc.is_placeholder_email = false;
     if (user.email !== undefined) finalDoc.email = user.email.trim();
@@ -709,12 +882,82 @@ export async function saveUser(vereinsId: string, user: User) {
 
   if (user.phone !== undefined) finalDoc.phone = user.phone;
   if (user.gender !== undefined) finalDoc.gender = user.gender;
+  if (user.birthDate !== undefined) finalDoc.birthDate = user.birthDate;
   if (user.showContactInfo !== undefined) finalDoc.showContactInfo = !!user.showContactInfo;
   if (user.isSuspended !== undefined) finalDoc.isSuspended = !!user.isSuspended;
   if (user.hauptAdmin !== undefined) finalDoc.hauptAdmin = !!user.hauptAdmin;
   if (user.show_onboarding_hints !== undefined) finalDoc.show_onboarding_hints = !!user.show_onboarding_hints;
+  if (user.onboarding_pending !== undefined) finalDoc.onboarding_pending = !!user.onboarding_pending;
+  if (user.avatarUrl !== undefined) {
+    finalDoc.avatarUrl = user.avatarUrl || null;
+  } else if (existingData.avatarUrl !== undefined) {
+    finalDoc.avatarUrl = existingData.avatarUrl;
+  }
+  if (user.avatarIcon !== undefined) {
+    finalDoc.avatarIcon = user.avatarIcon || null;
+  } else if (existingData.avatarIcon !== undefined) {
+    finalDoc.avatarIcon = existingData.avatarIcon;
+  }
 
-  await setDoc(doc(db, 'users', docId), finalDoc, { merge: true });
+  // Preserve & safely merge multi-club memberships
+  const userClubs = getUserClubs(user);
+  const existingClubs = existingData.clubs || [];
+  const mergedClubsMap = new Map<string, any>();
+
+  // Add existing clubs from database
+  existingClubs.forEach((c: any) => {
+    const cid = String(c.vereinsId || c.id || c).toLowerCase().replace(/\s/g, '');
+    mergedClubsMap.set(cid, typeof c === 'object' ? c : { vereinsId: cid, clubName: cid, role: 'mitglied' });
+  });
+
+  // Set or update the membership role for the current club
+  mergedClubsMap.set(normalizedId, {
+    vereinsId: normalizedId,
+    clubName: normalizedId,
+    role: backendRole as Role
+  });
+
+  // Add any explicitly supplied user clubs
+  if (userClubs && userClubs.length > 0) {
+    userClubs.forEach(c => {
+      const cid = String(c.vereinsId || c.id).toLowerCase().replace(/\s/g, '');
+      mergedClubsMap.set(cid, c);
+    });
+  }
+
+  finalDoc.clubs = Array.from(mergedClubsMap.values());
+  finalDoc.clubIds = Array.from(mergedClubsMap.keys());
+
+  const adminClubs = Array.from(mergedClubsMap.values())
+    .filter((c: any) => c.role === 'admin' || c.role === Role.ADMIN)
+    .map((c: any) => String(c.vereinsId || c.id).toLowerCase().replace(/\s/g, ''));
+  if (backendRole === 'admin' && !adminClubs.includes(normalizedId)) {
+    adminClubs.push(normalizedId);
+  }
+  finalDoc.adminClubIds = Array.from(new Set([...adminClubs, ...(existingData.adminClubIds || [])])).filter(Boolean);
+
+  const sanitizeForFirestore = (obj: any): any => {
+    if (obj === undefined) return null;
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) {
+      return obj.map(sanitizeForFirestore);
+    }
+    const cleanObj: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (obj[key] !== undefined) {
+          cleanObj[key] = sanitizeForFirestore(obj[key]);
+        } else {
+          cleanObj[key] = null;
+        }
+      }
+    }
+    return cleanObj;
+  };
+
+  const safeDoc = sanitizeForFirestore(finalDoc);
+
+  await setDoc(doc(db, 'users', docId), safeDoc, { merge: true });
 }
 
 export async function resetOnboardingHintsForAllUsers(vereinsId: string) {
@@ -744,8 +987,7 @@ export async function deleteUserDoc(vereinsId: string, username: string) {
 
   const q = query(
     collection(db, 'users'), 
-    where('username', '==', normalizedUsername),
-    where('tenantId', '==', normalizedId)
+    where('username', '==', normalizedUsername)
   );
   const snap = await getDocs(q);
   if (snap.empty) {
@@ -756,22 +998,45 @@ export async function deleteUserDoc(vereinsId: string, username: string) {
   const targetUser = userDoc.data() as any;
   const targetId = userDoc.id;
 
-  if (performer.role === 'super-admin') {
+  const isPerformerSuperAdmin = performer.role === 'super-admin' || performer.role === 'superadmin';
+  const isPerformerClubAdmin = performer.role === 'admin' || performer.hauptAdmin === true;
+
+  if (isPerformerSuperAdmin) {
     if (targetId === currentFbUser.uid) {
       throw new Error("Selbstlöschung ist nicht erlaubt!");
     }
-  } else if (performer.role === 'admin') {
-    if (targetUser.tenantId !== performer.tenantId) {
-      throw new Error("Aktion verweigert: Du darfst nur Benutzer deines eigenen Vereins löschen.");
+  } else if (isPerformerClubAdmin) {
+    const isMemberOfThisClub = targetUser.tenantId === normalizedId || 
+      (targetUser.clubIds && targetUser.clubIds.includes(normalizedId)) ||
+      (targetUser.clubs && targetUser.clubs.some((c: any) => (c.vereinsId || c.id) === normalizedId));
+      
+    if (!isMemberOfThisClub && targetUser.tenantId !== performer.tenantId) {
+      throw new Error("Aktion verweigert: Du darfst nur Benutzer deines eigenen Vereins löschen/entfernen.");
     }
     if (targetId === currentFbUser.uid || targetUser.username === performer.username) {
       throw new Error("Ein Administrator darf sich niemals selbst löschen!");
     }
   } else {
-    throw new Error("Aktion verweigert: Spieler besitzen keinerlei Löschrechte.");
+    throw new Error("Aktion verweigert: Mitglieder besitzen keinerlei Löschrechte.");
   }
 
-  await deleteDoc(doc(db, 'users', targetId));
+  // Multi-Club check: If user belongs to other clubs, detach from this club instead of deleting account
+  const remainingClubs = (targetUser.clubs || []).filter((c: any) => {
+    const cid = String(c.vereinsId || c.id || c).toLowerCase().replace(/\s/g, '');
+    return cid !== normalizedId;
+  });
+
+  if (remainingClubs.length > 0) {
+    const remainingIds = remainingClubs.map((c: any) => String(c.vereinsId || c.id || c).toLowerCase().replace(/\s/g, ''));
+    const newPrimaryTenant = targetUser.tenantId === normalizedId ? remainingIds[0] : targetUser.tenantId;
+    await setDoc(doc(db, 'users', targetId), {
+      clubs: remainingClubs,
+      clubIds: remainingIds,
+      tenantId: newPrimaryTenant
+    }, { merge: true });
+  } else {
+    await deleteDoc(doc(db, 'users', targetId));
+  }
 }
 
 // --- Global System Updates / Changelog APIs ---
@@ -780,7 +1045,6 @@ export interface SystemUpdates {
   text: string;
   lastUpdated?: string;
   updatedBy?: string;
-  globalLeagueEnabled?: boolean;
 }
 
 export function listenToSystemUpdates(callback: (updates: SystemUpdates | null) => void) {
@@ -793,36 +1057,25 @@ export function listenToSystemUpdates(callback: (updates: SystemUpdates | null) 
         callback({
           text: data.text || "",
           lastUpdated: data.lastUpdated,
-          updatedBy: data.updatedBy,
-          globalLeagueEnabled: data.globalLeagueEnabled !== false
+          updatedBy: data.updatedBy
         });
       } else {
-        callback({ text: "", globalLeagueEnabled: true });
+        callback({ text: "" });
       }
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      handleFirestoreError(error, OperationType.GET, path, false);
     }
   );
 }
 
-export async function saveSystemUpdates(text: string, updatedBy: string, globalLeagueEnabled?: boolean) {
+export async function saveSystemUpdates(text: string, updatedBy: string) {
   const dataToSave: any = {
     text,
     lastUpdated: new Date().toISOString(),
     updatedBy
   };
-  if (globalLeagueEnabled !== undefined) {
-    dataToSave.globalLeagueEnabled = globalLeagueEnabled;
-  }
   await setDoc(doc(db, 'system', 'updates'), dataToSave, { merge: true });
-}
-
-export async function setGlobalLeagueEnabled(enabled: boolean) {
-  await setDoc(doc(db, 'system', 'updates'), {
-    globalLeagueEnabled: enabled,
-    lastUpdated: new Date().toISOString()
-  }, { merge: true });
 }
 
 // --- Global Super-Admin Database APIs ---
@@ -856,7 +1109,7 @@ export function listenToClubs(callback: (clubs: any[]) => void) {
         callback(list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, path);
+        handleFirestoreError(error, OperationType.LIST, path, false);
       }
     );
   });
@@ -917,31 +1170,9 @@ export async function saveClub(clubDoc: { vereinsId: string, vereinsName: string
 export async function deleteClub(vereinsId: string) {
   const normalizedId = getNormalizedVereinsId(vereinsId);
   
-  // Clean up users associated with this tenant from flat collection
-  try {
-    const usersQ = query(collection(db, 'users'), where('tenantId', '==', normalizedId));
-    const usersSnap = await getDocs(usersQ);
-    for (const d of usersSnap.docs) {
-      await deleteDoc(doc(db, 'users', d.id));
-    }
-  } catch (e) {
-    console.error(`Error cleaning up users of club ${normalizedId} from global collection:`, e);
-  }
-
-  // Clean up all major subcollections so that they are fully removed
-  const subcollections = ['bookings', 'mitglieder', 'tournaments', 'backups', 'state', 'arbeitseinsaetze'];
-  for (const sub of subcollections) {
-    try {
-      const colRef = collection(db, 'vereine', normalizedId, sub);
-      const docsSnap = await getDocs(colRef);
-      for (const d of docsSnap.docs) {
-        await deleteDoc(doc(db, 'vereine', normalizedId, sub, d.id));
-      }
-    } catch (e) {
-      console.error(`Error cleaning up subcollection ${sub} of club ${normalizedId}:`, e);
-    }
-  }
-
+  // We no longer clean up users, bookings, or other historical data
+  // to ensure player history and rankings remain intact.
+  
   await deleteDoc(doc(db, 'vereine', normalizedId));
 }
 
@@ -990,7 +1221,7 @@ export function getLastCompletedSunday(currentDate: Date): Date {
 export interface GlobalSystemBackup {
   id: string;
   timestamp: string;
-  creator: "system" | "super-admin" | "rollback-auto";
+  creator: "system" | "super-admin" | "rollback-auto" | "league-reset";
   name: string;
   clubs: any[];
   users: any[];
@@ -1011,7 +1242,7 @@ export interface GlobalSystemBackup {
 }
 
 export async function createGlobalBackup(
-  creator: "system" | "super-admin" | "rollback-auto",
+  creator: "system" | "super-admin" | "rollback-auto" | "league-reset",
   customId?: string,
   customName?: string
 ): Promise<GlobalSystemBackup> {
@@ -1109,6 +1340,9 @@ export async function createGlobalBackup(
       } else if (creator === "rollback-auto") {
         id = `rollback_auto_${Date.now()}`;
         backupName = `Automatisches Backup vor Rollback (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
+      } else if (creator === "league-reset") {
+        id = `league_reset_auto_${Date.now()}`;
+        backupName = `Sicherheits-Snapshot vor Testdaten-Reset (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
       } else {
         id = `manual_${Date.now()}`;
         backupName = `Manuelles System-Backup (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
@@ -1120,6 +1354,8 @@ export async function createGlobalBackup(
       backupName = `Wöchentliches System-Backup (KW ${weekNum.week} - Stand Sonntag, ${sundayStr})`;
     } else if (creator === "rollback-auto") {
       backupName = `Automatisches Backup vor Rollback (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
+    } else if (creator === "league-reset") {
+      backupName = `Sicherheits-Snapshot vor Testdaten-Reset (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
     } else {
       backupName = `Manuelles System-Backup (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
     }
@@ -1341,21 +1577,36 @@ export function listenToGlobalBackups(callback: (backups: GlobalSystemBackup[]) 
       callback(data);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      handleFirestoreError(error, OperationType.LIST, path, false);
     }
   );
 }
 
 export async function checkAndPerformGlobalWeeklyBackup() {
-  const lastSunday = getLastCompletedSunday(new Date());
-  const weekNum = getWeekNumber(lastSunday);
-  const weekId = `weekly_${weekNum.year}_W${weekNum.week}`;
+  try {
+    const lastSunday = getLastCompletedSunday(new Date());
+    const weekNum = getWeekNumber(lastSunday);
+    const weekId = `weekly_${weekNum.year}_W${weekNum.week}`;
+    const cacheKey = `backup_checked_${weekId}`;
 
-  const backupDoc = await getDoc(doc(db, 'system_backups', weekId));
-  if (!backupDoc.exists()) {
-    console.log(`[Auto-Backup] Creating global weekly backup ${weekId}...`);
-    await createGlobalBackup("system", weekId);
-    await cleanupOldGlobalBackups();
+    // Skip if already successfully checked or created in this browser session/week
+    const lastChecked = localStorage.getItem(cacheKey);
+    if (lastChecked) {
+      const hoursSinceCheck = (Date.now() - parseInt(lastChecked, 10)) / (1000 * 60 * 60);
+      if (hoursSinceCheck < 24) {
+        return;
+      }
+    }
+
+    const backupDoc = await getDoc(doc(db, 'system_backups', weekId));
+    if (!backupDoc.exists()) {
+      console.log(`[Auto-Backup] Creating global weekly backup ${weekId}...`);
+      await createGlobalBackup("system", weekId);
+      await cleanupOldGlobalBackups();
+    }
+    localStorage.setItem(cacheKey, Date.now().toString());
+  } catch (err) {
+    console.warn("[Auto-Backup] Weekly backup check skipped or deferred:", err);
   }
 }
 
@@ -1401,7 +1652,7 @@ export function listenToArbeitseinsaetze(vereinsId: string, callback: (entries: 
         callback(data);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, path);
+        handleFirestoreError(error, OperationType.LIST, path, false);
       }
     );
   });
@@ -1449,7 +1700,7 @@ export function listenToPlannedWorkShifts(vereinsId: string, callback: (shifts: 
         callback(data);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, path);
+        handleFirestoreError(error, OperationType.LIST, path, false);
       }
     );
   });
@@ -1526,7 +1777,7 @@ export function listenToMemberships(vereinId: string, callback: (ms: Mitgliedsch
     });
     callback(list);
   }, (err) => {
-    handleFirestoreError(err, OperationType.LIST, path);
+    handleFirestoreError(err, OperationType.LIST, path, false);
   });
 }
 

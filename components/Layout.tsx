@@ -1,7 +1,18 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import {
+  ChevronDown,
+  CircleUser,
+  UserCog,
+  HelpCircle,
+  LogOut,
+  ArrowLeftRight,
+  Check,
+} from "lucide-react";
 import { RichTextRenderer } from "./RichText";
 import { UserClub } from "../types";
+import { getUserClubs } from "../lib/userUtils";
+import { UserAvatar } from "./UserAvatar";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -51,12 +62,41 @@ const Layout: React.FC<LayoutProps> = ({
   onSwitchClub,
 }) => {
   const clubUrl = websiteUrl;
-  const [isClubDropdownOpen, setIsClubDropdownOpen] = useState(false);
-  const clubDropdownRef = useRef<HTMLDivElement>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isTopLeftDropdownOpen, setIsTopLeftDropdownOpen] = useState(false);
+  const topLeftDropdownRef = useRef<HTMLDivElement>(null);
+  const closeTimeoutRef = useRef<any>(null);
+
+  const handleDropdownMouseEnter = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    if (showClubSwitcher) {
+      setIsTopLeftDropdownOpen(true);
+    }
+  };
+
+  const handleDropdownMouseLeave = () => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsTopLeftDropdownOpen(false);
+    }, 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const availableClubs = useMemo(() => {
-    const rawList = userClubs || user?.clubs || [];
+    const rawList = userClubs && userClubs.length > 0
+      ? userClubs
+      : getUserClubs(user);
     if (!Array.isArray(rawList)) return [];
 
     const uniqueSet = new Set<string>();
@@ -89,58 +129,36 @@ const Layout: React.FC<LayoutProps> = ({
       const nameB = String(b.clubName || b.name || b.id || "").toLowerCase();
       return nameA.localeCompare(nameB, 'de', { sensitivity: 'base' });
     });
-  }, [userClubs, user?.clubs]);
+  }, [userClubs, user]);
 
-  const showClubSwitcher = availableClubs.length > 1;
-
-  const handleMouseEnter = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setIsClubDropdownOpen(true);
-  };
-
-  const handleMouseLeave = () => {
-    hoverTimeoutRef.current = setTimeout(() => {
-      setIsClubDropdownOpen(false);
-    }, 250);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-    };
-  }, []);
+  const showClubSwitcher = availableClubs.length > 1 && !!onSwitchClub;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
-        clubDropdownRef.current &&
-        !clubDropdownRef.current.contains(event.target as Node)
+        topLeftDropdownRef.current &&
+        !topLeftDropdownRef.current.contains(event.target as Node)
       ) {
-        setIsClubDropdownOpen(false);
+        setIsTopLeftDropdownOpen(false);
       }
     }
-    if (isClubDropdownOpen) {
+    if (isTopLeftDropdownOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isClubDropdownOpen]);
+  }, [isTopLeftDropdownOpen]);
 
   const getCleanClubName = (clubObj: any, fallbackName?: string) => {
     if (!clubObj) return fallbackName || "Verein";
 
     const candidates = [
+      clubObj.clubName,
+      clubObj.vereinsName,
       clubObj.name,
       clubObj.shortName,
       clubObj.abbreviation,
-      clubObj.clubName,
-      clubObj.vereinsName,
       clubObj.title,
       clubObj.displayName,
     ];
@@ -197,7 +215,7 @@ const Layout: React.FC<LayoutProps> = ({
               />
             )}
             <div className="flex items-baseline gap-1.5">
-              <span className="font-bold text-lg leading-none" style={{ fontFamily: "Georgia, Cambria, 'Times New Roman', Times, serif" }}>
+              <span className="font-bold text-[15.5pt] leading-none" style={{ fontFamily: "Georgia, Cambria, 'Times New Roman', Times, serif" }}>
                 {clubName}
               </span>
               <span className="text-sm font-semibold text-white/90">
@@ -253,215 +271,199 @@ const Layout: React.FC<LayoutProps> = ({
         <div className="absolute inset-0 flex items-center px-4 md:px-6 z-20">
           <div className="flex items-center justify-between w-full gap-4 transition-all duration-300 ease-in-out">
             <div className="flex items-center gap-4 min-w-0 shrink transition-all duration-300 ease-in-out">
-              <AnimatePresence mode="wait">
-                <motion.div 
-                  key={currentVereinsId || logoUrl || clubName}
-                  layout
-                  initial={{ opacity: 0, y: -2 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 2 }}
-                  transition={{
-                    layout: { duration: 0.3, ease: "easeInOut" },
-                    opacity: { duration: 0.2, ease: "easeInOut" },
-                    y: { duration: 0.2, ease: "easeInOut" }
+              <motion.div
+                ref={topLeftDropdownRef}
+                layout
+                transition={{ layout: { duration: 0.3, ease: "easeInOut" } }}
+                className="relative flex items-center shrink-0 transition-all duration-300 ease-in-out"
+                onMouseEnter={handleDropdownMouseEnter}
+                onMouseLeave={handleDropdownMouseLeave}
+              >
+                <div 
+                  onClick={() => {
+                    if (showClubSwitcher && onSwitchClub) {
+                      setIsTopLeftDropdownOpen((prev) => !prev);
+                    } else if (onLogoClick) {
+                      onLogoClick();
+                    }
                   }}
-                  onClick={onLogoClick}
-                  className="flex items-center gap-2 sm:gap-3 shrink-0 max-w-[150px] sm:max-w-[180px] md:max-w-[200px] min-w-0 cursor-pointer hover:opacity-90 transition-all duration-300 ease-in-out"
+                  className="flex items-center gap-2 sm:gap-3 shrink-0 cursor-pointer hover:opacity-80 transition-all duration-300 ease-in-out select-none"
+                  title={showClubSwitcher ? "Verein wechseln" : clubName}
                 >
                   <img
                     src={logoUrl}
                     alt={`${clubName} Logo`}
-                    className="w-7 h-7 md:w-8 md:h-8 object-contain drop-shadow-lg shrink-0"
+                    className="w-7 h-7 md:w-8 md:h-8 object-contain drop-shadow-lg shrink-0 transition-all duration-300 ease-in-out"
                   />
-                  <div className="text-white drop-shadow-2xl truncate min-w-0">
+                  <div className="text-white drop-shadow-2xl truncate min-w-0 flex items-center gap-1.5 transition-all duration-300 ease-in-out">
                     <h2
-                      className="text-xs sm:text-sm md:text-base font-bold tracking-tight leading-none truncate max-w-[200px]"
+                      className="text-sm sm:text-base md:text-[14pt] font-bold tracking-tight leading-none truncate max-w-[200px] sm:max-w-[240px] md:max-w-[280px] transition-all duration-300 ease-in-out"
                       style={{ fontFamily: "Georgia, Cambria, 'Times New Roman', Times, serif" }}
                       title={clubName}
                     >
                       {clubName}
                     </h2>
+                    {showClubSwitcher && (
+                      <ChevronDown className={`w-3.5 h-3.5 text-white/80 transition-transform duration-200 shrink-0 ${isTopLeftDropdownOpen ? "rotate-180" : ""}`} strokeWidth={1.8} />
+                    )}
                   </div>
-                </motion.div>
-              </AnimatePresence>
+                </div>
+
+                {/* Top-Left Club Switcher Dropdown */}
+                <AnimatePresence>
+                  {showClubSwitcher && isTopLeftDropdownOpen && onSwitchClub && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="absolute left-0 top-full pt-1.5 w-60 z-[100] select-none text-slate-800"
+                    >
+                      <div className="bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden">
+                        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                          <span>Verein wechseln</span>
+                          <ArrowLeftRight className="w-3 h-3 text-[var(--color-primary)]" strokeWidth={1.8} />
+                        </div>
+                        <div className="py-1 max-h-60 overflow-y-auto hide-scrollbar">
+                          {availableClubs.map((club: any) => {
+                            const clubId = club.id || club.vereinsId;
+                            const clubNameDisplay = getCleanClubName(club, clubName);
+                            const targetVereinsId = club.vereinsId || club.id;
+                            const isActive = targetVereinsId === currentVereinsId || String(targetVereinsId).toLowerCase().replace(/\s/g, "") === String(currentVereinsId).toLowerCase().replace(/\s/g, "");
+                            return (
+                              <button
+                                key={clubId}
+                                onClick={() => {
+                                  onSwitchClub(targetVereinsId);
+                                  setIsTopLeftDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                                  isActive
+                                    ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold"
+                                    : "text-slate-700 hover:bg-slate-50 font-medium"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className={`w-2 h-2 rounded-full shrink-0 ${isActive ? "bg-[var(--color-primary)]" : "bg-slate-300"}`} />
+                                  <span className="truncate">{clubNameDisplay}</span>
+                                </div>
+                                {isActive && (
+                                  <Check className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" strokeWidth={2} />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+
               {desktopNav && (
-                <div className="flex items-center min-w-0 transition-all duration-300 ease-in-out">{desktopNav}</div>
+                <motion.div 
+                  layout 
+                  transition={{ layout: { duration: 0.3, ease: "easeInOut" } }} 
+                  className="flex items-center min-w-0 transition-all duration-300 ease-in-out"
+                >
+                  {desktopNav}
+                </motion.div>
               )}
             </div>
 
             {/* Compact Greeting & Control Buttons inside the Banner */}
             <div className="flex items-center justify-end drop-shadow-lg text-white select-none shrink-0 gap-3 ml-auto transition-all duration-300 ease-in-out">
               {/* Desktop: Unified Pill Container for Account, Profile and Help - identical to left Nav Bar styling */}
-              <div className="hidden lg:flex bg-white/10 p-0.5 rounded-full shadow-sm gap-0.5 w-auto backdrop-blur-sm border border-white/10 relative items-center transition-all duration-300 ease-in-out">
-                {/* Account Name */}
-                <div 
-                  className="flex items-center gap-1.5 py-1 px-3 text-[10px] font-medium tracking-wide rounded-full text-white/90 transition-all duration-300 ease-in-out"
-                  title={
-                    user.klarname ||
-                    user.displayName ||
-                    (user.firstName || user.lastName
-                      ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                      : user.name)
-                  }
-                >
-                  <i className="fa-solid fa-circle-user text-white/80 text-[10.5px] shrink-0"></i>
-                  <span className="truncate">
-                    {user.klarname ||
-                      user.displayName ||
-                      (user.firstName || user.lastName
-                        ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                        : user.name)}
-                  </span>
-                </div>
+              {(() => {
+                const headerDisplayName = (user.firstName && user.lastName)
+                  ? `${user.firstName} ${user.lastName}`
+                  : (user.firstName || user.lastName)
+                    ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
+                    : (user.displayName || user.username || user.klarname || user.name);
 
-                {/* Club Switcher Badge - ONLY rendered for multi-club members (user.clubs.length > 1) */}
-                {showClubSwitcher && onSwitchClub && (
+                return (
                   <>
-                    <div className="w-[1px] h-3 bg-white/15 mx-0.5 shrink-0" />
-                    <div
-                      className="relative transition-all duration-300 ease-in-out"
-                      ref={clubDropdownRef}
-                      onMouseEnter={handleMouseEnter}
-                      onMouseLeave={handleMouseLeave}
-                    >
-                      <button
-                        onClick={() => setIsClubDropdownOpen((prev) => !prev)}
-                        className="flex items-center gap-1.5 py-1 px-2 text-[10px] tracking-wide rounded-full hover:bg-white/10 text-white/90 hover:text-white transition-all duration-300 ease-in-out cursor-pointer outline-none active:scale-95"
-                        title="Verein wechseln"
-                      >
-                        <i className="fa-solid fa-building-columns text-[10px] text-white/80 shrink-0"></i>
-                        <span className="max-w-[200px] truncate font-bold inline-flex items-center">
-                          <AnimatePresence mode="wait">
-                            <motion.span
-                              key={activeClubName}
-                              initial={{ opacity: 0, y: -2 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: 2 }}
-                              transition={{ duration: 0.2, ease: "easeInOut" }}
-                              className="truncate max-w-[200px] inline-block"
-                            >
-                              {activeClubName}
-                            </motion.span>
-                          </AnimatePresence>
-                        </span>
-                        <i className={`fa-solid fa-chevron-down text-[8.5px] transition-transform duration-200 shrink-0 ${isClubDropdownOpen ? "rotate-180" : ""}`}></i>
-                      </button>
+                    <div className="hidden lg:flex bg-white/10 py-0.5 pl-1 pr-1.5 rounded-full shadow-sm gap-1 w-auto backdrop-blur-sm border border-white/10 relative items-center h-8 transition-all duration-300 ease-in-out">
+                      {/* Interactive Profile Button (Avatar + Name) */}
+                      {onShowProfile ? (
+                        <button
+                          type="button"
+                          onClick={onShowProfile}
+                          className="flex items-center gap-2 pl-1 pr-2.5 h-[26px] text-[10px] font-medium tracking-wide rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-all duration-200 cursor-pointer outline-none select-none group"
+                          title="Mein Profil bearbeiten"
+                        >
+                          <UserAvatar user={user} size="xs" showBorder borderColor="border-white/40" />
+                          <span className="truncate max-w-[120px] group-hover:text-white">
+                            {headerDisplayName}
+                          </span>
+                        </button>
+                      ) : (
+                        <div 
+                          className="flex items-center gap-2 pl-1 pr-2.5 h-[26px] text-[10px] font-medium tracking-wide rounded-full text-white/90"
+                          title={headerDisplayName}
+                        >
+                          <UserAvatar user={user} size="xs" showBorder borderColor="border-white/40" />
+                          <span className="truncate max-w-[120px]">
+                            {headerDisplayName}
+                          </span>
+                        </div>
+                      )}
 
-                      <AnimatePresence>
-                        {isClubDropdownOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -4, scale: 0.97 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -4, scale: 0.97 }}
-                            transition={{ duration: 0.15, ease: "easeOut" }}
-                            className="absolute right-0 top-full pt-1.5 w-56 z-[100] select-none"
-                          >
-                            <div className="bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200/90 py-1.5 overflow-hidden">
-                              <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 flex items-center justify-between">
-                                <span>Verein wechseln</span>
-                                <i className="fa-solid fa-arrow-right-arrow-left text-[9px] text-[var(--color-primary)]"></i>
-                              </div>
-                              <div className="py-1 max-h-60 overflow-y-auto hide-scrollbar">
-                                {availableClubs.map((club: any) => {
-                                  const clubId = club.id || club.vereinsId;
-                                  const clubNameDisplay = getCleanClubName(club, clubName);
-                                  const targetVereinsId = club.vereinsId || club.id;
-                                  const isActive = targetVereinsId === currentVereinsId || String(targetVereinsId).toLowerCase().replace(/\s/g, "") === String(currentVereinsId).toLowerCase().replace(/\s/g, "");
-                                  return (
-                                    <button
-                                      key={clubId}
-                                      onClick={() => {
-                                        onSwitchClub(targetVereinsId);
-                                        setIsClubDropdownOpen(false);
-                                      }}
-                                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                                        isActive
-                                          ? "bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold"
-                                          : "text-slate-700 hover:bg-slate-50 font-medium"
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div className={`w-2 h-2 rounded-full shrink-0 ${isActive ? "bg-[var(--color-primary)]" : "bg-slate-300"}`} />
-                                        <span className="truncate">{clubNameDisplay}</span>
-                                      </div>
-                                      {isActive && (
-                                        <i className="fa-solid fa-check text-xs text-[var(--color-primary)] shrink-0"></i>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                      {/* Vertical Divider */}
+                      {onShowHelp && <div className="w-[1px] h-3.5 bg-white/20 mx-0.5 shrink-0" />}
+
+                      {/* Help Action */}
+                      {onShowHelp && (
+                        <button
+                          type="button"
+                          onClick={onShowHelp}
+                          className="w-[26px] h-[26px] rounded-full flex items-center justify-center transition-colors cursor-pointer outline-none text-white/70 hover:text-white hover:bg-white/10 shrink-0"
+                          title="Hilfe & Funktionen"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Mobile Fallback for Account/Profile/Help */}
+                    <div className="flex lg:hidden items-center gap-1">
+                      <div className="text-[9px] font-medium tracking-wide flex items-center gap-1.5 text-white/95 bg-white/10 px-2.5 py-1 rounded-md border border-white/10 backdrop-blur-sm w-auto">
+                        <UserAvatar user={user} size="xs" />
+                        <span className="truncate max-w-[100px]">
+                          {headerDisplayName}
+                        </span>
+                      </div>
+                      {onShowProfile && (
+                        <button
+                          onClick={onShowProfile}
+                          className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
+                          title="Mein Profil"
+                        >
+                          <UserCog className="w-3.5 h-3.5" strokeWidth={1.8} />
+                        </button>
+                      )}
+                      {onShowHelp && (
+                        <button
+                          onClick={onShowHelp}
+                          className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
+                          title="Hilfe & Funktionen"
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                        </button>
+                      )}
                     </div>
                   </>
-                )}
-
-                {/* Vertical Divider */}
-                <div className="w-[1px] h-3 bg-white/15 mx-0.5" />
-
-                {onShowProfile && (
-                  <button
-                    onClick={onShowProfile}
-                    className="flex items-center justify-center py-1 px-3 text-[10px] font-medium tracking-wide rounded-full transition-colors cursor-pointer outline-none text-white/70 hover:text-white hover:bg-white/10"
-                    title="Mein Profil"
-                  >
-                    <i className="fa-solid fa-user-gear text-[11px]"></i>
-                  </button>
-                )}
-                {onShowHelp && (
-                  <button
-                    onClick={onShowHelp}
-                    className="flex items-center justify-center py-1 px-3 text-[10px] font-medium tracking-wide rounded-full transition-colors cursor-pointer outline-none text-white/70 hover:text-white hover:bg-white/10"
-                    title="Hilfe & Funktionen"
-                  >
-                    <i className="fa-solid fa-circle-question text-[11px]"></i>
-                  </button>
-                )}
-              </div>
-
-              {/* Mobile Fallback for Account/Profile/Help */}
-              <div className="flex lg:hidden items-center gap-1">
-                <div className="text-[9px] font-medium tracking-wide flex items-center gap-1 text-white/95 bg-white/10 px-4 py-1 rounded-md border border-white/10 backdrop-blur-sm w-auto">
-                  <i className="fa-solid fa-circle-user text-white/80 text-[10px]"></i>
-                  <span className="truncate">
-                    {user.klarname ||
-                      user.displayName ||
-                      (user.firstName || user.lastName
-                        ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                        : user.name)}
-                  </span>
-                </div>
-                {onShowProfile && (
-                  <button
-                    onClick={onShowProfile}
-                    className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
-                    title="Mein Profil"
-                  >
-                    <i className="fa-solid fa-user-gear text-[10px]"></i>
-                  </button>
-                )}
-                {onShowHelp && (
-                  <button
-                    onClick={onShowHelp}
-                    className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
-                    title="Hilfe & Funktionen"
-                  >
-                    <i className="fa-solid fa-circle-question text-[10px]"></i>
-                  </button>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Logout Button */}
               <button
                 onClick={onLogout}
-                className="bg-[var(--color-accent)] hover:bg-[color-mix(in srgb, var(--color-accent) 80%, black)] transition-all px-3 h-7 lg:h-[26px] rounded-lg text-white border border-white/20 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-[10px] font-medium tracking-wide shrink-0"
+                className="bg-[var(--color-accent)] hover:bg-[color-mix(in srgb, var(--color-accent) 80%, black)] transition-all px-4 h-7 lg:h-8 rounded-lg lg:rounded-full text-white border border-white/20 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-[10px] font-medium tracking-wide shrink-0"
                 title="Abmelden"
               >
                 <span className="hidden xl:inline">Abmelden</span>
-                <i className="fa-solid fa-right-from-bracket text-[10px]"></i>
+                <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.8} />
               </button>
             </div>
           </div>

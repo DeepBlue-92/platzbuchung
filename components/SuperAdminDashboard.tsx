@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import SuperAdminLeagueEligibilityList from "./SuperAdminLeagueEligibilityList";
+import SuperAdminPointsManagement from "./SuperAdminPointsManagement";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import {
@@ -37,17 +39,26 @@ import {
   ensureLeagueBaseRules,
   saveDynamicLeague,
   toggleDynamicLeagueStatus,
+  reorderDynamicLeagues,
+  archiveDynamicLeague,
+  restoreDynamicLeague,
+  resetLeagueTestData,
+  getLeagueMatchCount,
 } from "../services/league";
 import ClubBackupsPanel from "./ClubBackupsPanel";
 import { LeagueRuleEditor } from "./LeagueRuleEditor";
 import { RichTextRenderer, RichTextEditorToolbar } from "./RichText";
 import { motion, AnimatePresence } from "motion/react";
 import SuperAdminUserPurgeTab from "./SuperAdminUserPurgeTab";
+import SuperAdminPendingMatchesWidget from "./SuperAdminPendingMatchesWidget";
+import { exportLeagueToExcel } from "../services/leagueExport";
 
 export default function SuperAdminDashboard({
+  currentUser,
   onLogout,
   onLoginAs,
 }: {
+  currentUser: User;
   onLogout: () => void;
   onLoginAs?: (user: User) => void;
 }) {
@@ -122,15 +133,34 @@ export default function SuperAdminDashboard({
   const [dynamicLeaguesLoading, setDynamicLeaguesLoading] = useState<boolean>(true);
   const [isLeagueModalOpen, setIsLeagueModalOpen] = useState<boolean>(false);
   const [editingLeague, setEditingLeague] = useState<DynamicLeague | null>(null);
-  const [leagueFormData, setLeagueFormData] = useState<{ id?: string; name: string; description: string; active: boolean }>({
+  const [leagueFormData, setLeagueFormData] = useState<{
+    id?: string;
+    name: string;
+    description: string;
+    active: boolean;
+    allowedGenders?: ("m" | "w" | "u")[];
+    minAge?: number | null;
+    maxAge?: number | null;
+  }>({
     name: "",
     description: "",
     active: true,
+    allowedGenders: ["m", "w", "u"],
+    minAge: null,
+    maxAge: null,
   });
   const [savingLeague, setSavingLeague] = useState<boolean>(false);
   const [leagueNotification, setLeagueNotification] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<string>("all");
+  const [leagueStatusFilter, setLeagueStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [managingRulesLeague, setManagingRulesLeague] = useState<{ id: string; name: string } | null>(null);
+  const [leagueMatchCounts, setLeagueMatchCounts] = useState<Record<string, number>>({});
+  const [leagueToArchive, setLeagueToArchive] = useState<DynamicLeague | null>(null);
+  const [archiveLeagueLoading, setArchiveLeagueLoading] = useState<boolean>(false);
+  const [leagueToResetTestData, setLeagueToResetTestData] = useState<DynamicLeague | null>(null);
+  const [resetConfirmText, setResetConfirmText] = useState<string>("");
+  const [resetTestDataLoading, setResetTestDataLoading] = useState<boolean>(false);
+  const [exportingLeagueId, setExportingLeagueId] = useState<string | null>(null);
 
   // --- Hobbyliga Config States ---
   const [configVersions, setConfigVersions] = useState<LeagueConfigVersion[]>([]);
@@ -155,38 +185,57 @@ export default function SuperAdminDashboard({
     type: "success" | "error";
   } | null>(null);
 
+  const loadConfigVersions = useCallback(async () => {
+    setConfigVersionsLoading(true);
+    try {
+      let versions = await getLeagueConfigVersions();
+      setConfigVersions(versions || []);
+    } catch (err) {
+      console.error("Error loading league config versions:", err);
+    } finally {
+      setConfigVersionsLoading(false);
+    }
+  }, []);
+
   // Subscribe to dynamic leagues from database
   useEffect(() => {
     setDynamicLeaguesLoading(true);
     const unsubscribe = listenToDynamicLeagues((leagues) => {
-      setDynamicLeagues(leagues);
+      setDynamicLeagues(leagues || []);
       setDynamicLeaguesLoading(false);
-      ensureLeagueBaseRules(leagues)
-        .then(loadConfigVersions)
+      ensureLeagueBaseRules(leagues || [])
+        .then(() => loadConfigVersions())
         .catch((err) => console.error("Fehler beim Anlegen der Liga-Basiswerte:", err));
+    });
+    return () => unsubscribe();
+  }, [loadConfigVersions]);
+
+  // Real-time listener for league match counts
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, LEAGUE_MATCHES_COLLECTION), (snap) => {
+      const counts: Record<string, number> = {};
+      snap.forEach((d) => {
+        const match = d.data();
+        const lId = match.leagueId || "open_mixed";
+        counts[lId] = (counts[lId] || 0) + 1;
+      });
+      setLeagueMatchCounts(counts);
+    }, (err) => {
+      console.warn("Could not listen to league matches:", err);
     });
     return () => unsubscribe();
   }, []);
 
   const availableLeagues = useMemo(() => {
-    if (dynamicLeagues.length > 0) {
-      return dynamicLeagues;
-    }
-    const map = new Map<string, { id: string; name: string; active?: boolean }>();
-    DEFAULT_DYNAMIC_LEAGUES.forEach((l) => {
-      map.set(l.id, { id: l.id, name: l.name, active: l.active });
+    return dynamicLeagues;
+  }, [dynamicLeagues]);
+
+  const validConfigVersions = useMemo(() => {
+    return configVersions.filter(ver => {
+      if (ver.is_base_rule && (!ver.leagueId || ver.leagueId === "base_rule_20000101")) return true;
+      return dynamicLeagues.some(l => l.id === ver.leagueId);
     });
-    clubs.forEach((c) => {
-      if (c?.leagueSettings?.leagues && Array.isArray(c.leagueSettings.leagues)) {
-        c.leagueSettings.leagues.forEach((l: any) => {
-          if (l && l.id && l.name) {
-            map.set(l.id, { id: l.id, name: l.name, active: l.active !== false });
-          }
-        });
-      }
-    });
-    return Array.from(map.values());
-  }, [dynamicLeagues, clubs]);
+  }, [configVersions, dynamicLeagues]);
 
   const handleOpenNewLeagueModal = () => {
     setEditingLeague(null);
@@ -194,6 +243,9 @@ export default function SuperAdminDashboard({
       name: "",
       description: "",
       active: true,
+      allowedGenders: ["m", "w", "u"],
+      minAge: null,
+      maxAge: null,
     });
     setIsLeagueModalOpen(true);
   };
@@ -205,6 +257,9 @@ export default function SuperAdminDashboard({
       name: league.name,
       description: league.description || "",
       active: league.active !== false,
+      allowedGenders: league.allowedGenders || ["m", "w", "u"],
+      minAge: league.minAge !== undefined && league.minAge !== null ? league.minAge : null,
+      maxAge: league.maxAge !== undefined && league.maxAge !== null ? league.maxAge : null,
     });
     setIsLeagueModalOpen(true);
   };
@@ -214,11 +269,31 @@ export default function SuperAdminDashboard({
     if (!leagueFormData.name.trim()) return;
     setSavingLeague(true);
     try {
+      const minAge =
+        leagueFormData.minAge !== undefined &&
+        leagueFormData.minAge !== null &&
+        (leagueFormData.minAge as any) !== "" &&
+        !isNaN(Number(leagueFormData.minAge))
+          ? Number(leagueFormData.minAge)
+          : null;
+
+      const maxAge =
+        leagueFormData.maxAge !== undefined &&
+        leagueFormData.maxAge !== null &&
+        (leagueFormData.maxAge as any) !== "" &&
+        !isNaN(Number(leagueFormData.maxAge))
+          ? Number(leagueFormData.maxAge)
+          : null;
+
       await saveDynamicLeague({
         id: editingLeague?.id || undefined,
         name: leagueFormData.name.trim(),
-        description: leagueFormData.description.trim(),
+        description: leagueFormData.description ? leagueFormData.description.trim() : "",
         active: leagueFormData.active,
+        allowedGenders: leagueFormData.allowedGenders || ["m", "w", "u"],
+        minAge,
+        maxAge,
+        displayOrder: editingLeague?.displayOrder,
       });
       setIsLeagueModalOpen(false);
       setLeagueNotification({
@@ -253,6 +328,215 @@ export default function SuperAdminDashboard({
         type: "error",
       });
     }
+  };
+
+  const handleMoveLeagueOrder = async (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= dynamicLeagues.length) return;
+
+    const newLeagues = [...dynamicLeagues];
+    const [moved] = newLeagues.splice(index, 1);
+    newLeagues.splice(targetIndex, 0, moved);
+
+    const reorderedWithOrder = newLeagues.map((l, idx) => ({ ...l, displayOrder: idx }));
+    setDynamicLeagues(reorderedWithOrder);
+
+    try {
+      await reorderDynamicLeagues(reorderedWithOrder);
+      setLeagueNotification({
+        text: `Priorität aktualisiert: "${moved.name}" ist jetzt auf Rang #${targetIndex + 1}.`,
+        type: "success",
+      });
+      setTimeout(() => setLeagueNotification(null), 3000);
+    } catch (err: any) {
+      console.error("Error reordering leagues:", err);
+      setLeagueNotification({
+        text: `Fehler beim Ändern der Reihenfolge: ${err.message || err}`,
+        type: "error",
+      });
+    }
+  };
+
+  const handleDeactivateAndKeepModal = async (league: DynamicLeague) => {
+    try {
+      await toggleDynamicLeagueStatus(league.id, false);
+      if (leagueToResetTestData && leagueToResetTestData.id === league.id) {
+        setLeagueToResetTestData({ ...leagueToResetTestData, active: false, isActive: false, status: "inactive" });
+      }
+      setLeagueNotification({
+        text: `Liga "${league.name}" wurde auf Inaktiv gesetzt. Die Löschsperre ist jetzt aufgehoben.`,
+        type: "success",
+      });
+      setTimeout(() => setLeagueNotification(null), 4000);
+    } catch (err: any) {
+      console.error("Error setting league to inactive:", err);
+      setLeagueNotification({
+        text: `Fehler beim Inaktivieren der Liga: ${err.message || err}`,
+        type: "error",
+      });
+      setTimeout(() => setLeagueNotification(null), 4000);
+    }
+  };
+
+  const handleConfirmArchiveLeague = async () => {
+    if (!leagueToArchive) return;
+    setArchiveLeagueLoading(true);
+    try {
+      await archiveDynamicLeague(leagueToArchive.id);
+      setLeagueNotification({
+        text: `Liga "${leagueToArchive.name}" wurde archiviert (inaktiviert). Zugeordnete Profile wurden freigegeben.`,
+        type: "success",
+      });
+      setTimeout(() => setLeagueNotification(null), 4000);
+      setLeagueToArchive(null);
+    } catch (err: any) {
+      console.error("Error archiving league:", err);
+      setLeagueNotification({
+        text: `Fehler beim Archivieren: ${err.message || err}`,
+        type: "error",
+      });
+      setTimeout(() => setLeagueNotification(null), 4000);
+    } finally {
+      setArchiveLeagueLoading(false);
+    }
+  };
+
+  const handleRestoreLeague = async (league: DynamicLeague) => {
+    try {
+      await restoreDynamicLeague(league.id);
+      setLeagueNotification({
+        text: `Liga "${league.name}" wurde erfolgreich wiederhergestellt (aktiviert).`,
+        type: "success",
+      });
+      setTimeout(() => setLeagueNotification(null), 4000);
+    } catch (err: any) {
+      console.error("Error restoring league:", err);
+      setLeagueNotification({
+        text: `Fehler beim Wiederherstellen: ${err.message || err}`,
+        type: "error",
+      });
+      setTimeout(() => setLeagueNotification(null), 4000);
+    }
+  };
+
+  const handleConfirmResetTestData = async () => {
+    if (!leagueToResetTestData) return;
+    if (leagueToResetTestData.active) {
+      setLeagueNotification({
+        text: "Löschsperre aktiv: Die Liga muss vor dem Testdaten-Reset zuerst inaktiviert werden.",
+        type: "error",
+      });
+      return;
+    }
+    if (resetConfirmText.trim().toLowerCase() !== "löschen") {
+      setLeagueNotification({
+        text: "Bitte tippe zur Bestätigung exakt das Wort 'löschen' ein.",
+        type: "error",
+      });
+      return;
+    }
+    setResetTestDataLoading(true);
+    try {
+      const res = await resetLeagueTestData(leagueToResetTestData.id, leagueToResetTestData.name);
+      setLeagueNotification({
+        text: `Testdaten für "${leagueToResetTestData.name}" wurden zurückgesetzt (${res.matchesDeleted} Matches, ${res.profilesReset} Profile). Ein automatischer Sicherheits-Snapshot (${res.backupName}) wurde im Backup-Bereich gesichert.`,
+        type: "success",
+      });
+      setTimeout(() => setLeagueNotification(null), 6000);
+      
+      // Update local match counts to 0
+      setLeagueMatchCounts(prev => ({
+        ...prev,
+        [leagueToResetTestData.id]: 0
+      }));
+      
+      setLeagueToResetTestData(null);
+      setResetConfirmText("");
+    } catch (err: any) {
+      console.error("Error resetting league test data:", err);
+      setLeagueNotification({
+        text: err.message || "Fehler beim Zurücksetzen der Testdaten.",
+        type: "error",
+      });
+      setTimeout(() => setLeagueNotification(null), 5000);
+    } finally {
+      setResetTestDataLoading(false);
+    }
+  };
+
+  const handleExportLeague = async (league: DynamicLeague) => {
+    setExportingLeagueId(league.id);
+    try {
+      const uMap: Record<string, any> = {};
+      Object.values(usersByClub).flat().forEach((u) => {
+        if (u && u.id) uMap[u.id] = u;
+      });
+      await exportLeagueToExcel({
+        leagueId: league.id,
+        leagueName: league.name,
+        usersMap: uMap,
+      });
+      setLeagueNotification({
+        text: `Excel-Export für Liga "${league.name}" wurde erfolgreich erstellt und heruntergeladen!`,
+        type: "success",
+      });
+      setTimeout(() => setLeagueNotification(null), 4000);
+    } catch (err: any) {
+      console.error("Error exporting league to Excel:", err);
+      setLeagueNotification({
+        text: `Fehler beim Excel-Export: ${err.message || err}`,
+        type: "error",
+      });
+      setTimeout(() => setLeagueNotification(null), 5000);
+    } finally {
+      setExportingLeagueId(null);
+    }
+  };
+
+  const getLeaguePermissionText = (league: DynamicLeague) => {
+    const genders = league.allowedGenders;
+    const nameNorm = (league.name || "").toLowerCase();
+    const idNorm = (league.id || "").toLowerCase();
+    const minAge = league.minAge;
+    const maxAge = league.maxAge;
+
+    let genderText = "Offen";
+
+    if (genders && genders.length > 0) {
+      const hasM = genders.includes("m");
+      const hasW = genders.includes("w");
+      const hasU = genders.includes("u");
+
+      if ((hasM && hasW) || hasU || genders.length >= 3) {
+        genderText = "Offen";
+      } else if (hasM && !hasW) {
+        genderText = "Herren";
+      } else if (hasW && !hasM) {
+        genderText = "Damen";
+      }
+    } else if (idNorm.includes("damen") || nameNorm.includes("damen") || nameNorm.includes("frauen")) {
+      genderText = "Damen";
+    } else if (idNorm.includes("herren") || nameNorm.includes("herren") || nameNorm.includes("männer")) {
+      genderText = "Herren";
+    }
+
+    const hasMinAge = typeof minAge === "number" && !isNaN(minAge);
+    const hasMaxAge = typeof maxAge === "number" && !isNaN(maxAge);
+
+    let ageText = "Alle Alter";
+    if (hasMinAge && hasMaxAge) {
+      ageText = `${minAge}–${maxAge} J.`;
+    } else if (hasMinAge) {
+      ageText = `ab ${minAge} J.`;
+    } else if (hasMaxAge) {
+      ageText = `bis ${maxAge} J.`;
+    }
+
+    return (
+      <span className="text-slate-600 text-xs">
+        {genderText} &bull; {ageText}
+      </span>
+    );
   };
   const [usersByClub, setUsersByClub] = useState<Record<string, User[]>>({});
   const [membershipsByClub, setMembershipsByClub] = useState<Record<string, Mitgliedschaft[]>>({});
@@ -302,24 +586,6 @@ export default function SuperAdminDashboard({
     }
   }, [editClubModalClub]);
 
-  const [globalLeagueEnabled, setGlobalLeagueEnabledState] = useState(true);
-
-  const loadConfigVersions = async () => {
-    setConfigVersionsLoading(true);
-    try {
-      let versions = await getLeagueConfigVersions();
-      setConfigVersions(versions);
-    } catch (err) {
-      console.error("Error loading league config versions:", err);
-    } finally {
-      setConfigVersionsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadConfigVersions();
-  }, []);
-
   const handleOpenNewConfigModal = () => {
     setEditingConfigId(null);
     setConfigFormData({
@@ -358,7 +624,7 @@ export default function SuperAdminDashboard({
         base_points_win: configFormData.base_points_win,
         base_points_loss: configFormData.base_points_loss,
         inactivity_deduction_per_week: configFormData.inactivity_deduction_per_week,
-        logistic_factor: configFormData.logistic_factor,
+        logistic_factor: Math.round((parseFloat(String(configFormData.logistic_factor).replace(',', '.')) || 0.05) * 10000) / 10000,
         max_bonus: configFormData.max_bonus,
       });
 
@@ -413,9 +679,6 @@ export default function SuperAdminDashboard({
         setChangelogSavedText(updates.text || "");
         setChangelogSavedBy(updates.updatedBy || "System");
         setChangelogLastUpdated(updates.lastUpdated || "");
-        if (updates.globalLeagueEnabled !== undefined) {
-          setGlobalLeagueEnabledState(updates.globalLeagueEnabled);
-        }
       }
     });
     return () => unsub();
@@ -469,14 +732,7 @@ export default function SuperAdminDashboard({
     });
   }, [clubs]);
 
-  // Background check and trigger for automated weekly global backup
-  useEffect(() => {
-    checkAndPerformGlobalWeeklyBackup().catch((err) => {
-      console.error("Automatic weekly global backup check failed:", err);
-    });
-  }, []);
-
-  // Listen to members dynamically when a club is selected
+  // Real-time listener for club members
   useEffect(() => {
     if (!selectedClubId) {
       setClubMembers([]);
@@ -489,60 +745,82 @@ export default function SuperAdminDashboard({
     return () => unsub();
   }, [selectedClubId]);
 
+  const activeClubIdsKey = useMemo(() => {
+    return clubs
+      .filter(
+        (c) =>
+          c.vereinsId !== "super-admin" &&
+          c.vereinsId !== "system" &&
+          c.geloescht !== true,
+      )
+      .map((c) => c.vereinsId)
+      .sort()
+      .join(",");
+  }, [clubs]);
+
   // Subscribe to users for ALL clubs to show member counts
   useEffect(() => {
-    const activeClubs = clubs.filter(
-      (c) =>
-        c.vereinsId !== "super-admin" &&
-        c.vereinsId !== "system" &&
-        c.geloescht !== true,
-    );
+    if (!activeClubIdsKey) {
+      setUsersByClub({});
+      setMembershipsByClub({});
+      return;
+    }
+
+    const clubIdList = activeClubIdsKey.split(",").filter(Boolean);
     const unsubscribes: (() => void)[] = [];
 
-    setUsersByClub({});
-
-    activeClubs.forEach((club) => {
+    clubIdList.forEach((clubVereinsId) => {
       try {
-        const unsubU = listenToUsers(club.vereinsId, (usersRec) => {
+        const unsubU = listenToUsers(clubVereinsId, (usersRec) => {
           setUsersByClub((prev) => ({
             ...prev,
-            [club.vereinsId]: Object.values(usersRec),
+            [clubVereinsId]: Object.values(usersRec),
           }));
         });
         unsubscribes.push(unsubU);
 
-        const unsubM = listenToMemberships(club.vereinsId, (membershipsList) => {
+        const unsubM = listenToMemberships(clubVereinsId, (membershipsList) => {
           setMembershipsByClub((prev) => ({
             ...prev,
-            [club.vereinsId]: membershipsList,
+            [clubVereinsId]: membershipsList,
           }));
         });
         unsubscribes.push(unsubM);
       } catch (err) {
-        console.error(`Error subscribing for ${club.vereinsId}:`, err);
+        console.error(`Error subscribing for ${clubVereinsId}:`, err);
       }
     });
 
     return () => {
       unsubscribes.forEach((unsub) => unsub());
     };
-  }, [clubs]);
+  }, [activeClubIdsKey]);
 
   // Aggregate all unique persons and all memberships across clubs
   const allPersons = useMemo(() => {
     const map = new Map<string, Person>();
-    Object.values(usersByClub).forEach((userList: any) => {
-      userList.forEach((u) => {
-        if (!map.has(u.id)) {
-          map.set(u.id, u);
-        }
+    try {
+      Object.values(usersByClub || {}).forEach((userList: any) => {
+        if (!Array.isArray(userList)) return;
+        userList.forEach((u) => {
+          if (u && u.id && !map.has(u.id)) {
+            map.set(u.id, u);
+          }
+        });
       });
-    });
+    } catch (err) {
+      console.error("Error aggregating allPersons:", err);
+    }
     return Array.from(map.values());
   }, [usersByClub]);
 
   const allMemberships = useMemo(() => {
-    return Object.values(membershipsByClub).flat();
+    try {
+      return Object.values(membershipsByClub || {}).flat().filter(Boolean);
+    } catch (err) {
+      console.error("Error aggregating allMemberships:", err);
+      return [];
+    }
   }, [membershipsByClub]);
 
   // Subscribe to all league matches and global backups for SuperAdmin Purge Tab
@@ -569,19 +847,26 @@ export default function SuperAdminDashboard({
   }, [allPersons, allMemberships, ignoredPairs]);
 
   const filteredDuplicates = useMemo(() => {
-    let filtered = allSystemDuplicates;
+    let filtered = allSystemDuplicates || [];
 
     if (duplicateFilterLevel === "very_high") {
-      filtered = filtered.filter((d) => d.score >= 85);
+      filtered = filtered.filter((d) => d && d.score >= 85);
     } else if (duplicateFilterLevel === "high") {
-      filtered = filtered.filter((d) => d.score >= 65 && d.score < 85);
+      filtered = filtered.filter((d) => d && d.score >= 65 && d.score < 85);
     } else if (duplicateFilterLevel === "medium") {
-      filtered = filtered.filter((d) => d.score >= 40 && d.score < 65);
+      filtered = filtered.filter((d) => d && d.score >= 40 && d.score < 65);
     }
 
     if (duplicateTenantFilter !== "all") {
       filtered = filtered.filter((pair) => {
-        const isIntraTenant = pair.membershipsA.some(ma => pair.membershipsB.some(mb => ma.vereinId === mb.vereinId)) || (pair.personA.vereinsId && pair.personB.vereinsId && pair.personA.vereinsId === pair.personB.vereinsId);
+        if (!pair || !pair.personA || !pair.personB) return false;
+        const msA = Array.isArray(pair.membershipsA) ? pair.membershipsA : [];
+        const msB = Array.isArray(pair.membershipsB) ? pair.membershipsB : [];
+        const isIntraTenant =
+          msA.some((ma) => msB.some((mb) => ma && mb && ma.vereinId === mb.vereinId)) ||
+          (pair.personA.vereinsId &&
+            pair.personB.vereinsId &&
+            pair.personA.vereinsId === pair.personB.vereinsId);
         if (duplicateTenantFilter === "intra") return isIntraTenant;
         if (duplicateTenantFilter === "cross") return !isIntraTenant;
         return true;
@@ -1043,8 +1328,8 @@ export default function SuperAdminDashboard({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center py-10 px-4 md:px-8">
-      <div className="w-full max-w-7xl bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200 p-8">
+    <div className="min-h-screen w-full bg-slate-50 relative z-50 flex flex-col items-center py-6 sm:py-10 px-4 md:px-8 top-0 mt-0">
+      <div className="w-full max-w-7xl bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200 p-6 md:p-8">
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-100 pb-6 gap-4">
           <div>
@@ -1087,15 +1372,42 @@ export default function SuperAdminDashboard({
             Allgemein
           </button>
           <button
-            onClick={() => setActiveTab("backup")}
+            onClick={() => setActiveTab("accounts")}
             className={`flex-1 shrink-0 px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === "backup"
+              activeTab === "accounts"
                 ? "bg-[#1b4332] text-white shadow-sm border border-[#1b4332]"
                 : "text-slate-500 hover:text-slate-800 hover:bg-slate-200"
             }`}
           >
-            <i className="fa-solid fa-clock-rotate-left text-[11px]"></i>
-            Backup
+            <i className="fa-solid fa-user-shield text-[11px]"></i>
+            Benutzer
+          </button>
+          <button
+            onClick={() => setActiveTab("duplicates")}
+            className={`flex-1 shrink-0 px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === "duplicates"
+                ? "bg-[#1b4332] text-white shadow-sm border border-[#1b4332]"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-200"
+            }`}
+          >
+            <i className="fa-solid fa-users text-[11px]"></i>
+            Dubletten
+            {allSystemDuplicates.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-[9px] font-black rounded-full bg-amber-500 text-white">
+                {allSystemDuplicates.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("hobbyliga")}
+            className={`flex-1 shrink-0 px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === "hobbyliga"
+                ? "bg-[#1b4332] text-white shadow-sm border border-[#1b4332]"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-200"
+            }`}
+          >
+            <i className="fa-solid fa-trophy text-[11px]"></i>
+            Liga
           </button>
           <button
             onClick={() => setActiveTab("recycle-bin")}
@@ -1120,42 +1432,15 @@ export default function SuperAdminDashboard({
             Changelog
           </button>
           <button
-            onClick={() => setActiveTab("duplicates")}
+            onClick={() => setActiveTab("backup")}
             className={`flex-1 shrink-0 px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === "duplicates"
+              activeTab === "backup"
                 ? "bg-[#1b4332] text-white shadow-sm border border-[#1b4332]"
                 : "text-slate-500 hover:text-slate-800 hover:bg-slate-200"
             }`}
           >
-            <i className="fa-solid fa-users text-[11px]"></i>
-            Mögliche Dubletten
-            {allSystemDuplicates.length > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 text-[9px] font-black rounded-full bg-amber-500 text-white">
-                {allSystemDuplicates.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("hobbyliga")}
-            className={`flex-1 shrink-0 px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === "hobbyliga"
-                ? "bg-[#1b4332] text-white shadow-sm border border-[#1b4332]"
-                : "text-slate-500 hover:text-slate-800 hover:bg-slate-200"
-            }`}
-          >
-            <i className="fa-solid fa-trophy text-[11px] text-amber-400"></i>
-            Hobbyliga-Einstellungen
-          </button>
-          <button
-            onClick={() => setActiveTab("accounts")}
-            className={`flex-1 shrink-0 px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === "accounts"
-                ? "bg-[#1b4332] text-white shadow-sm border border-[#1b4332]"
-                : "text-slate-500 hover:text-slate-800 hover:bg-slate-200"
-            }`}
-          >
-            <i className="fa-solid fa-user-shield text-[11px] text-emerald-400"></i>
-            Benutzer-Verwaltung & Purge
+            <i className="fa-solid fa-clock-rotate-left text-[11px]"></i>
+            Backup
           </button>
         </div>
 
@@ -1171,36 +1456,6 @@ export default function SuperAdminDashboard({
           >
             {activeTab === "allgemein" ? (
               <div className="space-y-6">
-                {/* Global Module Settings */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <i className="fa-solid fa-bolt text-amber-600 text-lg"></i>
-                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">
-                        Hobby-Liga (Globales System-Modul)
-                      </h3>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium mt-1">
-                      Der Superadministrator schaltet die Hobby-Liga global für alle Vereine gleichzeitig frei oder sperrt sie. Damit das Modul in einem Verein aktiv ist, muss es global aktiviert sein UND vom jeweiligen Vereins-Administrator in seinen Modul-Einstellungen eingeschaltet werden.
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm cursor-pointer shrink-0 hover:border-[#1b4332] transition-colors">
-                    <span className="text-xs font-bold text-slate-700 uppercase">
-                      {globalLeagueEnabled ? "Global Aktiviert" : "Global Deaktiviert"}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={globalLeagueEnabled}
-                      onChange={async (e) => {
-                        const val = e.target.checked;
-                        setGlobalLeagueEnabledState(val);
-                        await setGlobalLeagueEnabled(val);
-                      }}
-                      className="w-5 h-5 accent-[#1b4332] cursor-pointer"
-                    />
-                  </label>
-                </div>
-
                 <div className="overflow-x-auto rounded-xl border border-slate-200">
                   <table className="w-full text-left border-collapse">
                   <thead>
@@ -1238,7 +1493,19 @@ export default function SuperAdminDashboard({
                               {club.vereinsId}
                             </td>
                             <td className="px-6 py-4 font-medium text-slate-800">
-                              {club.clubName}
+                              <div className="flex items-center gap-2">
+                                <span>{club.clubName}</span>
+                                {club.modules?.league === true ? (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                    Liga aktiv
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                    Liga pausiert
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-center font-bold text-slate-600">
                               {usersByClub[club.vereinsId]?.length || 0}
@@ -1576,7 +1843,7 @@ export default function SuperAdminDashboard({
                           value={changelogText}
                           onChange={(e) => setChangelogText(e.target.value)}
                           placeholder="# Version 2.0.0\n- Neues Modul 'System-Updates' hinzugefügt\n- Fehler bei Dirty-Save-Checks behoben"
-                          className="w-full h-96 bg-white border-2 border-t-0 border-slate-200 rounded-b-2xl p-4 text-xs font-bold font-mono text-slate-700 focus:outline-none focus:border-blue-500 hover:border-slate-300 transition-colors resize-y leading-relaxed"
+                          className="w-full h-96 bg-white border-2 border-t-0 border-slate-200 rounded-b-2xl p-4 text-xs font-mono text-slate-700 focus:outline-none focus:border-blue-500 hover:border-slate-300 transition-colors resize-y leading-relaxed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                       </div>
 
@@ -1668,7 +1935,7 @@ export default function SuperAdminDashboard({
                         <select
                           value={duplicateFilterLevel}
                           onChange={(e) => setDuplicateFilterLevel(e.target.value)}
-                          className="bg-white border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#1b4332]"
+                          className="bg-white border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-[#1b4332] font-sans font-medium"
                         >
                           <option value="all">Alle Relevanzstufen ({allSystemDuplicates.length})</option>
                           <option value="very_high">Sehr hohe Übereinstimmung (≥85%)</option>
@@ -1684,7 +1951,7 @@ export default function SuperAdminDashboard({
                         <select
                           value={duplicateTenantFilter}
                           onChange={(e) => setDuplicateTenantFilter(e.target.value as "all" | "intra" | "cross")}
-                          className="bg-white border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#1b4332]"
+                          className="bg-white border-2 border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:border-[#1b4332] font-sans font-medium"
                         >
                           <option value="all">Alle Typen</option>
                           <option value="intra">Intra-Tenant (Selber Verein)</option>
@@ -1813,7 +2080,7 @@ export default function SuperAdminDashboard({
                                     type="checkbox"
                                     checked={isSelected}
                                     onChange={() => toggleSelectPair(pair.id)}
-                                    className="w-4 h-4 accent-[#1b4332] rounded cursor-pointer"
+                                    className="w-4 h-4 accent-[#1b4332] rounded cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
                                   <span>{isSelected ? "Ausgewählt" : "Auswählen"}</span>
                                 </label>
@@ -1879,9 +2146,7 @@ export default function SuperAdminDashboard({
                               >
                                 <div className="flex items-center justify-between font-bold text-slate-700 border-b border-slate-200/60 pb-2 mb-2">
                                   <div className="flex items-center gap-2">
-                                    <input 
-                                      type="radio" 
-                                      className="w-4 h-4 accent-[#1b4332]"
+                                    <input className="w-4 h-4 accent-[#1b4332] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       checked={(pairMergeTargets[pair.id] || pair.personA.id) === pair.personA.id}
                                       onChange={() => setPairMergeTargets(prev => ({ ...prev, [pair.id]: pair.personA.id }))}
                                     />
@@ -1917,9 +2182,7 @@ export default function SuperAdminDashboard({
                               >
                                 <div className="flex items-center justify-between font-bold text-slate-700 border-b border-slate-200/60 pb-2 mb-2">
                                   <div className="flex items-center gap-2">
-                                    <input 
-                                      type="radio" 
-                                      className="w-4 h-4 accent-[#1b4332]"
+                                    <input className="w-4 h-4 accent-[#1b4332] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                       checked={(pairMergeTargets[pair.id] || pair.personA.id) === pair.personB.id}
                                       onChange={() => setPairMergeTargets(prev => ({ ...prev, [pair.id]: pair.personB.id }))}
                                     />
@@ -1978,6 +2241,13 @@ export default function SuperAdminDashboard({
             ) : activeTab === "hobbyliga" ? (
               /* HOBBYLIGA-EINSTELLUNGEN (SUPER-ADMIN EFFECTIVE DATE HISTORISIERUNG & DYNAMISCHE LIGEN) */
               <div className="space-y-6 font-sans">
+                {/* 0. OFFENE ERGEBNIS-EINGABEN (WIDGET) */}
+                <SuperAdminPendingMatchesWidget 
+                  allMatches={allLeagueMatches}
+                  allPersons={allPersons}
+                  currentUser={currentUser}
+                />
+
                 {/* 1. LIGEN & KATEGORIEN VERWALTEN (CRUD SEKTION) */}
                 <div className="bg-white border-2 border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
@@ -2028,6 +2298,62 @@ export default function SuperAdminDashboard({
                     </div>
                   )}
 
+                  {/* Waterfall Rule Explanation Banner */}
+                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs flex items-start gap-3 text-emerald-950">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-100 border border-emerald-300 flex items-center justify-center text-[#1b4332] text-xs shrink-0 mt-0.5">
+                      <i className="fa-solid fa-water"></i>
+                    </div>
+                    <div className="flex-1">
+                      <span className="font-black text-slate-900 block text-xs">
+                        Waterfall-Evaluierung & Priorität (First Match Wins)
+                      </span>
+                      <p className="mt-0.5 text-[11px] text-slate-600 leading-relaxed font-medium">
+                        Die Reihenfolge der Ligen (von oben nach unten) entscheidet über die automatische Spieler-Zuordnung. Jeder Spieler fällt in die <strong>erste aktive Liga</strong>, für deren Kriterien (Geschlecht/Zielgruppe) er berechtigt ist. Nutze die <strong>Pfeiltasten (▲ / ▼)</strong>, um die Rangfolge festzulegen.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setLeagueStatusFilter("all")}
+                        className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                          leagueStatusFilter === "all"
+                            ? "bg-white text-slate-900 shadow-2xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Alle ({dynamicLeagues.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLeagueStatusFilter("active")}
+                        className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                          leagueStatusFilter === "active"
+                            ? "bg-white text-emerald-700 shadow-2xs"
+                            : "text-slate-600 hover:text-emerald-700"
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Aktiv ({dynamicLeagues.filter(l => l.active).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLeagueStatusFilter("inactive")}
+                        className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                          leagueStatusFilter === "inactive"
+                            ? "bg-white text-slate-700 shadow-2xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                        Inaktiv / Archiviert ({dynamicLeagues.filter(l => !l.active).length})
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Ligen-Tisch / Cards */}
                   {dynamicLeaguesLoading ? (
                     <div className="py-8 text-center text-slate-400 font-bold flex flex-col items-center gap-2">
@@ -2040,38 +2366,107 @@ export default function SuperAdminDashboard({
                     </div>
                   ) : (
                     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                      <table className="w-full text-left border-collapse">
+                      <table className="w-full text-left border-collapse table-fixed min-w-[1050px]">
                         <thead>
                           <tr className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-200">
-                            <th className="px-5 py-3.5 font-black">Ligen-Name</th>
-                            <th className="px-5 py-3.5 font-black">Beschreibung</th>
-                            <th className="px-5 py-3.5 font-black text-center">Status</th>
+                            <th className="h-8 px-3 py-1.5 text-center w-[70px] font-sans font-medium">Priorität</th>
+                            <th className="px-5 py-3.5 font-black w-[15%]">Ligen-Name</th>
+                            <th className="px-5 py-3.5 font-black w-[15%]">Berechtigung</th>
+                            <th className="px-5 py-3.5 font-black w-[20%]">Beschreibung</th>
+                            <th className="h-8 px-3 py-1.5 text-center w-[8%] font-sans font-medium">Spiele</th>
+                            <th className="px-5 py-3.5 font-black text-center w-[10%]">Status</th>
                             <th className="px-5 py-3.5 font-black text-right">Aktionen</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                          {dynamicLeagues.map((league) => (
+                          {dynamicLeagues
+                            .filter((league) => {
+                              if (leagueStatusFilter === "active") return league.active;
+                              if (leagueStatusFilter === "inactive") return !league.active;
+                              return true;
+                            })
+                            .map((league, idx) => {
+                            const originalIdx = dynamicLeagues.findIndex(l => l.id === league.id);
+                            const mCount = leagueMatchCounts[league.id] || 0;
+                            const canDelete = mCount === 0;
+
+                            return (
                             <tr key={league.id} className="hover:bg-slate-50/70 transition-colors">
-                              <td className="px-5 py-4 font-bold">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 text-xs">
-                                    <i className="fa-solid fa-trophy"></i>
-                                  </div>
-                                  <div>
-                                    <span className="text-slate-900 font-black text-sm block">
-                                      {league.name}
-                                    </span>
-                                    <span className="text-[10px] font-mono text-slate-400">
-                                      ID: {league.id}
-                                    </span>
+                              {/* 1. Priorität / Reordering Arrows */}
+                              <td className="px-4 py-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <span className="w-6 h-6 rounded-md bg-slate-100 border border-slate-200 text-[11px] font-black text-slate-700 flex items-center justify-center">
+                                    #{originalIdx + 1}
+                                  </span>
+                                  <div className="flex flex-col gap-0.5">
+                                    <button
+                                      type="button"
+                                      disabled={originalIdx === 0}
+                                      onClick={() => handleMoveLeagueOrder(originalIdx, "up")}
+                                      title="Priorität nach oben verschieben"
+                                      className="w-5 h-5 rounded bg-slate-100 hover:bg-[#1b4332] hover:text-white disabled:opacity-30 disabled:hover:bg-slate-100 disabled:hover:text-slate-700 text-slate-700 flex items-center justify-center text-[9px] transition-colors cursor-pointer disabled:cursor-not-allowed"
+                                    >
+                                      <i className="fa-solid fa-chevron-up"></i>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={originalIdx === dynamicLeagues.length - 1}
+                                      onClick={() => handleMoveLeagueOrder(originalIdx, "down")}
+                                      title="Priorität nach unten verschieben"
+                                      className="w-5 h-5 rounded bg-slate-100 hover:bg-[#1b4332] hover:text-white disabled:opacity-30 disabled:hover:bg-slate-100 disabled:hover:text-slate-700 text-slate-700 flex items-center justify-center text-[9px] transition-colors cursor-pointer disabled:cursor-not-allowed"
+                                    >
+                                      <i className="fa-solid fa-chevron-down"></i>
+                                    </button>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-5 py-4 text-slate-600 text-xs max-w-xs truncate">
+
+                              {/* 2. Ligen-Name */}
+                              <td className="px-5 py-4 font-bold truncate">
+                                <span className="text-slate-900 font-black text-sm block truncate" title={league.name}>
+                                  {league.name}
+                                </span>
+                              </td>
+
+                              {/* 3. Berechtigung */}
+                              <td className="px-5 py-4 truncate" title={(() => {
+                                const genders = league.allowedGenders;
+                                const hasM = genders?.includes("m");
+                                const hasW = genders?.includes("w");
+                                const hasU = genders?.includes("u");
+                                let genderText = "Offen";
+                                if (genders && genders.length > 0) {
+                                  if ((hasM && hasW) || hasU || genders.length >= 3) genderText = "Offen";
+                                  else if (hasM && !hasW) genderText = "Herren";
+                                  else if (hasW && !hasM) genderText = "Damen";
+                                }
+                                let ageText = "Alle Alter";
+                                if (typeof league.minAge === "number" && typeof league.maxAge === "number") ageText = `${league.minAge}–${league.maxAge} J.`;
+                                else if (typeof league.minAge === "number") ageText = `ab ${league.minAge} J.`;
+                                else if (typeof league.maxAge === "number") ageText = `bis ${league.maxAge} J.`;
+                                return `${genderText} • ${ageText}`;
+                              })()}>
+                                {getLeaguePermissionText(league)}
+                              </td>
+
+                              {/* 4. Beschreibung */}
+                              <td className="px-5 py-4 text-slate-600 text-xs truncate" title={league.description || ''}>
                                 {league.description || (
                                   <span className="text-slate-400 italic text-[11px]">Keine Beschreibung</span>
                                 )}
                               </td>
+
+                              {/* 5. Registrierte Spiele */}
+                              <td className="px-4 py-4 text-center">
+                                <span
+                                  className="text-[11px] font-bold text-slate-700"
+                                  title={mCount > 0 ? `${mCount} Match(es) registriert` : "Noch keine Matches eingetragen"}
+                                >
+                                  {mCount} {mCount === 1 ? "Spiel" : "Spiele"}
+                                </span>
+                              </td>
+
+                              {/* 6. Status */}
                               <td className="px-5 py-4 text-center">
                                 <button
                                   type="button"
@@ -2091,28 +2486,81 @@ export default function SuperAdminDashboard({
                                   <span>{league.active ? "Aktiv" : "Inaktiv"}</span>
                                 </button>
                               </td>
+
+                              {/* 7. Aktionen */}
                               <td className="px-5 py-4 text-right">
-                                <div className="flex items-center justify-end gap-2">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    disabled={exportingLeagueId === league.id}
+                                    onClick={() => handleExportLeague(league)}
+                                    className="px-2.5 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 rounded-lg text-xs font-bold transition-all border border-emerald-200 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs group"
+                                    title="Komplette Liga als Excel (.xlsx) exportieren"
+                                  >
+                                    {exportingLeagueId === league.id ? (
+                                      <i className="fa-solid fa-circle-notch fa-spin text-emerald-700"></i>
+                                    ) : (
+                                      <i className="fa-solid fa-file-excel text-emerald-600"></i>
+                                    )}
+                                    <span>{exportingLeagueId === league.id ? "Exportiert..." : "Excel"}</span>
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => setManagingRulesLeague({ id: league.id, name: league.name })}
-                                    className="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg text-xs font-bold transition-all border border-amber-200 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                                    className="px-2.5 py-1.5 bg-white hover:bg-amber-50 text-amber-800 rounded-lg text-xs font-bold transition-all border border-amber-200 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                                    title="Punkte-Regeln und Stichtage bearbeiten"
                                   >
                                     <i className="fa-solid fa-sliders text-amber-700"></i>
-                                    Parameter bearbeiten
+                                    Parameter
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEditLeagueModal(league)}
-                                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-[#1b4332] hover:text-white text-slate-700 rounded-lg text-xs font-bold transition-all border border-slate-200 cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                                    className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold transition-all border border-slate-200 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
                                   >
-                                    <i className="fa-solid fa-pen-to-square"></i>
+                                    <i className="fa-solid fa-pen-to-square text-slate-500"></i>
                                     Bearbeiten
                                   </button>
+                                  {mCount > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLeagueToResetTestData(league);
+                                        setResetConfirmText("");
+                                      }}
+                                      className="px-2.5 py-1.5 bg-white hover:bg-purple-50 text-purple-700 rounded-lg text-xs font-bold transition-all border border-purple-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                      title={league.active ? "Testdaten zurücksetzen (Erfordert Inaktivierung der Liga)" : "Dynamische Testdaten dieser inaktiven Liga zurücksetzen"}
+                                    >
+                                      <i className="fa-solid fa-eraser text-purple-600"></i>
+                                      <span>Testdaten zurücksetzen</span>
+                                    </button>
+                                  )}
+                                  {league.active ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setLeagueToArchive(league)}
+                                      className="px-2.5 py-1.5 bg-white hover:bg-amber-50 text-amber-800 rounded-lg text-xs font-bold transition-all border border-amber-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                      title="Liga archivieren / inaktivieren und Spieler-Zuordnungen freigeben"
+                                    >
+                                      <i className="fa-solid fa-box-archive text-amber-700"></i>
+                                      <span>Archivieren</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRestoreLeague(league)}
+                                      className="px-2.5 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold transition-all border border-emerald-200 inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                      title="Inaktive Liga wiederherstellen (auf aktiv setzen)"
+                                    >
+                                      <i className="fa-solid fa-rotate-left text-emerald-600"></i>
+                                      <span>Wiederherstellen</span>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -2184,7 +2632,7 @@ export default function SuperAdminDashboard({
                       return (
                         <div ref={inlineFormRef} className="bg-white border border-slate-200/90 rounded-2xl p-6 shadow-sm space-y-6 mb-8">
                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                            <div className="flex items-center gap-2.5">
+                            <div className="flex items-center gap-3">
                               <div className="w-9 h-9 rounded-xl bg-[#1b4332]/10 flex items-center justify-center text-[#1b4332]">
                                 <i className="fa-solid fa-sliders text-base"></i>
                               </div>
@@ -2306,7 +2754,7 @@ export default function SuperAdminDashboard({
                                   min={0}
                                   value={configFormData.base_points_win}
                                   onChange={(e) => setConfigFormData({ ...configFormData, base_points_win: Number(e.target.value) })}
-                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all"
+                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <p className="text-[10px] text-slate-400 mt-1">
                                   Fixer Teilnahmegewinn pro gespieltem Sieg.
@@ -2324,7 +2772,7 @@ export default function SuperAdminDashboard({
                                   min={0}
                                   value={configFormData.base_points_loss}
                                   onChange={(e) => setConfigFormData({ ...configFormData, base_points_loss: Number(e.target.value) })}
-                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all"
+                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <p className="text-[10px] text-slate-400 mt-1">
                                   Fixer Wert/Trostpunkt bei Niederlagen.
@@ -2342,7 +2790,7 @@ export default function SuperAdminDashboard({
                                   min={0}
                                   value={configFormData.max_bonus}
                                   onChange={(e) => setConfigFormData({ ...configFormData, max_bonus: Number(e.target.value) })}
-                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all"
+                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <p className="text-[10px] text-slate-400 mt-1">
                                   Maximaler logistischer Bonus für Siege.
@@ -2352,19 +2800,25 @@ export default function SuperAdminDashboard({
                               <div>
                                 <label className="block text-xs font-black uppercase text-slate-600 mb-1.5 flex items-center gap-1.5">
                                   <i className="fa-solid fa-wave-square text-indigo-500"></i>
-                                  Skalierung (K)
+                                  Steigungsfaktor k (Logistisch)
                                 </label>
                                 <input
                                   type="number"
-                                  step="0.001"
+                                  step="any"
                                   required
-                                  min={0.001}
+                                  min={0.0001}
+                                  max={1}
                                   value={configFormData.logistic_factor}
-                                  onChange={(e) => setConfigFormData({ ...configFormData, logistic_factor: Number(e.target.value) })}
-                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all"
+                                  onChange={(e) => {
+                                    const rawVal = e.target.value.replace(',', '.');
+                                    const parsed = parseFloat(rawVal);
+                                    const rounded = isNaN(parsed) ? 0 : Math.round(parsed * 10000) / 10000;
+                                    setConfigFormData({ ...configFormData, logistic_factor: rounded });
+                                  }}
+                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all font-mono font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <p className="text-[10px] text-slate-400 mt-1">
-                                  Steilheit der S-Kurve (Empfehlung: 0.03 - 0.08).
+                                  Steilheit der S-Kurve / Sensitivität (z. B. 0.05).
                                 </p>
                               </div>
 
@@ -2379,7 +2833,7 @@ export default function SuperAdminDashboard({
                                   min={0}
                                   value={configFormData.inactivity_deduction_per_week}
                                   onChange={(e) => setConfigFormData({ ...configFormData, inactivity_deduction_per_week: Number(e.target.value) })}
-                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all"
+                                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-800 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                 />
                                 <p className="text-[10px] text-slate-400 mt-1">
                                   Punkteabzug pro inaktiver Woche.
@@ -2396,7 +2850,7 @@ export default function SuperAdminDashboard({
                                   isSimulatorExpanded ? "pb-4 border-b border-[#1b4332]" : ""
                                 }`}
                               >
-                                <div className="flex items-center gap-2.5">
+                                <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl bg-[#1b4332] flex items-center justify-center text-[#52b788] border border-[#2d6a4f]/60 shrink-0">
                                     <i className="fa-solid fa-calculator text-sm"></i>
                                   </div>
@@ -2444,20 +2898,20 @@ export default function SuperAdminDashboard({
                                     <div className="text-[10px] font-sans font-bold text-[#74c69d] uppercase tracking-wider">
                                       Mathematische Formel-Schritte:
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-slate-100 font-bold text-[11px]">
-                                      <div className="bg-[#081c15] p-2.5 rounded-lg border border-[#1b4332]">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-slate-100 font-bold text-[11px]">
+                                      <div className="bg-[#081c15] h-8 px-3 py-1 rounded-lg border border-[#1b4332] font-sans font-medium">
                                         <span className="text-[#95d5b2] text-[10px] font-sans block font-semibold mb-0.5">
                                           1. Rating-Differenz:
                                         </span>
                                         <span className="text-white">d = Rating_Gegner - Rating_Spieler</span>
                                       </div>
-                                      <div className="bg-[#081c15] p-2.5 rounded-lg border border-[#1b4332]">
+                                      <div className="bg-[#081c15] h-8 px-3 py-1 rounded-lg border border-[#1b4332] font-sans font-medium">
                                         <span className="text-[#95d5b2] text-[10px] font-sans block font-semibold mb-0.5">
                                           2. Logistischer Bonus:
                                         </span>
                                         <span className="text-white">Bonus = Max_Bonus / (1 + e^(-K * d))</span>
                                       </div>
-                                      <div className="bg-[#081c15] p-2.5 rounded-lg border border-[#1b4332]">
+                                      <div className="bg-[#081c15] h-8 px-3 py-1 rounded-lg border border-[#1b4332] font-sans font-medium">
                                         <span className="text-[#95d5b2] text-[10px] font-sans block font-semibold mb-0.5">
                                           3. Endergebnis:
                                         </span>
@@ -2517,7 +2971,7 @@ export default function SuperAdminDashboard({
                                             </div>
 
                                             <div className="space-y-2 text-xs">
-                                              <div className="bg-[#081c15] border border-[#1b4332]/70 p-2.5 rounded-lg space-y-1.5 font-mono text-[11px]">
+                                              <div className="bg-[#081c15] border border-[#1b4332]/70 h-8 px-3 py-1 rounded-lg space-y-1.5 font-mono text-[11px] font-sans font-medium">
                                                 <div>
                                                   <span className="text-[#95d5b2] text-[10px] font-sans block font-semibold">
                                                     1. Rating-Differenz:
@@ -2537,7 +2991,7 @@ export default function SuperAdminDashboard({
                                                 </div>
                                               </div>
 
-                                              <div className="p-2.5 bg-[#081c15] border border-[#2d6a4f]/60 rounded-lg text-[#d8f3dc] font-medium text-[11px] leading-relaxed">
+                                              <div className="h-8 px-3 py-1 bg-[#081c15] border border-[#2d6a4f]/60 rounded-lg text-[#d8f3dc] text-[11px] leading-relaxed font-sans font-medium">
                                                 <span className="font-black text-[#52b788] block mb-0.5 text-[10px] uppercase tracking-wider">
                                                   3. Gesamtergebnis:
                                                 </span>
@@ -2594,10 +3048,10 @@ export default function SuperAdminDashboard({
                             : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                         }`}
                       >
-                        Alle Ligen ({configVersions.length})
+                        Alle Ligen ({validConfigVersions.length})
                       </button>
                       {availableLeagues.map((l) => {
-                        const count = configVersions.filter((v) => v.leagueId === l.id).length;
+                        const count = validConfigVersions.filter((v) => v.leagueId === l.id).length;
                         return (
                           <button
                             key={l.id}
@@ -2622,7 +3076,7 @@ export default function SuperAdminDashboard({
                       <i className="fa-solid fa-circle-notch fa-spin text-xl text-[#1b4332]"></i>
                       <span>Lade Konfigurationen...</span>
                     </div>
-                  ) : configVersions.length === 0 ? (
+                  ) : validConfigVersions.length === 0 ? (
                     <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center space-y-3">
                       <p className="text-xs text-slate-500 font-bold">
                         Keine Versionen vorhanden.
@@ -2633,18 +3087,18 @@ export default function SuperAdminDashboard({
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-slate-100/80 text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-200">
-                            <th className="px-5 py-3.5 font-black">Stichtag (Effective Date)</th>
-                            <th className="px-5 py-3.5 font-black">Liga / Kategorie</th>
+                            <th className="px-5 py-3.5 font-black">Stichtag</th>
+                            <th className="px-5 py-3.5 font-black">Typ</th>
+                            <th className="px-5 py-3.5 font-black">Liga</th>
                             <th className="px-5 py-3.5 font-black text-center">Sieg / Niederlage Base</th>
                             <th className="px-5 py-3.5 font-black text-center">Max. Bonus</th>
                             <th className="px-5 py-3.5 font-black text-center">Skalierung (k)</th>
                             <th className="px-5 py-3.5 font-black text-center">Inaktivität / Woche</th>
-                            <th className="px-5 py-3.5 font-black">Erstellt am / von</th>
                             <th className="px-5 py-3.5 font-black text-right">Aktionen</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-                          {configVersions
+                          {validConfigVersions
                             .filter((ver) => {
                               if (selectedLeagueFilter === "all") return true;
                               return ver.leagueId === selectedLeagueFilter;
@@ -2660,49 +3114,17 @@ export default function SuperAdminDashboard({
                             return (
                               <tr key={ver.id} className={`hover:bg-slate-50/80 transition-colors ${isBaseRule ? 'bg-indigo-50/20' : ''}`}>
                                 <td className="px-5 py-4 font-bold">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="font-mono text-slate-900 text-sm font-black">
-                                      {ver.effective_date}
-                                    </span>
-                                    {isBaseRule && (
-                                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
-                                        <i className="fa-solid fa-shield-halved text-indigo-600"></i>
-                                        System Default / Basis-Regelwerk
-                                      </span>
-                                    )}
-                                    {isCurrent && (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                        Aktuell Gültig
-                                      </span>
-                                    )}
-                                    {isFuture && (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200">
-                                        Geplant
-                                      </span>
-                                    )}
-                                  </div>
+                                  <span className="font-mono text-slate-900 text-sm font-black">
+                                    {ver.effective_date}
+                                  </span>
                                 </td>
-                                <td className="px-5 py-4">
+                                <td className="px-5 py-4 font-medium text-slate-600">
+                                  {isBaseRule ? "Basis-Regelwerk" : "Anpassung"}
+                                </td>
+                                <td className="px-5 py-4 font-semibold text-slate-800">
                                   {(() => {
                                     const leagueObj = availableLeagues.find((l) => l.id === ver.leagueId);
-                                    return leagueObj ? (
-                                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border inline-flex items-center gap-1 ${
-                                        isBaseRule
-                                          ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                          : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                      }`}>
-                                        <i className={`fa-solid fa-trophy text-[9px] ${isBaseRule ? "text-indigo-600" : "text-emerald-600"}`}></i>
-                                        {leagueObj.name}
-                                      </span>
-                                    ) : ver.leagueId ? (
-                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-700 border border-slate-200">
-                                        {ver.leagueId}
-                                      </span>
-                                    ) : (
-                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-slate-100 text-slate-600 border border-slate-200">
-                                        Alle Ligen
-                                      </span>
-                                    );
+                                    return leagueObj ? leagueObj.name : ver.leagueId ? ver.leagueId : "Alle Ligen";
                                   })()}
                                 </td>
                                 <td className="px-5 py-4 text-center font-mono font-bold text-slate-800">
@@ -2718,21 +3140,6 @@ export default function SuperAdminDashboard({
                                 </td>
                                 <td className="px-5 py-4 text-center font-mono font-bold text-rose-700">
                                   -{ver.inactivity_deduction_per_week} Pkt.
-                                </td>
-                                <td className="px-5 py-4 text-slate-500 font-medium text-[11px]">
-                                  {isBaseRule ? (
-                                    <>
-                                      <span className="font-semibold text-slate-600">01.01.2000</span>
-                                      <br />
-                                      <span className="text-indigo-600 font-bold">System Default</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      {ver.created_at ? new Date(ver.created_at).toLocaleDateString('de-DE') : '-'}
-                                      <br />
-                                      <span className="text-slate-400">von {ver.created_by || 'Super-Admin'}</span>
-                                    </>
-                                  )}
                                 </td>
                                 <td className="px-5 py-4 text-right">
                                   <div className="flex items-center justify-end gap-2">
@@ -2771,6 +3178,18 @@ export default function SuperAdminDashboard({
                     </div>
                   )}
                 </div>
+
+                {/* 3. SPIELER-PUNKTEVERWALTUNG & KORREKTUR-TOOL */}
+                <SuperAdminPointsManagement
+                  allPersons={allPersons}
+                  dynamicLeagues={dynamicLeagues}
+                  currentUser={currentUser}
+                />
+
+                <SuperAdminLeagueEligibilityList 
+                  allPersons={allPersons}
+                  dynamicLeagues={dynamicLeagues}
+                />
               </div>
             ) : activeTab === "accounts" ? (
               <SuperAdminUserPurgeTab
@@ -2787,8 +3206,8 @@ export default function SuperAdminDashboard({
       </div>
 
       {showNewClubModal && (
-        <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-sm p-8 border border-slate-200/80">
+        <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-md shadow-sm p-8 -200/80">
             <h2 className="text-xl font-bold text-[#1b4332] uppercase tracking-tighter flex items-center justify-between mb-6">
               Neuen Verein anlegen
               <button
@@ -2894,7 +3313,7 @@ export default function SuperAdminDashboard({
                       })
                     }
                     placeholder="z.b. tennis-club"
-                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2"
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                   <p className="text-[10px] text-slate-400 mt-1 ml-1 font-medium">
                     Nur Buchstaben, Zahlen und Bindestriche.
@@ -2914,10 +3333,10 @@ export default function SuperAdminDashboard({
                       })
                     }
                     placeholder="z.B. Tennis-Club"
-                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2"
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                 </div>
-                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
                   <input
                     type="checkbox"
                     id="enableLeague"
@@ -2928,20 +3347,26 @@ export default function SuperAdminDashboard({
                         enableLeague: e.target.checked,
                       })
                     }
-                    className="w-5 h-5 accent-[#1b4332] shrink-0"
+                    className="w-5 h-5 accent-[#1b4332] shrink-0 mt-0.5 cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <label htmlFor="enableLeague" className="block text-sm font-bold text-slate-700 cursor-pointer">
-                      Hobbyliga aktivieren
+                      Hobbyliga &amp; Regelwerk aktivieren
                     </label>
                     <p className="text-[10px] text-slate-500 mt-0.5">
-                      Schaltet das Modul für die vereinsübergreifende Hobbyliga frei.
+                      Schaltet das Modul für die vereinsübergreifende Hobbyliga und die Regel-Validierung frei.
                     </p>
+                    <div className="mt-2 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg h-8 px-3 py-1 flex items-start gap-2 leading-relaxed font-sans font-medium">
+                      <i className="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 shrink-0 text-xs"></i>
+                      <span>
+                        <strong>Achtung:</strong> Das Deaktivieren schaltet die automatische Validierung von Forderungs- und Ligaregeln für diesen Verein global aus.
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {createClubError && (
-                  <p className="text-xs text-rose-600 font-bold bg-rose-50 border border-rose-100 rounded-xl px-4 py-3">
+                  <p className="text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-xl h-8 px-3 py-1 font-sans font-medium">
                     {createClubError}
                   </p>
                 )}
@@ -2980,8 +3405,8 @@ export default function SuperAdminDashboard({
           const isBlocked = hasPlayers;
 
           return (
-            <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl w-full max-w-md shadow-sm p-8 border border-slate-200/80">
+            <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="border-none outline-none bg-white rounded-2xl w-full max-w-md shadow-sm p-8 -200/80">
                 <h2 className="text-xl font-bold text-rose-600 uppercase tracking-tighter flex items-center justify-between mb-2">
                   Verein löschen
                   <button
@@ -3073,7 +3498,7 @@ export default function SuperAdminDashboard({
                         value={deleteConfirmText}
                         onChange={(e) => setDeleteConfirmText(e.target.value)}
                         placeholder="löschen"
-                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm font-bold text-slate-700 focus:outline-none focus:border-rose-500 transition-colors placeholder:text-slate-300 placeholder:font-normal font-mono py-2"
+                        className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm text-slate-700 focus:outline-none focus:border-rose-500 transition-colors placeholder:text-slate-300 placeholder: font-mono py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       />
                       <p className="text-[10px] text-slate-400 mt-1.5 ml-1 font-medium">
                         Bitte tippe exakt{" "}
@@ -3123,8 +3548,8 @@ export default function SuperAdminDashboard({
         })()}
 
       {editClubModalClub && (
-        <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-sm p-8 border border-slate-200/80 overflow-y-auto max-h-[92vh]">
+        <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-md shadow-sm p-8 -200/80 overflow-y-auto max-h-[92vh]">
             <h2 className="text-xl font-bold text-[#1b4332] uppercase tracking-tighter flex items-center justify-between mb-6">
               Vereinsdaten bearbeiten
               <button
@@ -3139,10 +3564,7 @@ export default function SuperAdminDashboard({
                 <label className="block text-[11px] font-black uppercase text-slate-500 mb-1.5 ml-1 tracking-wider">
                   Mandanten-ID (Nicht direkt editierbar)
                 </label>
-                <input
-                  disabled
-                  value={editClubForm.vereinsId}
-                  className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl px-4 text-slate-400 cursor-not-allowed p-2 text-sm font-medium"
+                <input className="w-full bg-slate-100 border-2 border-slate-200 rounded-xl px-4 text-slate-400 cursor-not-allowed p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
                 <p className="text-[10px] text-slate-400 mt-1 ml-1 font-medium">
                   Die ID ist Standard-ID zur Anmeldung dieses Vereins.
@@ -3162,10 +3584,10 @@ export default function SuperAdminDashboard({
                     })
                   }
                   placeholder="z.B. Tennis-Club"
-                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm font-bold text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2"
+                  className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
-              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
                 <input
                   type="checkbox"
                   id="editEnableLeague"
@@ -3176,15 +3598,21 @@ export default function SuperAdminDashboard({
                       enableLeague: e.target.checked,
                     })
                   }
-                  className="w-5 h-5 accent-[#1b4332] shrink-0"
+                  className="w-5 h-5 accent-[#1b4332] shrink-0 mt-0.5 cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
-                <div>
+                <div className="flex-1 min-w-0">
                   <label htmlFor="editEnableLeague" className="block text-sm font-bold text-slate-700 cursor-pointer">
-                    Hobbyliga aktivieren
+                    Hobbyliga &amp; Regelwerk aktivieren
                   </label>
                   <p className="text-[10px] text-slate-500 mt-0.5">
-                    Schaltet das Modul für die vereinsübergreifende Hobbyliga frei.
+                    Schaltet das Modul für die vereinsübergreifende Hobbyliga und die Regel-Validierung frei.
                   </p>
+                  <div className="mt-2 text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg h-8 px-3 py-1 flex items-start gap-2 leading-relaxed font-sans font-medium">
+                    <i className="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 shrink-0 text-xs"></i>
+                    <span>
+                      <strong>Achtung:</strong> Das Deaktivieren schaltet die automatische Validierung von Forderungs- und Ligaregeln für diesen Verein global aus.
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -3235,7 +3663,7 @@ export default function SuperAdminDashboard({
                         )
                       }
                       placeholder="z.B. djk-furth"
-                      className="flex-1 bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500 transition-colors py-2"
+                      className="flex-1 bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-xs text-slate-700 focus:outline-none focus:border-amber-500 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                     <button
                       type="button"
@@ -3274,8 +3702,8 @@ export default function SuperAdminDashboard({
         </div>
       )}
       {resetPasswordModalUser && (
-        <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-sm p-8 border border-slate-200/80">
+        <div className="fixed inset-0 bg-[#1b4332]/30 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-sm shadow-sm p-8 -200/80">
             <h2 className="text-xl font-bold text-[#1b4332] uppercase tracking-tighter flex items-center justify-between mb-2">
               Passwort setzen
               <button
@@ -3313,7 +3741,7 @@ export default function SuperAdminDashboard({
                       setResetPasswordNewPassword(e.target.value)
                     }
                     placeholder="********"
-                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-4 pr-12 text-sm font-bold text-slate-700 focus:outline-none focus:border-blue-500 transition-colors py-2"
+                    className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl pl-4 pr-12 text-sm text-slate-700 focus:outline-none focus:border-blue-500 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                   <button
                     type="button"
@@ -3374,8 +3802,8 @@ export default function SuperAdminDashboard({
 
       {/* Single Duplicate Pair Merge Confirmation Modal */}
       {mergeConfirmData && (
-        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 space-y-0">
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden -200 space-y-0">
             {/* Modal Header */}
             <div className="bg-[#1b4332] text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -3519,8 +3947,8 @@ export default function SuperAdminDashboard({
 
       {/* Batch Duplicate Pairs Merge Confirmation Modal */}
       {batchConfirmData && (
-        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden border border-slate-200 space-y-0">
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden -200 space-y-0">
             <div className="bg-[#1b4332] text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-emerald-300 text-lg shrink-0">
@@ -3597,10 +4025,10 @@ export default function SuperAdminDashboard({
 
       {/* Dynamic League Create / Edit Modal */}
       {isLeagueModalOpen && (
-        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 -200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5 text-slate-800">
+              <div className="flex items-center gap-3 text-slate-800">
                 <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 font-bold">
                   <i className="fa-solid fa-trophy"></i>
                 </div>
@@ -3633,7 +4061,7 @@ export default function SuperAdminDashboard({
                   placeholder="z.B. Herren, Damen, Herren Einzel"
                   value={leagueFormData.name}
                   onChange={(e) => setLeagueFormData({ ...leagueFormData, name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl h-8 px-3 py-1 text-sm text-slate-900 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                 />
               </div>
 
@@ -3646,7 +4074,7 @@ export default function SuperAdminDashboard({
                   placeholder="Optionale Details zur Kategorie..."
                   value={leagueFormData.description}
                   onChange={(e) => setLeagueFormData({ ...leagueFormData, description: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs text-slate-900 focus:outline-none focus:border-[#1b4332] focus:bg-white transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
 
@@ -3659,7 +4087,7 @@ export default function SuperAdminDashboard({
                     type="checkbox"
                     checked={leagueFormData.active}
                     onChange={(e) => setLeagueFormData({ ...leagueFormData, active: e.target.checked })}
-                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                   <div>
                     <span className="text-xs font-bold text-slate-900 block">
@@ -3674,42 +4102,332 @@ export default function SuperAdminDashboard({
                 </label>
               </div>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  disabled={savingLeague}
-                  onClick={() => setIsLeagueModalOpen(false)}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingLeague || !leagueFormData.name.trim()}
-                  className="flex-1 py-2.5 bg-[#1b4332] hover:bg-black disabled:opacity-50 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {savingLeague ? (
-                    <>
-                      <i className="fa-solid fa-circle-notch fa-spin"></i>
-                      <span>Speichern...</span>
-                    </>
-                  ) : (
-                    <>
-                      <i className="fa-solid fa-floppy-disk"></i>
-                      <span>{editingLeague ? "Änderungen speichern" : "Liga anlegen"}</span>
-                    </>
-                  )}
-                </button>
+              <div>
+                <label className="block text-xs font-black uppercase text-slate-700 mb-1.5 mt-2">
+                  Berechtigte Geschlechter / Zielgruppe
+                </label>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  Bestimmt, welche Spieler beim automatischen Regel-Abgleich (Waterfall) in diese Liga fallen.
+                </p>
+
+                {/* Quick Presets */}
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLeagueFormData({ ...leagueFormData, allowedGenders: ["m"] })}
+                    className={`py-2 px-2 text-[11px] font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                      leagueFormData.allowedGenders?.length === 1 && leagueFormData.allowedGenders?.includes("m")
+                        ? "bg-blue-50 border-blue-400 text-blue-800 shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <i className="fa-solid fa-mars mr-1 text-blue-600"></i>
+                    Nur Herren
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLeagueFormData({ ...leagueFormData, allowedGenders: ["w"] })}
+                    className={`py-2 px-2 text-[11px] font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                      leagueFormData.allowedGenders?.length === 1 && leagueFormData.allowedGenders?.includes("w")
+                        ? "bg-pink-50 border-pink-400 text-pink-800 shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <i className="fa-solid fa-venus mr-1 text-pink-600"></i>
+                    Nur Damen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLeagueFormData({ ...leagueFormData, allowedGenders: ["m", "w", "u"] })}
+                    className={`py-2 px-2 text-[11px] font-bold rounded-lg border text-center transition-all cursor-pointer ${
+                      (leagueFormData.allowedGenders?.includes("u") || (leagueFormData.allowedGenders?.includes("m") && leagueFormData.allowedGenders?.includes("w")))
+                        ? "bg-emerald-50 border-emerald-400 text-emerald-800 shadow-2xs"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <i className="fa-solid fa-venus-mars mr-1 text-emerald-600"></i>
+                    Offen (Alle)
+                  </button>
+                </div>
+              </div>
+
+              {/* Altersbegrenzung / Alterskriterien */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Altersbegrenzung & Kriterien
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-semibold">
+                    Optional (Berechnung via Geburtsdatum)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                      Mindestalter (Jahre)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={leagueFormData.minAge !== undefined && leagueFormData.minAge !== null ? leagueFormData.minAge : ""}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
+                        setLeagueFormData({ ...leagueFormData, minAge: isNaN(val as number) ? null : val });
+                      }}
+                      placeholder="z.B. 18 (leer = egal)"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-[#1b4332] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">
+                      Höchstalter (Jahre)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={leagueFormData.maxAge !== undefined && leagueFormData.maxAge !== null ? leagueFormData.maxAge : ""}
+                      onChange={(e) => {
+                        const val = e.target.value === "" ? null : parseInt(e.target.value, 10);
+                        setLeagueFormData({ ...leagueFormData, maxAge: isNaN(val as number) ? null : val });
+                      }}
+                      placeholder="z.B. 18 (leer = egal)"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:border-[#1b4332] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2">
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    disabled={savingLeague}
+                    onClick={() => setIsLeagueModalOpen(false)}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingLeague || !leagueFormData.name.trim()}
+                    className="flex-1 py-2.5 bg-[#1b4332] hover:bg-black disabled:opacity-50 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {savingLeague ? (
+                      <>
+                        <i className="fa-solid fa-circle-notch fa-spin"></i>
+                        <span>Speichern...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-floppy-disk"></i>
+                        <span>{editingLeague ? "Änderungen speichern" : "Liga anlegen"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {editingLeague && (
+                  <div className="pt-3 mt-1 border-t border-slate-200/80 flex items-center justify-between">
+                    <button
+                      type="button"
+                      disabled={exportingLeagueId === editingLeague.id}
+                      onClick={() => handleExportLeague(editingLeague)}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-800 rounded-lg text-xs font-bold transition-all border border-emerald-200 cursor-pointer inline-flex items-center gap-1.5 shadow-2xs group"
+                      title="Alle Daten dieser Liga als Excel (.xlsx) exportieren"
+                    >
+                      {exportingLeagueId === editingLeague.id ? (
+                        <i className="fa-solid fa-circle-notch fa-spin text-emerald-700"></i>
+                      ) : (
+                        <i className="fa-solid fa-file-excel text-emerald-600 group-hover:text-white"></i>
+                      )}
+                      <span>Excel-Export</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* League Reset Test Data Modal */}
+      {leagueToResetTestData && (
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 -200 space-y-4">
+            <div className="flex items-center gap-3 text-purple-600">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-lg shrink-0">
+                <i className="fa-solid fa-eraser"></i>
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                  Testdaten zurücksetzen?
+                </h3>
+                <p className="text-xs text-purple-600 font-medium">
+                  {leagueToResetTestData.active ? "Löschsperre aktiv (Aktive Liga)" : "Dynamische Spieldaten werden gelöscht"}
+                </p>
+              </div>
+            </div>
+
+            {leagueToResetTestData.active ? (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 text-xs font-medium text-amber-950 space-y-3 leading-relaxed">
+                <div className="flex items-center gap-2 font-black text-amber-900 text-sm">
+                  <i className="fa-solid fa-shield-halved text-amber-600 text-base"></i>
+                  <span>Löschsperre: Aktive Live-Liga</span>
+                </div>
+                <p className="text-slate-700">
+                  Die Liga &ldquo;<span className="font-bold text-slate-900">{leagueToResetTestData.name}</span>&rdquo; ist aktuell <span className="font-bold text-emerald-700">AKTIV</span> geschaltet. Um das versehentliche Löschen von Live-Daten zu verhindern, ist das Zurücksetzen von Testdaten für aktive Ligen strikt gesperrt.
+                </p>
+                <p className="text-slate-600 text-[11px]">
+                  <strong>Schritt 1:</strong> Setze die Liga auf <strong>INAKTIV</strong>. Anschließend kannst du die Testdaten mit manueller Text-Bestätigung und automatischem Sicherheits-Snapshot bereinigen.
+                </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDeactivateAndKeepModal(leagueToResetTestData)}
+                    className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-solid fa-power-off"></i>
+                    <span>Liga jetzt auf Inaktiv setzen</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 text-xs font-medium text-purple-950 space-y-2 leading-relaxed">
+                  <p className="font-bold text-slate-900 text-sm">
+                    Möchtest du alle Testdaten der inaktiven Liga &ldquo;<span className="text-purple-700">{leagueToResetTestData.name}</span>&rdquo; zurücksetzen?
+                  </p>
+                  <ul className="text-slate-700 list-disc list-inside space-y-1">
+                    <li>Alle eingetragenen <span className="font-bold text-slate-900">Matches &amp; Platzbuchungen</span> dieser Liga werden gelöscht.</li>
+                    <li><span className="font-bold text-slate-900">Punkte-Logs und Korrekturen</span> werden bereinigt.</li>
+                    <li>Die Punktestände der zugeordneten Spieler werden auf den <span className="font-bold text-slate-900">Startwert</span> zurückgesetzt.</li>
+                  </ul>
+                  <div className="mt-2 pt-2 border-t border-purple-200/80 text-[11px] text-purple-900 flex items-start gap-1.5">
+                    <i className="fa-solid fa-shield text-purple-600 mt-0.5 shrink-0"></i>
+                    <span><strong>Automatischer Snapshot:</strong> Direkt vor der Bereinigung wird ein Sicherheits-Snapshot angelegt, der im Notfall über den Backup-Bereich wiederhergestellt werden kann.</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-black uppercase text-slate-700">
+                    Tippe zur Freigabe das Wort <span className="text-purple-700 underline decoration-2">löschen</span> ein:
+                  </label>
+                  <input
+                    type="text"
+                    value={resetConfirmText}
+                    onChange={(e) => setResetConfirmText(e.target.value)}
+                    placeholder="löschen"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-600 focus:bg-white transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                disabled={resetTestDataLoading}
+                onClick={() => {
+                  setLeagueToResetTestData(null);
+                  setResetConfirmText("");
+                }}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              {!leagueToResetTestData.active && (
+                <button
+                  type="button"
+                  disabled={resetTestDataLoading || resetConfirmText.trim().toLowerCase() !== "löschen"}
+                  onClick={handleConfirmResetTestData}
+                  className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-md transition-all active:scale-95 border border-purple-600 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {resetTestDataLoading ? (
+                    <>
+                      <i className="fa-solid fa-circle-notch fa-spin"></i>
+                      <span>Sichere &amp; Lösche...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-eraser"></i>
+                      <span>Testdaten löschen</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* League Archive Confirmation Modal */}
+      {leagueToArchive && (
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 -200 space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-lg shrink-0">
+                <i className="fa-solid fa-box-archive"></i>
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                  Liga archivieren
+                </h3>
+                <p className="text-xs text-amber-700 font-medium">
+                  {leagueToArchive.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-950 space-y-2.5 leading-relaxed">
+              <p className="font-bold text-slate-900 text-sm">
+                Möchtest du die Liga &ldquo;<span className="text-amber-800">{leagueToArchive.name}</span>&rdquo; wirklich archivieren?
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-slate-700 font-medium">
+                <li>Die Liga wird als <strong>Inaktiv / Archiviert</strong> markiert.</li>
+                <li>Zugeordnete Spielerprofile werden freigegeben (ihre Liga-Zuordnung wird zurückgesetzt), sodass sie über die Waterfall-Regeln neu zugeordnet werden können.</li>
+                <li>Alle historischen Spiele, Ranglistenpunkte und Ergebnisse bleiben <strong>vollständig erhalten</strong>.</li>
+                <li>Du kannst die Liga jederzeit mit einem Klick auf <strong>Wiederherstellen</strong> reaktivieren.</li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                disabled={archiveLeagueLoading}
+                onClick={() => setLeagueToArchive(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer text-center"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                disabled={archiveLeagueLoading}
+                onClick={handleConfirmArchiveLeague}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all active:scale-95 border border-amber-600 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {archiveLeagueLoading ? (
+                  <>
+                    <i className="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Archiviere...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-box-archive"></i>
+                    <span>Jetzt archivieren</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Dialog Modal */}
       {showConfigConfirmModal && (
-        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 border border-amber-200 space-y-4">
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-md shadow-2xl p-6 -200 space-y-4">
             <div className="flex items-center gap-3 text-amber-600">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-lg shrink-0">
                 <i className="fa-solid fa-triangle-exclamation"></i>
@@ -3775,7 +4493,7 @@ export default function SuperAdminDashboard({
       )}
       {/* League Rule Editor Modal */}
       {managingRulesLeague && (
-        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
           <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl">
             <LeagueRuleEditor
               leagueId={managingRulesLeague.id}

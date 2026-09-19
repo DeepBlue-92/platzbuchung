@@ -7,7 +7,7 @@
       "properties": {
         "id": { "type": "string" },
         "username": { "type": "string" },
-        "role": { "type": "string", "enum": ["super-admin", "admin", "spieler"] },
+        "role": { "type": "string", "enum": ["super-admin", "admin", "mitglied", "spieler", "user"] },
         "tenantId": { "type": "string" },
         "password": { "type": "string" },
         "firstName": { "type": "string" },
@@ -78,7 +78,11 @@
         "collectEmail": { "type": "boolean" },
         "collectPhone": { "type": "boolean" },
         "courts": { "type": "array" },
-        "news": { "type": "string" }
+        "news": { "type": "string" },
+        "feeSettings": {
+          "type": "object",
+          "description": "2-tier guest fee settings (Simple flat fee or Advanced Workday-style condition rule builder)"
+        }
       },
       "required": ["clubName"]
     },
@@ -176,6 +180,18 @@
     "system/updates": {
       "schema": { "title": "SystemUpdates", "type": "object", "properties": { "text": { "type": "string" }, "lastUpdated": { "type": "string" }, "updatedBy": { "type": "string" } } },
       "description": "Global master dataset for system-wide updates and changelogs."
+    },
+    "system_settings/{settingId}": {
+      "schema": { "title": "SystemSettings", "type": "object", "properties": { "ignoredPairs": { "type": "array" } } },
+      "description": "System-level administrative settings including duplicate detection exclusions."
+    },
+    "system_backups/{backupId}": {
+      "schema": { "title": "SystemBackup", "type": "object", "properties": { "id": { "type": "string" }, "timestamp": { "type": "string" }, "creator": { "type": "string" } } },
+      "description": "Global system backups for database recovery."
+    },
+    "memberships/{membershipId}": {
+      "schema": { "title": "Membership", "type": "object", "properties": { "id": { "type": "string" }, "personId": { "type": "string" }, "vereinId": { "type": "string" }, "role": { "type": "string" } } },
+      "description": "Cross-club user memberships."
     }
   }
 }

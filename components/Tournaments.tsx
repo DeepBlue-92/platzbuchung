@@ -195,16 +195,16 @@ const Tournaments: React.FC<TournamentsProps> = ({
 
     const tournamentDetails = {
       title: formData.title.trim(),
-      date: formData.date || undefined,
-      startTime: formData.startTime || undefined,
-      endTime: formData.endTime || undefined,
-      description: formData.description.trim() || undefined,
+      date: formData.date || null,
+      startTime: formData.startTime || null,
+      endTime: formData.endTime || null,
+      description: formData.description.trim() || null,
       hideExpired: formData.hideExpired,
       allowComment: formData.allowComment,
       maxParticipants: formData.maxParticipants
         ? parseInt(formData.maxParticipants, 10)
-        : undefined,
-      isRegistrationBlocked: formData.isRegistrationBlocked || undefined,
+        : null,
+      isRegistrationBlocked: formData.isRegistrationBlocked || null,
     };
 
     if (editingTournamentId && onUpdateTournament) {
@@ -343,7 +343,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
           <div className="p-4 border-b border-slate-100 flex flex-col gap-1.5 relative">
             <div className="flex justify-between items-start gap-2">
               <h3
-                className="text-sm font-black md:font-normal uppercase text-[var(--color-primary)] line-clamp-2 leading-tight overflow-hidden text-ellipsis flex-1"
+                className="text-sm font-black md:font-black uppercase text-[var(--color-primary)] line-clamp-2 leading-tight overflow-hidden text-ellipsis flex-1"
                 title={t.title}
               >
                 {t.title}
@@ -453,9 +453,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                 <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">
                   Teilnehmer manuell (Admin)
                 </label>
-                <input
-                  type="text"
-                  className="w-full px-2.5 border border-slate-200 rounded-lg outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors p-2 text-sm font-medium"
+                <input className="w-full px-2.5 border border-slate-200 rounded-lg outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   placeholder="Name suchen..."
                   value={
                     playerSearch.tournamentId === t.id ? playerSearch.query : ""
@@ -579,7 +577,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                         [t.id]: e.target.value,
                       })
                     }
-                    className="w-full px-2.5 border-2 border-slate-200 rounded-xl font-bold text-xs outline-none bg-white focus:border-[var(--color-accent)] py-2"
+                    className="w-full px-2.5 border-2 border-slate-200 rounded-xl text-xs outline-none bg-white focus:border-[var(--color-accent)] py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                 </div>
               )}
@@ -789,7 +787,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                       onChange={(e) =>
                         setFormData({ ...formData, title: e.target.value })
                       }
-                      className="w-full p-2 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none font-bold text-xs shadow-sm transition-colors text-slate-700"
+                      className="w-full p-2 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none text-xs shadow-sm transition-colors text-slate-700 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       placeholder="z.B. Sommerfest, Schleiferlturnier"
                     />
                   </div>
@@ -804,7 +802,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                       onChange={(e) =>
                         setFormData({ ...formData, date: e.target.value })
                       }
-                      className="w-full p-2 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none font-bold text-xs shadow-sm transition-colors text-slate-700 uppercase"
+                      className="w-full p-2 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none text-xs shadow-sm transition-colors text-slate-700 uppercase font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
 
@@ -822,7 +820,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                             startTime: e.target.value,
                           })
                         }
-                        className="w-full p-2 border-2 border-slate-300 rounded-lg bg-white font-black text-[11px] outline-none focus:border-[var(--color-primary)] transition-colors"
+                        className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                       />
                     </div>
                     <div>
@@ -835,7 +833,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                         onChange={(e) =>
                           setFormData({ ...formData, endTime: e.target.value })
                         }
-                        className="w-full p-2 border-2 border-slate-300 rounded-lg bg-white font-black text-[11px] outline-none focus:border-[var(--color-primary)] transition-colors"
+                        className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
                       />
                     </div>
                   </div>
@@ -852,7 +850,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                           description: e.target.value,
                         })
                       }
-                      className="w-full p-3 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none font-bold text-xs shadow-sm transition-colors h-24 resize-none text-slate-700"
+                      className="w-full p-3 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none text-xs shadow-sm transition-colors h-24 resize-none text-slate-700 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       placeholder="Details, Ablauf, Verpflegung..."
                     />
                   </div>
@@ -873,7 +871,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                             onChange={() =>
                               setFormData({ ...formData, hideExpired: false })
                             }
-                            className="w-4 h-4 accent-slate-800"
+                            className="w-4 h-4 accent-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <span>
                             In den Reiter "Vergangene Veranstaltungen"
@@ -887,7 +885,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                             onChange={() =>
                               setFormData({ ...formData, hideExpired: true })
                             }
-                            className="w-4 h-4 accent-slate-800"
+                            className="w-4 h-4 accent-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <span>Komplett ausblenden</span>
                         </label>
@@ -908,7 +906,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                             onChange={() =>
                               setFormData({ ...formData, allowComment: true })
                             }
-                            className="w-4 h-4 accent-slate-800"
+                            className="w-4 h-4 accent-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <span>Ja</span>
                         </label>
@@ -919,7 +917,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                             onChange={() =>
                               setFormData({ ...formData, allowComment: false })
                             }
-                            className="w-4 h-4 accent-slate-800"
+                            className="w-4 h-4 accent-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <span>Nein</span>
                         </label>
@@ -941,7 +939,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                             maxParticipants: e.target.value,
                           })
                         }
-                        className="w-full p-2 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none font-bold text-xs shadow-sm transition-colors"
+                        className="w-full p-2 border-2 border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-[var(--color-primary)] outline-none text-xs shadow-sm transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       />
                     </div>
 
@@ -960,7 +958,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                                 isRegistrationBlocked: true,
                               })
                             }
-                            className="w-4 h-4 accent-red-500"
+                            className="w-4 h-4 accent-red-500 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <span>Gesperrt</span>
                         </label>
@@ -974,7 +972,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                                 isRegistrationBlocked: false,
                               })
                             }
-                            className="w-4 h-4 accent-[var(--color-primary)]"
+                            className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                           <span>Offen</span>
                         </label>
@@ -1159,7 +1157,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                     return (
                       <div
                         key={i}
-                        className="flex gap-3 p-2.5 bg-slate-50 border border-slate-100 rounded-xl items-center shadow-sm"
+                        className="flex gap-3 h-8 px-3 py-1 bg-slate-50 border border-slate-100 rounded-xl items-center shadow-sm font-sans font-medium"
                       >
                         <div
                           className={`w-8 h-8 rounded-full flex shrink-0 items-center justify-center text-white text-sm shadow-sm ${

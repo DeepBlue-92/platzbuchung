@@ -519,7 +519,9 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
       const countGuestFee = b.guestFee !== undefined ? b.guestFee : guestFee;
 
       let fee = 0;
-      if (count > 0) {
+      if (b.calculatedFeeCents !== undefined) {
+        fee = b.calculatedFeeCents / 100;
+      } else if (count > 0) {
         if (countBillingMode === "per_court") {
           fee = countGuestFee * resolvedHours;
         } else {
@@ -585,7 +587,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
 
           {isAdmin && (
             <div className="flex flex-row items-center justify-between gap-2 w-full md:w-auto self-stretch md:self-auto mt-0 md:mt-0">
-              <div className="flex items-center gap-1.5 sm:gap-2.5 bg-slate-50 border border-slate-200 px-2 sm:px-3.5 h-9 rounded-2xl shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-3 bg-slate-50 border border-slate-200 px-2 sm:px-3.5 h-9 rounded-2xl shrink-0">
                 <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse shrink-0" />
                 <div>
                   <div className="text-[7px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none">
@@ -642,7 +644,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                 <select 
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] shadow-sm py-2"
+                  className="bg-white border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] shadow-sm py-2 font-sans font-medium"
                 >
                   <option value="all">Alle Jahre</option>
                   {availableYears.map((year) => (
@@ -670,7 +672,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                   ? "Mitglieder, Platz oder Datum suchen..."
                   : "Platz oder Datum suchen..."
               }
-              className="w-full pl-9 pr-4 bg-white border border-slate-200 rounded-xl text-[11px] font-medium text-slate-700 placeholder-slate-400 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] shadow-sm py-2"
+              className="w-full pl-9 pr-4 bg-white border border-slate-200 rounded-xl text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] shadow-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
             />
           </div>
         </div>
@@ -757,7 +759,9 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       b.guestFee !== undefined ? b.guestFee : guestFee;
 
                     let fee = 0;
-                    if (count > 0) {
+                    if (b.calculatedFeeCents !== undefined) {
+                      fee = b.calculatedFeeCents / 100;
+                    } else if (count > 0) {
                       if (countBillingMode === "per_court") {
                         fee = countGuestFee * resolvedHours;
                       } else {
@@ -802,6 +806,11 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                               ? "pro Platzstunde"
                               : "pro Gast"}
                           </span>
+                          {b.appliedFeeRuleName && (
+                            <div className="text-[9px] text-slate-400 font-medium mt-0.5" title={`Regel: ${b.appliedFeeRuleName}`}>
+                              {b.appliedFeeRuleName}
+                            </div>
+                          )}
                         </td>
                         <td className="p-4 font-semibold text-sm text-slate-800 text-right font-sans">
                           {fee.toFixed(2).replace(".", ",")} €
@@ -887,7 +896,9 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                   b.guestFee !== undefined ? b.guestFee : guestFee;
 
                 let fee = 0;
-                if (count > 0) {
+                if (b.calculatedFeeCents !== undefined) {
+                  fee = b.calculatedFeeCents / 100;
+                } else if (count > 0) {
                   if (countBillingMode === "per_court") {
                     fee = countGuestFee * resolvedHours;
                   } else {
@@ -1084,7 +1095,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                         max="2100"
                         value={editingRule.gueltig_ab_jahr}
                         onChange={(e) => setEditingRule({...editingRule, gueltig_ab_jahr: e.target.value})}
-                        className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text"
+                        className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         required
                       />
                     </div>
@@ -1112,7 +1123,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                               });
                             }
                           }}
-                          className="w-full h-10 pl-4 pr-12 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text"
+                          className="w-full h-10 pl-4 pr-12 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           required
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400">€</span>
@@ -1126,7 +1137,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       <select
                         value={editingRule.berechnungsmodus}
                         onChange={(e) => setEditingRule({...editingRule, berechnungsmodus: e.target.value})}
-                        className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer"
+                        className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer font-sans font-medium"
                         required
                       >
                         <option value="PLATZBASIS">Platzbasis (pauschal)</option>
@@ -1155,7 +1166,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                 <button
                   type="submit"
                   form="rule-form"
-                  className="w-full px-4 py-3 bg-[var(--color-primary)] text-white text-sm font-bold rounded-xl hover:bg-black shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center"
+                  className="w-full h-10 px-3 py-1.5 bg-[var(--color-primary)] text-white text-sm font-bold rounded-xl hover:bg-black shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center"
                 >
                   <Save className="w-4 h-4 mr-2" /> Speichern
                 </button>
@@ -1257,7 +1268,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       }
                       value={bDate}
                       onChange={(e) => setBDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                   <div>
@@ -1273,7 +1284,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       }
                       value={bCourt}
                       onChange={(e) => setBCourt(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -1292,7 +1303,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       }
                       value={bTime}
                       onChange={(e) => setBTime(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                   <div>
@@ -1307,7 +1318,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       }
                       value={bEndTime}
                       onChange={(e) => setBEndTime(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-60 disabled:cursor-not-allowed py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                   <div>
@@ -1331,7 +1342,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                   <select 
                     value={bUserId}
                     onChange={(e) => setBUserId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] py-2"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] py-2 font-sans font-medium"
                   >
                     {(Object.values(users) as User[])
                       .sort((a, b) => {
@@ -1372,7 +1383,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       required
                       value={bGuestCount}
                       onChange={(e) => setBGuestCount(Number(e.target.value))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] py-2"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                   <div>
@@ -1386,7 +1397,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                       required
                       value={bGuestFee}
                       onChange={(e) => setBGuestFee(Number(e.target.value))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] font-mono py-2"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] font-mono py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -1403,7 +1414,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                         e.target.value as "per_player" | "per_court",
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] font-bold text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] py-2"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] py-2 font-sans font-medium"
                   >
                     <option value="per_player">
                       pro Gast (Stundensatz * Gäste * Dauer)
@@ -1447,7 +1458,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                     placeholder="Interner Vermerk (z.b. Clubabend, Training oder Gutschein)..."
                     value={bComment}
                     onChange={(e) => setBComment(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] font-bold text-slate-700 placeholder-slate-400 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] resize-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-700 outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] resize-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                 </div>
 
@@ -1457,7 +1468,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                     id="bIsPaidCheckbox"
                     checked={bIsPaid}
                     onChange={(e) => setBIsPaid(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] shadow-sm"
+                    className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] shadow-sm font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                   <label
                     htmlFor="bIsPaidCheckbox"

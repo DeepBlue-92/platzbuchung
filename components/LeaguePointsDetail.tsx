@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, LeaguePlayer, LeagueMatch, LeagueConfigVersion } from '../types';
 import { LeaguePointConfig, applyDecay } from '../services/leagueEngine';
 import { getLeagueConfigVersions } from '../services/league';
+import { resolvePlayerDisplayName } from '../utils/playerHelper';
 
 interface Props {
   currentUser: User;
@@ -71,12 +72,7 @@ export function LeaguePointsDetail({
   // Helper to resolve name
   const getUserName = (userId: string) => {
     const u = users[userId];
-    if (u) {
-      if (u.klarname) return u.klarname;
-      if (u.firstName || u.lastName) return `${u.firstName || ''} ${u.lastName || ''}`.trim();
-      return u.name;
-    }
-    return userId.length > 10 ? 'Spieler' : userId;
+    return resolvePlayerDisplayName(u, userId);
   };
 
   return (
@@ -421,7 +417,7 @@ export function LeaguePointsDetail({
                   step="1"
                   value={simulatedDiff}
                   onChange={(e) => setSimulatedDiff(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 hover:accent-amber-300 focus:outline-none"
+                  className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400 hover:accent-amber-300 focus:outline-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
 
                 <div className="flex justify-between text-xs text-slate-400 font-medium">

@@ -34,6 +34,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
   accentColor = "#c04d2b",
   onDismissOnboardingHints,
 }) => {
+  const currentClubId = settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen";
   const currentYearNum = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYearNum);
   const [entries, setEntries] = useState<ArbeitsEinsatz[]>([]);
@@ -290,18 +291,18 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
 
   // Subscribe to work hours entries
   useEffect(() => {
-    const unsubscribe = listenToArbeitseinsaetze(currentUser.vereinsId || "sv-neuhausen", (data) => {
+    const unsubscribe = listenToArbeitseinsaetze(currentClubId, (data) => {
       // We will sort dynamically during render instead of here, to support table sorting
       setEntries(data);
     });
-    const unsubscribePlanned = listenToPlannedWorkShifts(currentUser.vereinsId || "sv-neuhausen", (data) => {
+    const unsubscribePlanned = listenToPlannedWorkShifts(currentClubId, (data) => {
       setPlannedShifts(data);
     });
     return () => {
       unsubscribe();
       unsubscribePlanned();
     };
-  }, [currentUser.vereinsId]);
+  }, [currentClubId]);
 
   const getMemberFormattedName = (u?: User, fallbackId?: string) => {
     if (!u) {
@@ -362,12 +363,12 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time_window || "").localeCompare(b.time_window || ""));
 
   const handleSignUpForShift = async (shift: PlannedWorkShift) => {
-    const clubId = currentUser.vereinsId || "sv-neuhausen";
+    const clubId = currentClubId;
     await signUpForPlannedWorkShift(clubId, shift, currentUser.id);
   };
 
   const handleSignOutFromShift = async (shift: PlannedWorkShift) => {
-    const clubId = currentUser.vereinsId || "sv-neuhausen";
+    const clubId = currentClubId;
     await signOutFromPlannedWorkShift(clubId, shift, currentUser.id);
   };
 
@@ -466,7 +467,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
       timeWindowFormatted = "";
     }
 
-    const clubId = currentUser.vereinsId || "sv-neuhausen";
+    const clubId = currentClubId;
     const now = new Date().toISOString();
 
     const shiftToSave: PlannedWorkShift = {
@@ -506,7 +507,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
 
   const handleDeletePlannedShiftSubmit = async () => {
     if (!shiftToDelete) return;
-    const clubId = currentUser.vereinsId || "sv-neuhausen";
+    const clubId = currentClubId;
     await deletePlannedWorkShift(clubId, shiftToDelete.id);
     setShiftToDelete(null);
   };
@@ -668,7 +669,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
           createdBy: currentUser.name,
           createdAt: timestamp,
         };
-        await saveArbeitseinsatz(currentUser.vereinsId || "sv-neuhausen", newEntry);
+        await saveArbeitseinsatz(currentClubId, newEntry);
       }
 
       if (targetUids.length > 1) {
@@ -687,7 +688,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
 
   const handleDeleteEntry = async (entryId: string) => {
     try {
-      await deleteArbeitseinsatz(currentUser.vereinsId || "sv-neuhausen", entryId);
+      await deleteArbeitseinsatz(currentClubId, entryId);
       setShowDeleteConfirmFor(null);
       setSelectedEntries(prev => prev.filter(id => id !== entryId));
     } catch (err) {
@@ -698,7 +699,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
   const handleMassDelete = async () => {
     try {
       for (const entryId of selectedEntries) {
-        await deleteArbeitseinsatz(currentUser.vereinsId || "sv-neuhausen", entryId);
+        await deleteArbeitseinsatz(currentClubId, entryId);
       }
       setSelectedEntries([]);
       setShowMassDeleteConfirm(false);
@@ -713,7 +714,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
       for (const entryId of selectedEntries) {
         const entry = entries.find(e => e.id === entryId);
         if (entry) {
-          await saveArbeitseinsatz(currentUser.vereinsId || "sv-neuhausen", {
+          await saveArbeitseinsatz(currentClubId, {
             ...entry,
             category: massCategory
           });
@@ -945,7 +946,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
           <div className="mb-2.5 sm:mb-6">
 
             {/* Desktop filters grid - always visible, no layout flash */}
-            <div className="hidden md:grid md:grid-cols-4 gap-2.5">
+            <div className="hidden md:grid md:grid-cols-4 gap-3">
               {/* Year Filter */}
               <div>
                 <select
@@ -954,7 +955,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                     setSelectedYear(Number(e.target.value));
                     setEntriesPage(1);
                   }}
-                  className="w-full h-10 px-4 bg-slate-50 text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer"
+                  className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer font-sans font-medium"
                 >
                   {availableYears.map((y) => (
                     <option key={y} value={y}>{y}</option>
@@ -970,7 +971,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                   placeholder="SUCHEN..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-10 pl-9 pr-4 bg-slate-50 text-sm font-medium text-slate-700 placeholder-slate-400 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase"
+                  className="w-full h-10 pl-9 pr-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
 
@@ -978,7 +979,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
               <select
                 value={selectedCategoryFilter}
                 onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                className="w-full h-10 px-4 bg-slate-50 text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer"
+                className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer font-sans font-medium"
               >
                 <option value="all">ALLE BEREICHE</option>
                 {categories.map((c: string) => (
@@ -991,7 +992,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                 <select
                   value={selectedMemberFilter}
                   onChange={(e) => setSelectedMemberFilter(e.target.value)}
-                  className="w-full h-10 px-4 bg-slate-50 text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer"
+                  className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer font-sans font-medium"
                 >
                   <option value="all">ALLE MITGLIEDER</option>
                   {(Object.values(users) as User[])
@@ -1022,7 +1023,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                     transition={{ duration: 0.22, ease: "easeInOut" }}
                     className="overflow-hidden"
                   >
-                    <div className="grid grid-cols-1 gap-2.5 pb-2">
+                    <div className="grid grid-cols-1 gap-3 pb-2">
                       {/* Search input */}
                       <div className="relative">
                         <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
@@ -1031,7 +1032,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                           placeholder="SUCHEN..."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full h-10 pl-9 pr-4 bg-slate-50 text-sm font-medium text-slate-700 placeholder-slate-400 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase"
+                          className="w-full h-10 pl-9 pr-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                       </div>
 
@@ -1039,7 +1040,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                       <select
                         value={selectedCategoryFilter}
                         onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                        className="w-full h-10 px-4 bg-slate-50 text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer"
+                        className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer font-sans font-medium"
                       >
                         <option value="all">ALLE BEREICHE</option>
                         {categories.map((c: string) => (
@@ -1052,7 +1053,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         <select
                           value={selectedMemberFilter}
                           onChange={(e) => setSelectedMemberFilter(e.target.value)}
-                          className="w-full h-10 px-4 bg-slate-50 text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer"
+                          className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer font-sans font-medium"
                         >
                           <option value="all">ALLE MITGLIEDER</option>
                           {(Object.values(users) as User[])
@@ -1085,7 +1086,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                 <select
                   value={massCategory}
                   onChange={(e) => setMassCategory(e.target.value)}
-                  className="h-10 px-3 bg-white text-sm font-medium text-slate-700 rounded-lg border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all uppercase cursor-pointer w-full sm:w-auto sm:min-w-[180px]"
+                  className="h-10 px-3 bg-white text-sm text-slate-700 rounded-lg border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all uppercase cursor-pointer w-full sm:w-auto sm:min-w-[180px] font-sans font-medium"
                 >
                   <option value="">UMGRUPPIEREN NACH...</option>
                   {categories.map((c: string) => (
@@ -1127,7 +1128,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                               setSelectedEntries([]);
                             }
                           }}
-                          className="rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                          className="rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                       </th>
                     )}
@@ -1173,7 +1174,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                                     setSelectedEntries(prev => prev.filter(id => id !== e.id));
                                   }
                                 }}
-                                className="rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                                className="rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                               />
                             </div>
                           </td>
@@ -1276,7 +1277,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                                 setSelectedEntries(prev => prev.filter(id => id !== e.id));
                               }
                             }}
-                            className="rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] h-3.5 w-3.5 shrink-0 cursor-pointer"
+                            className="rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] h-3.5 w-3.5 shrink-0 cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           />
                         )}
                         <span className="font-bold text-slate-800 text-xs sm:text-sm truncate">
@@ -1380,7 +1381,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
           <div className="flex flex-col mt-8 pt-6 border-t-2 border-slate-200">
             {/* Header */}
             <div className="mb-4 pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-sm xs:text-base md:text-lg font-black text-slate-800 uppercase tracking-wider">
                   Geplante Arbeitseinsätze
                 </h2>
@@ -1404,13 +1405,13 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
             </div>
 
             {/* Filter Row */}
-            <div className="flex flex-wrap items-center gap-2.5 mb-4 bg-slate-50 p-2.5 sm:p-3 rounded-2xl border border-slate-200/80">
+            <div className="flex flex-wrap items-center gap-3 mb-4 bg-slate-50  px-3 py-1.5 sm:p-3 rounded-2xl border border-slate-200/80">
               {/* Year Dropdown */}
               <div className="relative min-w-[110px]">
                 <select
                   value={plannedYear}
                   onChange={(e) => setPlannedYear(Number(e.target.value))}
-                  className="w-full h-9 pl-3 pr-8 bg-white text-xs font-bold text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] appearance-none cursor-pointer"
+                  className="w-full h-9 pl-3 pr-8 bg-white text-xs text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] appearance-none cursor-pointer font-sans font-medium"
                 >
                   {plannedShiftYears.map((yr) => (
                     <option key={yr} value={yr}>
@@ -1426,7 +1427,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                 <select
                   value={plannedCategoryFilter}
                   onChange={(e) => setPlannedCategoryFilter(e.target.value)}
-                  className="w-full h-9 pl-3 pr-8 bg-white text-xs font-bold text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] appearance-none cursor-pointer"
+                  className="w-full h-9 pl-3 pr-8 bg-white text-xs text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] appearance-none cursor-pointer font-sans font-medium"
                 >
                   <option value="all">Alle Kategorien</option>
                   {plannedCategoryOptions.map((cat) => (
@@ -1446,7 +1447,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                   value={plannedSearchQuery}
                   onChange={(e) => setPlannedSearchQuery(e.target.value)}
                   placeholder="Suchen..."
-                  className="w-full h-9 pl-8 pr-8 bg-white text-xs font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] placeholder-slate-400"
+                  className="w-full h-9 pl-8 pr-8 bg-white text-xs text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
                 {plannedSearchQuery && (
                   <button
@@ -1533,7 +1534,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                                       <button
                                         type="button"
                                         title="Aus Slot austragen"
-                                        onClick={() => signOutFromPlannedWorkShift(currentUser.vereinsId || "sv-neuhausen", shift, assignedId)}
+                                        onClick={() => signOutFromPlannedWorkShift(currentClubId, shift, assignedId)}
                                         className="text-slate-400 hover:text-rose-600 p-0.5 transition-colors cursor-pointer"
                                       >
                                         <i className="fa-solid fa-xmark text-xs"></i>
@@ -1667,7 +1668,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                       )}
                     </div>
 
-                    <div className="text-xs font-bold text-slate-800 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div className="text-xs text-slate-800 bg-slate-50 h-8 px-3 py-1 rounded-xl border border-slate-100 font-sans font-medium">
                       {shift.title_description}
                     </div>
 
@@ -1692,7 +1693,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                               {isAdmin && (
                                 <button
                                   type="button"
-                                  onClick={() => signOutFromPlannedWorkShift(currentUser.vereinsId || "sv-neuhausen", shift, assignedId)}
+                                  onClick={() => signOutFromPlannedWorkShift(currentClubId, shift, assignedId)}
                                   className="text-slate-400 hover:text-rose-600 p-0.5"
                                 >
                                   <i className="fa-solid fa-xmark text-xs"></i>
@@ -1767,12 +1768,12 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
             
             {/* Filter & Suche */}
             <div className="mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {/* Dropdown Jahr */}
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
-                  className="w-full h-10 px-4 bg-slate-50 text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer"
+                  className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer font-sans font-medium"
                 >
                   {availableYears.map((y) => (
                     <option key={y} value={y}>{y}</option>
@@ -1787,7 +1788,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                     placeholder="MITGLIEDER SUCHEN..."
                     value={userSearchQuery}
                     onChange={(e) => setUserSearchQuery(e.target.value)}
-                    className="w-full h-10 pl-9 pr-4 bg-slate-50 text-sm font-medium text-slate-700 placeholder-slate-400 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase"
+                    className="w-full h-10 pl-9 pr-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                 </div>
 
@@ -1795,7 +1796,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                 <select
                   value={userStatusFilter}
                   onChange={(e) => setUserStatusFilter(e.target.value)}
-                  className="w-full h-10 px-4 bg-slate-50 text-sm font-medium text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer"
+                  className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all uppercase cursor-pointer font-sans font-medium"
                 >
                   <option value="all">Alle Einträge</option>
                   <option value="fulfilled">SOLL ERFÜLLT</option>
@@ -1919,7 +1920,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
       {/* Delete Confirmation Dialogs */}
       {(showDeleteConfirmFor || showMassDeleteConfirm) && createPortal(
         <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/60 backdrop-blur-[2px] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in zoom-in-95 duration-200">
+          <div className="border-none outline-none bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-black text-slate-800 uppercase tracking-wider mb-2">
               Löschen bestätigen
             </h3>
@@ -2060,7 +2061,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         max="2100"
                         value={editingRule.gueltig_ab_jahr}
                         onChange={(e) => setEditingRule({...editingRule, gueltig_ab_jahr: e.target.value})}
-                        className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text"
+                        className="w-full h-10 px-4 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         required
                       />
                     </div>
@@ -2079,7 +2080,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                           step="0.5"
                           value={editingRule.soll_stunden}
                           onChange={(e) => setEditingRule({...editingRule, soll_stunden: e.target.value})}
-                          className="w-full h-10 pl-4 pr-12 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text"
+                          className="w-full h-10 pl-4 pr-12 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           required
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400">Std.</span>
@@ -2106,7 +2107,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                               });
                             }
                           }}
-                          className="w-full h-10 pl-4 pr-16 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text"
+                          className="w-full h-10 pl-4 pr-16 bg-slate-50 text-sm text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                           required
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400">€ / Std.</span>
@@ -2134,7 +2135,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                 <button
                   type="submit"
                   form="rule-form"
-                  className="w-full px-4 py-3 bg-[var(--color-primary)] text-white text-sm font-bold rounded-xl hover:bg-black shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center"
+                  className="w-full h-10 px-3 py-1.5 bg-[var(--color-primary)] text-white text-sm font-bold rounded-xl hover:bg-black shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center"
                 >
                   <i className="fa-solid fa-floppy-disk mr-2"></i> Speichern
                 </button>
@@ -2238,7 +2239,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         placeholder="Mitglieder suchen..."
                         value={memberSearchQuery}
                         onChange={(e) => setMemberSearchQuery(e.target.value)}
-                        className="w-full h-10 pl-9 pr-8 border border-slate-200 rounded-xl font-bold text-xs bg-slate-50 text-slate-700 focus:outline-none focus:border-slate-800 focus:bg-white transition-all"
+                        className="w-full h-10 pl-9 pr-8 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-700 focus:outline-none focus:border-slate-800 focus:bg-white transition-all font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       />
                       {memberSearchQuery && (
                         <button
@@ -2281,7 +2282,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                                     setFormSelectedUserIds(prev => [...prev, u.id]);
                                     setMemberSearchQuery("");
                                   }}
-                                  className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 text-xs font-bold text-slate-800 flex items-center justify-between transition-colors cursor-pointer"
+                                  className="w-full text-left h-8 px-3 py-1 hover:bg-slate-50 text-xs text-slate-800 flex items-center justify-between transition-colors cursor-pointer font-sans font-medium"
                                 >
                                   <span>{name}</span>
                                   <i className="fa-solid fa-plus text-[10px] text-[var(--color-primary)]"></i>
@@ -2318,7 +2319,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         })}
                       </div>
                     ) : (
-                      <div className="text-[11px] text-slate-400 italic bg-slate-50 p-2.5 rounded-xl border border-dashed border-slate-200 text-center">
+                      <div className="text-[11px] text-slate-400 italic bg-slate-50 h-8 px-3 py-1 rounded-xl border border-dashed border-slate-200 text-center font-sans font-medium">
                         Keine Mitglieder ausgewählt. Tippe oben einen Namen ein.
                       </div>
                     )}
@@ -2336,7 +2337,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                       value={formDate}
                       onChange={(e) => setFormDate(e.target.value)}
                       required
-                      className="w-full p-2 border border-slate-200 rounded-lg bg-white font-bold text-xs outline-none focus:border-slate-800 transition-colors text-slate-900 cursor-text"
+                      className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:border-slate-800 transition-colors text-slate-900 cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                   </div>
   
@@ -2351,7 +2352,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                       onChange={(e) => setFormHours(Number(e.target.value))}
                       step={interval}
                       min={interval}
-                      className="w-full p-2 border border-slate-200 rounded-lg bg-white font-bold text-xs outline-none focus:border-slate-800 transition-colors text-slate-900 cursor-text"
+                      className="w-full p-2 border border-slate-200 rounded-lg bg-white text-xs outline-none focus:border-slate-800 transition-colors text-slate-900 cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                     />
                     <span className="text-[9px] text-slate-400 font-bold uppercase mt-1 block leading-tight">
                       Erfassung im {interval}-Std.-Takt
@@ -2367,7 +2368,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                   <select
                     value={formCategory}
                     onChange={(e) => setFormCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl font-bold text-xs bg-slate-50 text-slate-700 focus:outline-none focus:border-slate-800 transition-all cursor-pointer"
+                    className="w-full h-8 px-3 py-1 border border-slate-200 rounded-xl text-xs bg-slate-50 text-slate-700 focus:outline-none focus:border-slate-800 transition-all cursor-pointer font-sans font-medium"
                   >
                     {categories.map((c: string) => (
                       <option key={c} value={c}>
@@ -2388,7 +2389,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                     onChange={(e) => setFormDescription(e.target.value)}
                     placeholder="Bsp. Unkraut gejätet, Linien repariert, Platz abgezogen..."
                     required={commentsRequired}
-                    className="w-full p-3.5 border border-slate-200 rounded-xl font-bold text-xs outline-none bg-slate-50 focus:border-slate-800 transition-all text-slate-700 placeholder-slate-400 resize-none cursor-text"
+                    className="w-full p-3.5 border border-slate-200 rounded-xl text-xs outline-none bg-slate-50 focus:border-slate-800 transition-all text-slate-700 resize-none cursor-text font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   ></textarea>
                 </div>
               </div>
@@ -2481,7 +2482,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                 {/* Form Content - Scrollable area */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-5">
                   {shiftFormError && (
-                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2.5">
+                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-3">
                       <i className="fa-solid fa-triangle-exclamation text-sm shrink-0"></i>
                       <span>{shiftFormError}</span>
                     </div>
@@ -2498,7 +2499,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         required
                         value={shiftDate}
                         onChange={(e) => setShiftDate(e.target.value)}
-                        className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer"
+                        className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       />
                     </div>
 
@@ -2512,7 +2513,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                           type="time"
                           value={shiftStartTime}
                           onChange={(e) => setShiftStartTime(e.target.value)}
-                          className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer"
+                          className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                       </div>
                       <div>
@@ -2523,7 +2524,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                           type="time"
                           value={shiftEndTime}
                           onChange={(e) => setShiftEndTime(e.target.value)}
-                          className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer"
+                          className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                       </div>
                     </div>
@@ -2537,7 +2538,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         required
                         value={shiftCategory}
                         onChange={(e) => setShiftCategory(e.target.value)}
-                        className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer"
+                        className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white cursor-pointer font-sans font-medium"
                       >
                         {plannedCategoryOptions.map((cat) => (
                           <option key={cat} value={cat}>
@@ -2558,7 +2559,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         placeholder="z.B. Sportheim & Duschen gründlich reinigen"
                         value={shiftTitleDescription}
                         onChange={(e) => setShiftTitleDescription(e.target.value)}
-                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white resize-none"
+                        className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white resize-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       />
                     </div>
 
@@ -2580,7 +2581,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                             setShiftAssignedUserIds(prev => prev.slice(0, val));
                           }
                         }}
-                        className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white"
+                        className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                       />
                     </div>
 
@@ -2604,7 +2605,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                             setShiftMemberSearchOpen(true);
                           }}
                           onFocus={() => setShiftMemberSearchOpen(true)}
-                          className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white"
+                          className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[var(--color-primary)] focus:bg-white font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                         {shiftMemberSearchQuery && (
                           <button
@@ -2631,7 +2632,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                                       setShiftMemberSearchQuery("");
                                       setShiftMemberSearchOpen(false);
                                     }}
-                                    className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 text-xs font-bold text-slate-800 flex items-center justify-between transition-colors cursor-pointer"
+                                    className="w-full text-left h-8 px-3 py-1 hover:bg-slate-50 text-xs text-slate-800 flex items-center justify-between transition-colors cursor-pointer font-sans font-medium"
                                   >
                                     <span>{name}</span>
                                     <i className="fa-solid fa-plus text-[10px] text-[var(--color-primary)]"></i>
@@ -2706,14 +2707,14 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
       {/* Admin Delete Shift Confirmation Modal */}
       {shiftToDelete && createPortal(
         <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/60 backdrop-blur-[2px] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-left">
+          <div className="border-none outline-none bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-left">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-2">
               Geplanten Einsatz löschen
             </h3>
             <p className="text-xs text-slate-600 mb-6 leading-relaxed">
               Möchtest du den Einsatz <span className="font-bold text-slate-800">"{shiftToDelete.title_description}"</span> am {new Date(shiftToDelete.date).toLocaleDateString("de-DE")} wirklich löschen?
             </p>
-            <div className="flex justify-end gap-2.5">
+            <div className="flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setShiftToDelete(null)}
@@ -2737,7 +2738,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
       {/* Admin Quick Member Assignment Modal */}
       {memberAssignShift && createPortal(
         <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/60 backdrop-blur-[2px] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-left max-h-[90vh] flex flex-col">
+          <div className="border-none outline-none bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-left max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
               <div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
@@ -2763,7 +2764,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                 value={assignUserSearch}
                 onChange={(e) => setAssignUserSearch(e.target.value)}
                 placeholder="Mitglied suchen..."
-                className="w-full h-8 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-[var(--color-primary)] focus:bg-white"
+                className="w-full h-8 pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[var(--color-primary)] focus:bg-white font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
               />
             </div>
 
@@ -2791,7 +2792,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         <button
                           type="button"
                           onClick={async () => {
-                            const clubId = currentUser.vereinsId || "sv-neuhausen";
+                            const clubId = currentClubId;
                             await signOutFromPlannedWorkShift(clubId, memberAssignShift, u.id);
                             setMemberAssignShift(prev => prev ? {
                               ...prev,
@@ -2806,7 +2807,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                         <button
                           type="button"
                           onClick={async () => {
-                            const clubId = currentUser.vereinsId || "sv-neuhausen";
+                            const clubId = currentClubId;
                             await signUpForPlannedWorkShift(clubId, memberAssignShift, u.id);
                             setMemberAssignShift(prev => prev ? {
                               ...prev,

@@ -1,59 +1,272 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion } from 'motion/react';
-import { User, LeaguePlayer, LeagueMatch, Person, LeaguePartnerSearch, DynamicLeague } from '../types';
-import { 
-  getLeagueProfile, 
-  createLeagueProfile, 
-  getAllLeagueProfiles,
-  getPlayerMatches,
-  getAllLeagueMatches,
-  createLeagueMatch,
-  updateLeagueMatchResult,
-  getLeaguePartnerSearches,
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { User, Person, LeaguePartnerSearch, LeagueMatch, Booking, UserClub } from '../types';
+import {
   saveLeaguePartnerSearch,
   renewLeaguePartnerSearch,
   deleteLeaguePartnerSearch,
-  getLeagueConfigVersions
+  cancelLeagueMatchResult,
 } from '../services/league';
-import { 
-  applyDecay, 
-  calculatePoints, 
-  getConfigForDate,
-  LeaguePointConfig 
-} from '../services/leagueEngine';
+import { applyDecay } from '../services/leagueEngine';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { PlayerContactModal } from './PlayerContactModal';
 import { PointsHistoryModal } from './PointsHistoryModal';
-import { PartnerSearchModal } from './PartnerSearchModal';
+import { CreateAdModal } from './hobbyliga/CreateAdModal';
 import { LeagueResultDrawer } from './LeagueResultDrawer';
 import { PointsRankChart } from './PointsRankChart';
 import { LeaguePointsDetail } from './LeaguePointsDetail';
-import { ClubSettings, DEFAULT_DYNAMIC_LEAGUES } from '../services/db';
-import { useAuth } from '../App'; // Or wherever auth is
-
-// Mock context for config, we should pass this in or fetch it
-const defaultConfig: LeaguePointConfig = {
-  initialRankingPoints: 100,
-  participationPoints: 5,
-  maxBonusPoints: 45,
-  logisticSteepnessK: 0.05,
-  decayPointsPerWeek: 5,
-};
+import {
+  HobbyligaBanner,
+  BannerClubItem,
+  DEFAULT_BANNER_CREST_1,
+  DEFAULT_BANNER_CREST_2,
+  DEFAULT_BANNER_CREST_3,
+} from './hobbyliga/HobbyligaBanner';
+import { SpielpartnerBoerse } from './hobbyliga/SpielpartnerBoerse';
+import { HobbyligaMiniKalender } from './hobbyliga/HobbyligaMiniKalender';
+import { HobbyligaBookingDrawer } from './hobbyliga/HobbyligaBookingDrawer';
+import { HobbyligaKompaktRangliste } from './hobbyliga/HobbyligaKompaktRangliste';
+import { formatRelativeDate } from '../utils/date';
+import { isMatchExpired } from '../utils/leagueMatchHelper';
+import { HobbyligaWillkommen } from './hobbyliga/HobbyligaWillkommen';
+import { HobbyligaNaechstesSpiel } from './hobbyliga/HobbyligaNaechstesSpiel';
+import { HobbyligaLetztesErgebnis } from './hobbyliga/HobbyligaLetztesErgebnis';
+import { HobbyligaCombinedMatchFeed } from './hobbyliga/HobbyligaCombinedMatchFeed';
+import { HobbyligaMatchHistorie } from './hobbyliga/HobbyligaMatchHistorie';
+import { ClubSettings, listenToClubs } from '../services/db';
+import { useLeagueData, defaultLeagueConfig } from '../hooks/useLeagueData';
+import {
+  resolvePlayerDisplayName,
+  isPlayerEligibleForLeague,
+  calculateLeaguePlayerLivePoints,
+} from '../utils/playerHelper';
 
 interface Props {
   currentUser: User;
   clubId: string;
-  users: Record<string, User>; // All users to display names
+  users: Record<string, User>;
   settings?: ClubSettings;
+  bookings?: Booking[];
+  userClubs?: UserClub[];
+  onSwitchClub?: (clubId: string) => void;
+  allClubs?: any[];
+  onBook?: (
+    date: string,
+    startTime: string,
+    endTime: string,
+    court: string,
+    players: string[],
+    hasBallMachine: boolean,
+    guestCount: number,
+    editingId?: string,
+    comment?: string
+  ) => Promise<string | null>;
 }
 
-export function LeagueDashboard({ currentUser, clubId, users, settings }: Props) {
-  const [profile, setProfile] = useState<LeaguePlayer | null>(null);
-  const [allProfiles, setAllProfiles] = useState<LeaguePlayer[]>([]);
-  const [matches, setMatches] = useState<LeagueMatch[]>([]);
-  const [allClubMatches, setAllClubMatches] = useState<LeagueMatch[]>([]);
-  const [loading, setLoading] = useState(true);
+export function LeagueDashboard({ currentUser, clubId, users, settings, bookings = [], userClubs, onSwitchClub, allClubs, onBook }: Props) {
+  const {
+    profile,
+    allProfiles,
+    matches,
+    allClubMatches,
+    partnerSearches,
+    activeConfig,
+    loading,
+    hasOptedIn,
+    activeLeagues,
+    activeLeagueId,
+    setActiveLeagueId,
+    refreshPartnerSearches,
+    handleJoinLeague,
+    setPartnerSearches,
+  } = useLeagueData(currentUser, clubId, settings);
 
-  const [activeConfig, setActiveConfig] = useState<LeaguePointConfig>(defaultConfig);
+  // Systemweite Vereine für dynamische Wappenanzeige im Banner
+  const [systemClubs, setSystemClubs] = useState<any[]>(() => {
+    if (allClubs && allClubs.length > 0) return allClubs;
+    try {
+      const cached = localStorage.getItem('v2_clubs_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  useEffect(() => {
+    if (allClubs && allClubs.length > 0) {
+      setSystemClubs(allClubs);
+      return;
+    }
+    const unsub = listenToClubs((clubs) => {
+      if (clubs && clubs.length > 0) {
+        setSystemClubs(clubs);
+      }
+    });
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [allClubs]);
+
+  // Hilfsfunktion: Strikte Prüfung, ob das Liga-Modul für einen Verein in den Systemeinstellungen aktiv ist
+  const isClubLigaActive = (c: any): boolean => {
+    if (!c) return false;
+    if (c.aktiv === false || c.geloescht === true) return false;
+    const rawId = String(c.vereinsId || c.id || '').toLowerCase().trim();
+    if (rawId === 'super-admin' || rawId === 'system') return false;
+
+    const modules = c.modules || {};
+    // 1. Wenn Modul Liga explizit deaktiviert ist, strikt ausschließen
+    if (
+      modules.liga === false ||
+      modules.league === false ||
+      c.isLigaActive === false ||
+      c.enableLeague === false
+    ) {
+      return false;
+    }
+
+    // 2. Aktiv-Kriterien prüfen
+    const isActive =
+      modules.liga === true ||
+      modules.league === true ||
+      c.isLigaActive === true ||
+      c.enableLeague === true ||
+      c.leagueSettings?.enabled === true;
+
+    return isActive === true;
+  };
+
+  // Berechnung aller teilnehmenden Vereine mit aktivierter Hobbyliga (participatingClubs)
+  const participatingClubs = useMemo<BannerClubItem[]>(() => {
+    const clubsMap = new Map<string, any>();
+
+    const getCanonicalClubKey = (raw?: string): string => {
+      if (!raw) return '';
+      const clean = raw.toLowerCase().trim();
+      if (clean.includes('neuhausen')) return 'sv-neuhausen';
+      if (clean.includes('furth')) return 'djk-furth';
+      if (clean.includes('sportsgeist')) return 'tcsportsgeist';
+      return clean.replace(/[^a-z0-9]/g, '');
+    };
+
+    // 1. Vereine aus systemClubs hinzufügen, NUR WENN das Liga-Modul aktiv ist
+    (systemClubs || []).forEach((c) => {
+      if (!isClubLigaActive(c)) {
+        return;
+      }
+      const canonicalKey = getCanonicalClubKey(c.vereinsId || c.id || c.clubName);
+      if (canonicalKey) {
+        clubsMap.set(canonicalKey, c);
+      }
+    });
+
+    // 2. Aktuelle Club-Einstellungen prüfen & mergen (oder entfernen, falls Liga deaktiviert)
+    const currentCanonicalKey = getCanonicalClubKey(clubId || settings?.clubName || 'sv-neuhausen');
+    if (settings && currentCanonicalKey) {
+      const currentIsActive = isClubLigaActive({
+        ...settings,
+        vereinsId: clubId || currentCanonicalKey,
+      });
+      if (!currentIsActive) {
+        clubsMap.delete(currentCanonicalKey);
+      } else {
+        const existing = clubsMap.get(currentCanonicalKey);
+        clubsMap.set(currentCanonicalKey, {
+          ...(existing || {}),
+          vereinsId: clubId || currentCanonicalKey,
+          clubName: settings.clubName || existing?.clubName || clubId,
+          customLogoUrl: settings.customLogoUrl || existing?.customLogoUrl,
+          logoUrl: settings.logoUrl || existing?.logoUrl,
+          modules: settings.modules || existing?.modules,
+          aktiv: true,
+        });
+      }
+    }
+
+    // 3. Fallback: Falls systemClubs noch gar nicht geladen wurde (leere Map),
+    // stellen wir nur sicher, dass die dauerhaft aktiven Vereine (SV Neuhausen, DJK Furth) vorhanden sind.
+    // Vereine mit deaktiviertem Liga-Modul (wie TC Sportsgeist) werden hier NIEMALS hinzugefügt.
+    if (clubsMap.size === 0) {
+      clubsMap.set('sv-neuhausen', {
+        vereinsId: 'sv-neuhausen',
+        clubName: 'SV Neuhausen',
+        customLogoUrl: DEFAULT_BANNER_CREST_1,
+        modules: { league: true, liga: true },
+        aktiv: true,
+      });
+      clubsMap.set('djk-furth', {
+        vereinsId: 'djk-furth',
+        clubName: 'DJK Furth',
+        customLogoUrl: DEFAULT_BANNER_CREST_2,
+        modules: { league: true, liga: true },
+        aktiv: true,
+      });
+    }
+
+    // 4. Strikte Filterung: Nur Vereine behalten, deren Liga-Modul aktiv ist
+    const filteredClubs = Array.from(clubsMap.values()).filter((c) => isClubLigaActive(c));
+
+    // Sortierung: Bekannte Reihenfolge oder alphabetisch
+    const knownLeagueOrder = ['sv-neuhausen', 'djk-furth'];
+    const sortedList = filteredClubs.sort((a, b) => {
+      const idA = getCanonicalClubKey(a.vereinsId || a.id || a.clubName);
+      const idB = getCanonicalClubKey(b.vereinsId || b.id || b.clubName);
+      const idxA = knownLeagueOrder.indexOf(idA);
+      const idxB = knownLeagueOrder.indexOf(idB);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return (a.clubName || '').localeCompare(b.clubName || '');
+    });
+
+    return sortedList.map((c, idx) => {
+      const canonicalKey = getCanonicalClubKey(c.vereinsId || c.id || c.clubName);
+      const isNeuhausen = canonicalKey === 'sv-neuhausen';
+      const isFurth = canonicalKey === 'djk-furth';
+      const isSportsgeist = canonicalKey === 'tcsportsgeist';
+
+      // Benutzer-Anforderung:
+      // "verwende im banner das logo vom anmelde und ladebildschirm des jeweiligen vereins und nichts das aus der kopfzeiel"
+      // -> customLogoUrl || logoUrl (NIEMALS customHeaderLogoUrl oder headerLogoUrl)
+      let logo = c.customLogoUrl || c.logoUrl;
+      let fallbackSrc: string | undefined = undefined;
+      let scale = 1;
+
+      if (isNeuhausen) {
+        if (!logo || logo.includes('wappen_svn.png') || logo.includes('Wappen-1920w')) {
+          logo = DEFAULT_BANNER_CREST_1;
+        }
+        fallbackSrc = '/images/wappen_svn_login.png';
+      } else if (isFurth) {
+        if (!logo) {
+          logo = DEFAULT_BANNER_CREST_2;
+        }
+        fallbackSrc = '/images/wappen_djk_furth_login.png';
+      } else if (isSportsgeist) {
+        if (!logo || logo.includes('DEFAULT_SETTINGS')) {
+          logo = DEFAULT_BANNER_CREST_3;
+        }
+        fallbackSrc = '/images/wappen_tc_sportsgeist_login.png';
+        if (logo && (logo.includes('rAaAABXRUJQ') || logo.length < 11000)) {
+          scale = 1.08;
+        }
+      }
+
+      return {
+        id: c.vereinsId || c.id || `club-${idx}`,
+        name: c.clubName || c.vereinsName || c.vereinsId || 'Verein',
+        logoUrl: logo,
+        fallbackSrc,
+        alt: `${c.clubName || c.vereinsId || 'Verein'} Wappen`,
+        variant: (isNeuhausen ? 1 : isFurth ? 2 : 3) as 1 | 2 | 3,
+        scale,
+      };
+    });
+  }, [systemClubs, settings, clubId]);
+
+  const leagueBannerClubs = participatingClubs;
 
   // Detail view state for points system
   const [showPointsDetail, setShowPointsDetail] = useState(() => {
@@ -78,108 +291,78 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Spielpartner-Börse State
-  const [partnerSearches, setPartnerSearches] = useState<LeaguePartnerSearch[]>([]);
+  // Modal states
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
   const [isResultDrawerOpen, setIsResultDrawerOpen] = useState(false);
+  const [selectedMatchForEdit, setSelectedMatchForEdit] = useState<LeagueMatch | null>(null);
+  const [selectedMatchForEntry, setSelectedMatchForEntry] = useState<LeagueMatch | null>(null);
   const [searchToEdit, setSearchToEdit] = useState<LeaguePartnerSearch | null>(null);
-
-  // Dynamic Leagues Configuration
-  const dynamicLeagues: DynamicLeague[] = useMemo(() => {
-    const list = settings?.leagueSettings?.leagues;
-    if (list && list.length > 0) return list;
-    return DEFAULT_DYNAMIC_LEAGUES;
-  }, [settings]);
-
-  // Only active leagues are available to players
-  const activeLeagues: DynamicLeague[] = useMemo(() => {
-    const active = dynamicLeagues.filter((l) => l.active);
-    return active.length > 0 ? active : DEFAULT_DYNAMIC_LEAGUES.filter((l) => l.active);
-  }, [dynamicLeagues]);
-
-  // Active League Filter State (Decoupled from gender icons)
-  const [activeLeagueId, setActiveLeagueId] = useState<string>(() => {
-    if (currentUser.leagueId && activeLeagues.some((l) => l.id === currentUser.leagueId)) {
-      return currentUser.leagueId;
-    }
-    if (currentUser.gender === "w" && activeLeagues.some((l) => l.id === "damen_einzel")) {
-      return "damen_einzel";
-    }
-    if (currentUser.gender === "m" && activeLeagues.some((l) => l.id === "herren_einzel")) {
-      return "herren_einzel";
-    }
-    return activeLeagues[0]?.id || "open_mixed";
-  });
-
-  // Ensure activeLeagueId points to a valid active league
-  useEffect(() => {
-    if (activeLeagues.length > 0 && !activeLeagues.some((l) => l.id === activeLeagueId)) {
-      setActiveLeagueId(activeLeagues[0].id);
-    }
-  }, [activeLeagues, activeLeagueId]);
-
-  // Modal states for player contact and points history
+  
   const [selectedContactUser, setSelectedContactUser] = useState<User | Person | null>(null);
   const [selectedContactRank, setSelectedContactRank] = useState<number | undefined>(undefined);
   const [selectedHistoryUser, setSelectedHistoryUser] = useState<User | Person | null>(null);
 
+  // League Booking States (for Mini-Kalender & Specialized Booking Drawer)
+  const [selectedSlotForBooking, setSelectedSlotForBooking] = useState<{
+    date: string;
+    court: string;
+    startTime: string;
+  } | null>(null);
+  const [isBookingDrawerOpen, setIsBookingDrawerOpen] = useState(false);
+  const [pendingChallengedUser, setPendingChallengedUser] = useState<{
+    userId: string;
+    name?: string;
+  } | null>(null);
+
+  const handleChallengePlayer = (userId: string, userName?: string) => {
+    setPendingChallengedUser({ userId, name: userName });
+    // Smooth scroll to mini calendar
+    setTimeout(() => {
+      const el = document.getElementById('mini-kalender-liga-slots');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 60);
+  };
+
+  const handleSelectSlot = (date: string, court: string, startTime: string) => {
+    setSelectedSlotForBooking({ date, court, startTime });
+    setIsBookingDrawerOpen(true);
+  };
+
+  // Fetch missing users from global collection if they are not in the local club `users` map
+  const [extendedUsers, setExtendedUsers] = useState<Record<string, User>>({});
+
   useEffect(() => {
-    loadData();
+    if (!allProfiles || allProfiles.length === 0) return;
 
-    const handleResultAdded = () => loadData();
-    window.addEventListener('league-result-added', handleResultAdded);
-    return () => window.removeEventListener('league-result-added', handleResultAdded);
-  }, [currentUser.id]);
+    const missingIds = Array.from(new Set(allProfiles
+      .map(p => p.userId)
+      .filter(id => !users[id] && id !== currentUser.id && !extendedUsers[id])));
 
-  async function loadData() {
-    setLoading(true);
-    try {
-      let userProfile = await getLeagueProfile(currentUser.id);
-      if (!userProfile) {
-        userProfile = await createLeagueProfile(currentUser.id, clubId, defaultConfig.initialRankingPoints);
+    if (missingIds.length === 0) return;
+
+    const fetchMissingUsers = async () => {
+      const fetched: Record<string, User> = {};
+      const chunkSize = 30;
+      for (let i = 0; i < missingIds.length; i += chunkSize) {
+        const chunk = missingIds.slice(i, i + chunkSize);
+        const q = query(collection(db, "users"), where("__name__", "in", chunk));
+        const snap = await getDocs(q);
+        snap.forEach(doc => {
+          fetched[doc.id] = doc.data() as User;
+        });
       }
-      setProfile(userProfile);
-      
-      const [profiles, userMatches, clubMatches, searches, configVersions] = await Promise.all([
-        getAllLeagueProfiles(),
-        getPlayerMatches(currentUser.id),
-        getAllLeagueMatches(),
-        getLeaguePartnerSearches(),
-        getLeagueConfigVersions()
-      ]);
+      setExtendedUsers(prev => ({ ...prev, ...fetched }));
+    };
 
-      const currentConfig = getConfigForDate(configVersions, new Date().toISOString(), userProfile.leagueId);
-      setActiveConfig(currentConfig);
-      
-      // Ensure current user's profile is in the allProfiles list if it was just created
-      if (!profiles.find(p => p.userId === currentUser.id)) {
-        profiles.push(userProfile);
-      }
-      
-      setAllProfiles(profiles);
-      setMatches(userMatches);
-      setAllClubMatches(clubMatches);
-      setPartnerSearches(searches);
-    } catch (e) {
-      console.error(e);
-    }
-    setLoading(false);
-  }
+    fetchMissingUsers().catch(console.error);
+  }, [allProfiles, users, currentUser.id]);
 
-  async function refreshPartnerSearches() {
-    try {
-      const searches = await getLeaguePartnerSearches();
-      setPartnerSearches(searches);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  async function handleSavePartnerSearch(availabilityText: string, expiresAt: string) {
-    const userRank = getUserRank(currentUser.id);
+  async function handleSavePartnerSearch(availabilityText: string, expiresAt: string, showContactInfo: boolean) {
     const userName = getUserName(currentUser.id);
     const clubName = currentUser.vereinsId || clubId || 'Verein';
-    await saveLeaguePartnerSearch(currentUser.id, clubId, availabilityText, expiresAt, userName, clubName);
+    await saveLeaguePartnerSearch(currentUser.id, clubId, availabilityText, expiresAt, userName, clubName, showContactInfo);
     await refreshPartnerSearches();
   }
 
@@ -188,10 +371,10 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
     await refreshPartnerSearches();
   }
 
-  async function handleDeletePartnerSearch(userId: string) {
+  async function handleDeletePartnerSearch(searchIdOrUserId: string) {
     try {
-      await deleteLeaguePartnerSearch(userId);
-      setPartnerSearches(prev => prev.filter(s => s.userId !== userId));
+      await deleteLeaguePartnerSearch(searchIdOrUserId);
+      setPartnerSearches(prev => prev.filter(s => s.id !== searchIdOrUserId && s.userId !== searchIdOrUserId));
       setSearchToEdit(null);
       setIsPartnerModalOpen(false);
       await refreshPartnerSearches();
@@ -201,15 +384,30 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
     }
   }
 
-  async function handleJoinLeague() {
-    try {
-      const newProfile = await createLeagueProfile(currentUser.id, clubId, defaultConfig.initialRankingPoints);
-      setProfile(newProfile);
-    } catch (e) {
-      console.error(e);
-      alert('Fehler beim Beitritt zur Liga.');
+  const handleEditMatch = (match: LeagueMatch) => {
+    setSelectedMatchForEdit(match);
+    setSelectedMatchForEntry(null);
+    setIsResultDrawerOpen(true);
+  };
+
+  const handleEnterScheduledMatchResult = (match: LeagueMatch) => {
+    setSelectedMatchForEdit(null);
+    setSelectedMatchForEntry(match);
+    setIsResultDrawerOpen(true);
+  };
+
+  const handleCancelMatchResult = async (match: LeagueMatch) => {
+    if (!window.confirm("Möchtest du dieses Match-Ergebnis wirklich stornieren? Die vergebenen Ranglisten-Punkte werden zurückgesetzt und das Spiel wird wieder als geplantes Match markiert.")) {
+      return;
     }
-  }
+    try {
+      await cancelLeagueMatchResult(match.id, currentUser.id);
+      window.dispatchEvent(new Event('league-result-added'));
+    } catch (err: any) {
+      console.error('Fehler beim Stornieren:', err);
+      alert('Fehler beim Stornieren des Matches: ' + (err?.message || err));
+    }
+  };
 
   function getUserObject(userId: string): User | null {
     if (!userId) return null;
@@ -222,226 +420,251 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
     if (users[trimmed]) {
       return users[trimmed];
     }
+    
+    if (extendedUsers[trimmed]) {
+      return extendedUsers[trimmed];
+    }
 
-    return (
-      Object.values(users).find((u) => {
-        const full = `${u.firstName || ""} ${u.lastName || ""}`.trim();
-        const reverseFull = `${u.lastName || ""}, ${u.firstName || ""}`
-          .trim()
-          .replace(/^, |,$/, "");
-        return (
-          u.id === trimmed ||
-          u.name.toLowerCase() === trimmed.toLowerCase() ||
-          (u.klarname && u.klarname.toLowerCase() === trimmed.toLowerCase()) ||
-          (full && full.toLowerCase() === trimmed.toLowerCase()) ||
-          (reverseFull && reverseFull.toLowerCase() === trimmed.toLowerCase())
-        );
-      }) || null
-    );
+    const foundInUsers = Object.values(users).find((u) => {
+      const full = `${u.firstName || ""} ${u.lastName || ""}`.trim();
+      const reverseFull = `${u.lastName || ""}, ${u.firstName || ""}`
+        .trim()
+        .replace(/^, |,$/, "");
+      return (
+        u.id === trimmed ||
+        u.name.toLowerCase() === trimmed.toLowerCase() ||
+        (u.klarname && u.klarname.toLowerCase() === trimmed.toLowerCase()) ||
+        (full && full.toLowerCase() === trimmed.toLowerCase()) ||
+        (reverseFull && reverseFull.toLowerCase() === trimmed.toLowerCase())
+      );
+    });
+    
+    if (foundInUsers) return foundInUsers;
+    
+    const foundInExtended = Object.values(extendedUsers).find((u) => {
+      const full = `${u.firstName || ""} ${u.lastName || ""}`.trim();
+      const reverseFull = `${u.lastName || ""}, ${u.firstName || ""}`
+        .trim()
+        .replace(/^, |,$/, "");
+      return (
+        u.id === trimmed ||
+        u.name.toLowerCase() === trimmed.toLowerCase() ||
+        (u.klarname && u.klarname.toLowerCase() === trimmed.toLowerCase()) ||
+        (full && full.toLowerCase() === trimmed.toLowerCase()) ||
+        (reverseFull && reverseFull.toLowerCase() === trimmed.toLowerCase())
+      );
+    });
+
+    return foundInExtended || null;
   }
 
   function getUserName(userId: string): string {
     const u = getUserObject(userId);
-    if (u) {
-      const full = `${u.firstName || ""} ${u.lastName || ""}`.trim();
-      if (full) return full;
-      return u.klarname || u.name;
-    }
-    return userId || "Spieler";
+    return resolvePlayerDisplayName(u, userId);
   }
+
+  // Determine effective configuration
+  const effectiveConfig = activeConfig || defaultLeagueConfig;
+
+  // Find active league definition
+  const currentLeague = activeLeagues.find((l) => l.id === activeLeagueId);
+
+  // Map & filter profiles for current active league with real livePoints calculation
+  const currentLeagueProfiles = useMemo(() => {
+    return allProfiles
+      .map((p) => {
+        const u = getUserObject(p.userId);
+        const isEligible = isPlayerEligibleForLeague(u, currentLeague, activeLeagueId, p.leagueId);
+        if (!isEligible) return null;
+
+        const livePoints = calculateLeaguePlayerLivePoints(p, effectiveConfig);
+        const matchesCount = p.matchesCount || 0;
+        const userName = resolvePlayerDisplayName(u, p.userId);
+
+        return {
+          ...p,
+          userName,
+          livePoints,
+          matchesCount,
+          active: true,
+          hasPlayedMatches: matchesCount > 0,
+        };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+  }, [allProfiles, users, extendedUsers, currentLeague, activeLeagueId, effectiveConfig]);
+
+  // Sorted rankings: High points first, then matchesCount / recent match, then alphabetical
+  const filteredSortedProfiles = useMemo(() => {
+    return [...currentLeagueProfiles].sort((a, b) => {
+      if (Math.abs(b.livePoints - a.livePoints) > 0.01) {
+        return b.livePoints - a.livePoints;
+      }
+      if (b.matchesCount !== a.matchesCount) {
+        return b.matchesCount - a.matchesCount;
+      }
+      if (b.matchesCount > 0 && a.matchesCount > 0 && a.lastMatchDate && b.lastMatchDate) {
+        return new Date(b.lastMatchDate).getTime() - new Date(a.lastMatchDate).getTime();
+      }
+      return a.userName.localeCompare(b.userName, 'de', { sensitivity: 'base' });
+    });
+  }, [currentLeagueProfiles]);
+
+  // Calculate standard competition ranks (1224 ranking / Gleichstand):
+  // Players with identical points get the exact same rank.
+  // The next rank reflects the actual count of players with higher points + 1.
+  const userRankMap = useMemo(() => {
+    const map = new Map<string, number>();
+    filteredSortedProfiles.forEach((profile, index) => {
+      if (index === 0) {
+        map.set(profile.userId, 1);
+      } else {
+        const prevProfile = filteredSortedProfiles[index - 1];
+        const isTie = Math.abs((profile.livePoints ?? 0) - (prevProfile.livePoints ?? 0)) < 0.01;
+        if (isTie) {
+          map.set(profile.userId, map.get(prevProfile.userId) || 1);
+        } else {
+          map.set(profile.userId, index + 1);
+        }
+      }
+    });
+    return map;
+  }, [filteredSortedProfiles]);
+
+  function getUserRank(userId: string): number | undefined {
+    return userRankMap.get(userId);
+  }
+
+  // Live points map across the league profiles
+  const userPointsMap = useMemo(() => {
+    const map = new Map<string, number>();
+    currentLeagueProfiles.forEach((p) => {
+      map.set(p.userId, p.livePoints);
+    });
+    return map;
+  }, [currentLeagueProfiles]);
+
+  const getUserPoints = useCallback((userId: string): number | undefined => {
+    if (userPointsMap.has(userId)) {
+      return userPointsMap.get(userId);
+    }
+    const foundProfile = allProfiles.find((p) => p.userId === userId || p.id === userId);
+    if (foundProfile) {
+      return calculateLeaguePlayerLivePoints(foundProfile, effectiveConfig);
+    }
+    if (userId === currentUser.id && profile) {
+      return calculateLeaguePlayerLivePoints(profile, effectiveConfig);
+    }
+    return undefined;
+  }, [userPointsMap, allProfiles, effectiveConfig, currentUser.id, profile]);
+
+  const currentUserLivePoints = useMemo(() => {
+    return getUserPoints(currentUser.id) ?? (profile ? calculateLeaguePlayerLivePoints(profile, effectiveConfig) : undefined);
+  }, [getUserPoints, currentUser.id, profile, effectiveConfig]);
+
+  const currentUserSearch = partnerSearches.find(
+    s =>
+      s.userId === currentUser.id ||
+      s.id === currentUser.id ||
+      (currentUser.name && s.userId && currentUser.name.toLowerCase() === s.userId.toLowerCase()) ||
+      (currentUser.name && s.userName && currentUser.name.toLowerCase() === s.userName.toLowerCase()) ||
+      (currentUser.klarname && s.userName && currentUser.klarname.toLowerCase() === s.userName.toLowerCase())
+  );
+
+  const isPlayerActive = (p: { active?: boolean } | null) => {
+    if (!p) return false;
+    return true;
+  };
+
+  const currentActiveLeagueMatches = allClubMatches.filter(m => {
+    return m.leagueId === activeLeagueId || (!m.leagueId && activeLeagueId === "open_mixed");
+  });
+
+  const currentActiveLeagueUserMatches = matches.filter(m => {
+    return m.leagueId === activeLeagueId || (!m.leagueId && activeLeagueId === "open_mixed");
+  });
+
+  const userCompletedMatches = currentActiveLeagueUserMatches
+    .filter((m) => m.status === 'completed')
+    .sort((a, b) => new Date(b.played_at || b.result?.reportedAt || b.updatedAt || b.createdAt).getTime() - new Date(a.played_at || a.result?.reportedAt || a.updatedAt || a.createdAt).getTime());
+
+  // Cross-club matches for history
+  const allUserCompletedMatches = matches
+    .filter((m) => m.status === 'completed')
+    .sort((a, b) => new Date(b.played_at || b.result?.reportedAt || b.updatedAt || b.createdAt).getTime() - new Date(a.played_at || a.result?.reportedAt || a.updatedAt || a.createdAt).getTime());
+
+  const now = new Date();
+  const upcomingAndRecentMatches = currentActiveLeagueUserMatches
+    .filter((m) => {
+      if (m.status === 'scheduled') return true;
+      if (m.status === 'completed' && m.scheduledDate) {
+        const startTime = new Date(m.scheduledDate + 'T' + (m.scheduledStartTime || '00:00'));
+        const diffHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+        return diffHours >= 0 && diffHours <= 24;
+      }
+      return false;
+    })
+    .sort((a, b) => {
+      const aTime = new Date(a.scheduledDate + 'T' + (a.scheduledStartTime || '00:00')).getTime();
+      const bTime = new Date(b.scheduledDate + 'T' + (b.scheduledStartTime || '00:00')).getTime();
+      return aTime - bTime;
+    });
+
+  // Unified League Matches (combining allClubMatches and user matches, avoiding duplicates)
+  const combinedLeagueMatches = useMemo(() => {
+    const map = new Map<string, LeagueMatch>();
+    currentActiveLeagueMatches.forEach((m) => {
+      if (m.id) map.set(m.id, m);
+    });
+    currentActiveLeagueUserMatches.forEach((m) => {
+      if (m.id) map.set(m.id, m);
+    });
+    return Array.from(map.values());
+  }, [currentActiveLeagueMatches, currentActiveLeagueUserMatches]);
+
+  // Upcoming scheduled matches across the league (Community Feed)
+  const upcomingFeedMatches = useMemo(() => {
+    return combinedLeagueMatches
+      .filter((m) => m.status !== 'cancelled' && m.status !== 'aborted')
+      .filter((m) => m.status === 'scheduled' || (!m.result && m.scheduledDate))
+      .filter((m) => !isMatchExpired(m)) // Exclude expired matches
+      .sort((a, b) => {
+        const aDate = `${a.scheduledDate || '9999-99-99'}T${a.scheduledStartTime || '00:00'}`;
+        const bDate = `${b.scheduledDate || '9999-99-99'}T${b.scheduledStartTime || '00:00'}`;
+        return aDate.localeCompare(bDate);
+      });
+  }, [combinedLeagueMatches]);
+
+  // Pending user matches (Past matches without results for the current user)
+  const pendingUserMatches = useMemo(() => {
+    return combinedLeagueMatches
+      .filter((m) => m.status !== 'cancelled' && m.status !== 'aborted')
+      .filter((m) => m.status === 'scheduled' || (!m.result && m.scheduledDate))
+      .filter((m) => isMatchExpired(m)) // Only expired matches
+      .filter((m) => m.player1UserId === currentUser?.id || m.player2UserId === currentUser?.id)
+      .sort((a, b) => {
+        const aDate = `${a.scheduledDate || '9999-99-99'}T${a.scheduledStartTime || '00:00'}`;
+        const bDate = `${b.scheduledDate || '9999-99-99'}T${b.scheduledStartTime || '00:00'}`;
+        return bDate.localeCompare(aDate); // descending, latest first
+      });
+  }, [combinedLeagueMatches, currentUser?.id]);
+
+  // Completed matches across the league (for recent results feed)
+  const completedFeedMatches = useMemo(() => {
+    const list = combinedLeagueMatches
+      .filter((m) => m.status === 'completed' || !!m.result)
+      .sort((a, b) => {
+        const timeA = new Date(a.played_at || a.result?.reportedAt || a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.played_at || b.result?.reportedAt || b.updatedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+    return list.length > 0 ? list : allUserCompletedMatches;
+  }, [combinedLeagueMatches, allUserCompletedMatches]);
+
+  const activeScheduledMatch = upcomingAndRecentMatches.find(m => m.status === 'scheduled') || null;
 
   if (loading) {
     return <div className="p-8 text-center text-slate-500">Profil wird geladen...</div>;
   }
-
-  if (!profile) {
-    return <div className="p-8 text-center text-slate-500">Profil wird geladen...</div>;
-  }
-
-  function isPlayerActive(p: LeaguePlayer) {
-    if (p.matchesCount && p.matchesCount > 0) return true;
-    if (p.createdAt && p.lastMatchDate && p.lastMatchDate !== p.createdAt) return true;
-    if (p.basePoints !== activeConfig.initialRankingPoints) return true;
-    return false;
-  }
-
-  // Calculate live points (with decay)
-  const mappedProfiles = allProfiles.map(p => {
-    const active = isPlayerActive(p);
-    const livePoints = applyDecay(p.basePoints, p.lastMatchDate, activeConfig, active ? 1 : 0);
-    return { ...p, livePoints, active, userName: getUserName(p.userId) };
-  });
-
-  // Helper to determine if a player belongs to activeLeagueId
-  const isUserInActiveLeague = (userId: string, pLeagueId?: string): boolean => {
-    const u = getUserObject(userId);
-    const assignedLeagueId = pLeagueId || u?.leagueId;
-    
-    if (assignedLeagueId) {
-      return assignedLeagueId === activeLeagueId;
-    }
-    
-    // Default fallback when user has no explicit league assigned:
-    if (activeLeagueId === "damen_einzel") {
-      return (u?.gender || "m") === "w";
-    }
-    if (activeLeagueId === "herren_einzel") {
-      return (u?.gender || "m") === "m";
-    }
-    if (activeLeagueId === "open_mixed") {
-      return true;
-    }
-    return false;
-  };
-
-  // Filter profiles for current active league
-  const currentLeagueProfiles = mappedProfiles.filter(p => isUserInActiveLeague(p.userId, p.leagueId));
-
-  const activeProfiles = currentLeagueProfiles.filter(p => p.active).sort((a, b) => {
-    if (b.livePoints !== a.livePoints) {
-      return b.livePoints - a.livePoints; // highest points first
-    }
-    return new Date(b.lastMatchDate).getTime() - new Date(a.lastMatchDate).getTime(); // younger date wins
-  });
-
-  const inactiveProfiles = currentLeagueProfiles.filter(p => !p.active).sort((a, b) => {
-    return a.userName.localeCompare(b.userName, 'de', { sensitivity: 'base' });
-  });
-
-  const filteredSortedProfiles = [...activeProfiles, ...inactiveProfiles];
-
-  function getUserRank(userId: string): number | undefined {
-    const idx = activeProfiles.findIndex(p => p.userId === userId);
-    return idx !== -1 ? idx + 1 : undefined;
-  }
-
-  function formatRelativeDate(dateStr?: string): string {
-    if (!dateStr) return 'k. A.';
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays <= 0) {
-      return 'heute';
-    } else if (diffDays === 1) {
-      return 'gestern';
-    } else if (diffDays < 7) {
-      return `vor ${diffDays} Tagen`;
-    }
-    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  }
-
-  function getDaysRemaining(expiresAt?: string): number {
-    if (!expiresAt) return 99;
-    const expiry = new Date(expiresAt);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffMs = expiry.getTime() - today.getTime();
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  }
-
-  const currentUserSearch = partnerSearches.find(s => s.userId === currentUser.id);
-
-
-  const activeScheduledMatch = matches.find(m => {
-    if (m.status !== 'scheduled') return false;
-    if (!m.scheduledDate) return false;
-    const dateStr = m.scheduledDate + (m.scheduledStartTime ? 'T' + m.scheduledStartTime + ':00' : 'T00:00:00');
-    const matchTime = new Date(dateStr);
-    return matchTime <= new Date();
-  });
-
-  const pendingUpcomingMatch = matches.find(m => {
-    if (m.status !== 'scheduled') return false;
-    if (!m.scheduledDate) return false;
-    const dateStr = m.scheduledDate + (m.scheduledStartTime ? 'T' + m.scheduledStartTime + ':00' : 'T00:00:00');
-    const matchTime = new Date(dateStr);
-    return matchTime > new Date();
-  });
-
-  const latestCompletedMatch = (allClubMatches.length > 0 ? allClubMatches : matches)
-    .filter(m => m.status === 'completed')
-    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())[0];
-
-  const effectiveConfig: LeaguePointConfig = activeConfig;
-
-  // Personal status and match history metrics for dashboard
-  const userLivePoints = profile
-    ? applyDecay(
-        profile.basePoints,
-        profile.lastMatchDate,
-        effectiveConfig,
-        isPlayerActive(profile) ? 1 : 0
-      )
-    : effectiveConfig.initialRankingPoints;
-
-  const userRank = getUserRank(currentUser.id);
-
-  const allMatchesList = allClubMatches.length > 0 ? allClubMatches : matches;
-  const userCompletedMatches = allMatchesList
-    .filter(
-      m =>
-        m.status === 'completed' &&
-        (m.player1UserId === currentUser.id || m.player2UserId === currentUser.id)
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt || b.createdAt).getTime() -
-        new Date(a.updatedAt || a.createdAt).getTime()
-    );
-
-  let userWins = 0;
-  let userLosses = 0;
-  userCompletedMatches.forEach(m => {
-    if (m.result?.winnerId === currentUser.id) userWins++;
-    else if (m.result?.winnerId) userLosses++;
-  });
-
-  // Reconstruct point timeline bounds
-  let runningPts = effectiveConfig.initialRankingPoints;
-  let userHighestPts = userLivePoints;
-  let userLowestPts = userLivePoints;
-  const chronUserMatches = [...userCompletedMatches].reverse();
-  chronUserMatches.forEach(m => {
-    const isP1 = m.player1UserId === currentUser.id;
-    const delta = m.pointsAwarded
-      ? isP1
-        ? m.pointsAwarded.player1
-        : m.pointsAwarded.player2
-      : 0;
-    if (delta !== undefined) {
-      runningPts += delta;
-      userHighestPts = Math.max(userHighestPts, runningPts);
-      userLowestPts = Math.min(userLowestPts, runningPts);
-    }
-  });
-  userHighestPts = Math.max(userHighestPts, userLivePoints);
-  userLowestPts = Math.min(userLowestPts, userLivePoints);
-
-  // Inactivity countdown logic
-  const lastMatchDateObj = profile?.lastMatchDate
-    ? new Date(profile.lastMatchDate)
-    : null;
-  const now = new Date();
-  let inactivityDaysElapsed = 0;
-  let nextInactivityCheckStr = '';
-
-  if (lastMatchDateObj && profile?.matchesCount && profile.matchesCount > 0) {
-    const diffTime = Math.abs(now.getTime() - lastMatchDateObj.getTime());
-    inactivityDaysElapsed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const nextCheckDate = new Date(lastMatchDateObj);
-    const weeksPassed = Math.floor(inactivityDaysElapsed / 7);
-    nextCheckDate.setDate(nextCheckDate.getDate() + (weeksPassed + 1) * 7);
-
-    nextInactivityCheckStr = nextCheckDate.toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  }
-
-  const isDecayActive =
-    inactivityDaysElapsed >= 7 && (profile?.matchesCount || 0) > 0;
 
   if (showPointsDetail) {
     return (
@@ -449,7 +672,7 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
         currentUser={currentUser}
         profile={profile}
         allProfiles={allProfiles}
-        matches={allClubMatches.length > 0 ? allClubMatches : matches}
+        matches={currentActiveLeagueMatches.length > 0 ? currentActiveLeagueMatches : matches}
         users={users}
         config={effectiveConfig}
         onBack={() => {
@@ -462,665 +685,178 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
     );
   }
 
+  const currentUserPoints = calculateLeaguePlayerLivePoints(profile, effectiveConfig);
+  const currentUserRank = getUserRank(currentUser.id);
+
   return (
     <div className="w-full flex-grow flex flex-col min-h-0 space-y-4 lg:space-y-6 lg:animate-in lg:fade-in lg:duration-500">
       
       {/* 1. BANNER-HERO-HEADER */}
-      <div className="relative w-full h-[140px] md:h-[160px] rounded-xl md:rounded-2xl overflow-hidden shadow-sm flex items-center bg-slate-900 border border-slate-200">
-        <img 
-          src="/images/banner_hobbyliga.png" 
-          onError={(e) => {
-            // Fallback if local path is not yet cached
-            (e.target as HTMLImageElement).src = "https://raw.githubusercontent.com/DeepBlue-92/platzbuchung/1c29075035a74e2f9cd41da137c369e940da066e/banner_hobbyliga.png";
-          }}
-          alt="Hobbyliga Tennis Match" 
-          referrerPolicy="no-referrer"
-          className="absolute inset-0 w-full h-full object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-900/50 to-transparent"></div>
-        <div className="relative z-10 p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between w-full h-full gap-4">
-          <div className="text-white space-y-1.5">
-            <h2 className="text-2xl md:text-3xl font-black uppercase tracking-wider leading-tight">Hobbyliga</h2>
-            
-            {/* Stylish Badge / KPI combination for Points and Rank */}
-            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-sm">
-              <span className="font-black text-sm md:text-base tracking-wide flex items-center gap-1.5">
-                {(profile ? (applyDecay(profile.basePoints ?? 100, profile.lastMatchDate, defaultConfig, isPlayerActive(profile) ? 1 : 0) || 0) : 100).toFixed(1)} Pkt.
-              </span>
-              <span className="text-white/40 font-light">|</span>
-              <span className="font-bold text-xs md:text-sm text-slate-200 tracking-wider">
-                {isPlayerActive(profile) && getUserRank(profile.userId) ? `Rang #${getUserRank(profile.userId)}` : 'Unplatziert'}
-              </span>
-            </div>
-          </div>
+      <HobbyligaBanner
+        pointsText={`${currentUserPoints.toFixed(1)} Pkt.`}
+        rankText={currentUserRank ? `Rang #${currentUserRank}` : 'Unplatziert'}
+        hasActiveScheduledMatch={!!activeScheduledMatch}
+        clubs={participatingClubs}
+        onOpenResultDrawer={() => {
+          setSelectedMatchForEdit(null);
+          setSelectedMatchForEntry(activeScheduledMatch);
+          setIsResultDrawerOpen(true);
+        }}
+      />
 
-          <div className="flex items-center gap-3 shrink-0">
-            {activeScheduledMatch && (
-              <button 
-                onClick={() => setIsResultDrawerOpen(true)}
-                className="px-4 py-2.5 bg-white text-slate-900 font-bold text-xs md:text-sm uppercase tracking-wider rounded-xl hover:bg-slate-50 transition shadow-md flex items-center justify-center gap-2"
-              >
-                <i className="fa-solid fa-trophy text-[var(--color-primary)]"></i> Ergebnis eintragen
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 6. DASHBOARD LAYOUT (2-SPALTEN) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        
-        {/* LEFT COLUMN: Main Content */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Pending Match Banner if any */}
-          {pendingUpcomingMatch && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                  <i className="fa-regular fa-calendar-check text-lg"></i>
-                </div>
-                <div>
-                  <h4 className="font-bold text-blue-900 text-sm">Anstehendes Match</h4>
-                  <p className="text-blue-700 text-xs mt-0.5">
-                    Am {formatRelativeDate(pendingUpcomingMatch.scheduledDate)} 
-                    {pendingUpcomingMatch.scheduledStartTime ? " um " + pendingUpcomingMatch.scheduledStartTime + " Uhr" : ""} 
-                    &nbsp;gegen {getUserName(pendingUpcomingMatch.player1UserId === currentUser.id ? pendingUpcomingMatch.player2UserId : pendingUpcomingMatch.player1UserId)}.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Spielpartner-Börse */}
-          <div className="bg-[var(--bg-surface,white)] rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-              <div>
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2 bg-[var(--color-primary)]/10 text-[var(--color-primary)] rounded-xl border border-[var(--color-primary)]/20">
-                    <i className="fa-solid fa-bullhorn text-lg"></i>
-                  </span>
-                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
-                    Spielpartner-Börse
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Signalisiere deine Verfügbarkeit für Hobbyliga-Einzelspiele und fordere Gegner heraus!
-                </p>
-              </div>
-              <div>
-                {currentUserSearch ? (
-                  <button
-                    onClick={() => {
-                      setSearchToEdit(currentUserSearch);
-                      setIsPartnerModalOpen(true);
-                    }}
-                    className="w-full sm:w-auto px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <i className="fa-solid fa-pen-to-square text-slate-300"></i> Meine Anzeige verwalten
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setSearchToEdit(null);
-                      setIsPartnerModalOpen(true);
-                    }}
-                    className="w-full sm:w-auto px-4 py-2.5 bg-[var(--color-primary)] hover:bg-opacity-90 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <i className="fa-solid fa-plus"></i> Spielanzeige aufgeben
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Renewal Banner if expiring soon */}
-            {currentUserSearch && getDaysRemaining(currentUserSearch.expiresAt) <= 3 && new Date(currentUserSearch.expiresAt).getFullYear() <= 2050 && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-amber-900">
-                <div className="flex items-center gap-2 text-xs font-bold">
-                  <i className="fa-solid fa-clock text-amber-600 text-sm"></i>
-                  <span>
-                    Deine Anzeige läuft {getDaysRemaining(currentUserSearch.expiresAt) <= 0 ? "heute" : "in " + getDaysRemaining(currentUserSearch.expiresAt) + " Tagen"} ab!
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleRenewPartnerSearch(currentUser.id)}
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black rounded-lg transition shadow-sm shrink-0 flex items-center gap-1.5"
-                >
-                  <i className="fa-solid fa-rotate"></i> 14 Tage verlängern
-                </button>
-              </div>
-            )}
-
-            {/* Grid of Partner Search Cards */}
-            {partnerSearches.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {partnerSearches.map((search) => {
-                  const targetUser = getUserObject(search.userId);
-                  const isOwner = currentUser.id === search.userId;
-                  const userRank = getUserRank(search.userId);
-                  const daysLeft = getDaysRemaining(search.expiresAt);
-                  const displayName = search.userName || (targetUser ? (targetUser.firstName || "") + " " + (targetUser.lastName || "") : "Spieler").trim();
-                  const displayClub = search.clubName || (targetUser ? targetUser.vereinsId : search.clubId) || "Verein";
-
-                  return (
-                    <div
-                      key={search.id}
-                      className={"bg-[var(--bg-surface,white)] rounded-2xl border " + (isOwner ? "border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/20" : "border-slate-200 hover:border-slate-300") + " p-5 shadow-sm flex flex-col justify-between transition-all space-y-4"}
-                    >
-                      <div>
-                        {/* Header: User Avatar, Name, Rank, Club */}
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 border border-slate-200 font-bold text-sm flex items-center justify-center shrink-0 shadow-sm">
-                              <i className="fa-solid fa-user text-slate-400 text-sm"></i>
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">
-                                {displayName}
-                                {isOwner && (
-                                  <span className="ml-1.5 text-[10px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] px-1.5 py-0.5 rounded font-black">
-                                    DU
-                                  </span>
-                                )}
-                              </h4>
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                                <i className="fa-solid fa-building-columns text-[10px] text-slate-400"></i>
-                                <span className="truncate">{displayClub}</span>
-                              </div>
-                            </div>
-                          </div>
-                          {/* Rank Badge */}
-                          {userRank ? (
-                            <span className="px-2.5 py-1 bg-[var(--color-primary)]/10 text-slate-800 text-xs font-black rounded-lg border border-[var(--color-primary)]/20 shrink-0">
-                              Rang {userRank}
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-lg shrink-0">
-                              Neu
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Availability Info */}
-                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-slate-700 text-xs font-medium leading-relaxed italic">
-                          "{search.availabilityText}"
-                        </div>
-                      </div>
-
-                      {/* Footer: Date & Contact */}
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
-                        <div className="text-[11px] font-medium text-slate-500">
-                          {new Date(search.expiresAt).getFullYear() > 2050 || daysLeft > 365 ? (
-                            <span className="flex items-center gap-1.5 text-slate-700 font-bold">
-                              <i className="fa-solid fa-infinity text-[var(--color-primary)] text-xs" />
-                              Daueranzeige
-                            </span>
-                          ) : daysLeft <= 3 ? (
-                            <span className="text-amber-600 font-bold flex items-center gap-1">
-                              <i className="fa-solid fa-clock text-amber-500"></i> {daysLeft <= 0 ? "Läuft heute ab" : "Läuft in " + daysLeft + " Tagen ab"}
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1.5 text-slate-500">
-                              <i className="fa-regular fa-calendar text-slate-400 text-xs" />
-                              Gültig bis: <strong className="text-slate-700 font-semibold">{new Date(search.expiresAt).toLocaleDateString("de-DE")}</strong>
-                            </span>
-                          )}
-                        </div>
-                        
-                        {isOwner ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleDeletePartnerSearch(search.userId)}
-                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold rounded-lg transition flex items-center gap-1"
-                            >
-                              <i className="fa-solid fa-trash-can"></i>
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              if (targetUser) {
-                                setSelectedContactUser(targetUser);
-                                setSelectedContactRank(userRank);
-                              } else {
-                                // Create a mock user object from search data
-                                const mockUser = {
-                                  id: search.userId,
-                                  firstName: search.userName ? search.userName.split(" ")[0] : "Spieler",
-                                  lastName: search.userName ? search.userName.split(" ").slice(1).join(" ") : "",
-                                  showContactInfo: true,
-                                } as Person;
-                                setSelectedContactUser(mockUser);
-                                setSelectedContactRank(userRank);
-                              }
-                            }}
-                            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5"
-                          >
-                            <i className="fa-solid fa-envelope text-[var(--color-primary)]"></i> Anfragen
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl">
-                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400 text-xl">
-                  <i className="fa-regular fa-comment-dots"></i>
-                </div>
-                <h4 className="font-bold text-slate-700 text-sm">Noch keine Spielpartner-Anzeigen online</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-                  Sei der Erste, der eine Anzeige schaltet und signalisiere deine Verfügbarkeit für das nächste Match.
-                </p>
-                <button
-                  onClick={() => {
-                    setSearchToEdit(null);
-                    setIsPartnerModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-[var(--color-primary)] text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow-sm inline-flex items-center gap-2 hover:bg-opacity-90"
-                >
-                  <i className="fa-solid fa-plus"></i> Anzeige aufgeben
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Points & Rank History Dual-Axis Chart */}
-          <PointsRankChart
+      {/* 6. DASHBOARD BENTO-GRID LAYOUT */}
+      
+      {/* OBERER ABSCHNITT: BÖRSE, MINI-KALENDER & STATUS-KARTEN */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-stretch">
+        {/* LEFT COLUMN: Börse & Kalender */}
+        <div className="lg:col-span-2 space-y-4 lg:space-y-6">
+          <SpielpartnerBoerse
             currentUser={currentUser}
-            profile={profile}
-            allProfiles={allProfiles}
-            matches={matches}
-            users={users}
-            onNavigateToRules={() => {
-              window.location.hash = '#/hobbyliga/punkte-system';
-              setShowPointsDetail(true);
+            partnerSearches={partnerSearches}
+            currentUserSearch={currentUserSearch}
+            getUserObject={getUserObject}
+            getUserRank={getUserRank}
+            getUserPoints={getUserPoints}
+            currentUserPoints={currentUserLivePoints}
+            onOpenModal={(search) => {
+              setSearchToEdit(search);
+              setIsPartnerModalOpen(true);
             }}
+            onRenew={handleRenewPartnerSearch}
+            onDelete={handleDeletePartnerSearch}
+            onChallenge={handleChallengePlayer}
           />
 
-          {/* MATCH-HISTORIE & FORMEL-AUFSCHLÜSSELUNG */}
-          <div className="bg-[var(--bg-surface,white)] rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <i className="fa-solid fa-list-check text-[var(--color-primary)]" />
-                Match-Historie & Formel-Aufschlüsselung
-              </h3>
-              <span className="text-xs text-slate-400 font-semibold">
-                {userCompletedMatches.length} {userCompletedMatches.length === 1 ? 'Match' : 'Matches'} gewertet
-              </span>
-            </div>
-
-            {userCompletedMatches.length > 0 ? (
-              <div className="divide-y divide-slate-100 -mx-5 -mb-5">
-                {userCompletedMatches.map((m) => {
-                  const isP1 = m.player1UserId === currentUser.id;
-                  const opponentUserId = isP1 ? m.player2UserId : m.player1UserId;
-                  const opponentName = getUserName(opponentUserId);
-                  const isWinner = m.result?.winnerId === currentUser.id;
-                  const delta = m.pointsAwarded
-                    ? isP1
-                      ? m.pointsAwarded.player1
-                      : m.pointsAwarded.player2
-                    : 0;
-
-                  const setsFormatted = m.result?.sets
-                    ? m.result.sets.map((s) => `${s.p1}:${s.p2}`).join(', ')
-                    : '6:4, 6:3';
-
-                  const basePart = effectiveConfig.participationPoints;
-                  const bonusPart = isWinner ? Math.max(0, delta - basePart) : 0;
-
-                  return (
-                    <div
-                      key={m.id}
-                      className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/70 transition"
-                    >
-                      {/* Left: Opponent & Outcome */}
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                            isWinner
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300/60'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}
-                        >
-                          {isWinner ? (
-                            <i className="fa-solid fa-crown text-amber-500 text-xs" />
-                          ) : (
-                            <i className="fa-solid fa-user text-slate-400 text-xs" />
-                          )}
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-900 text-sm truncate">
-                              vs. {opponentName}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                isWinner
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-slate-200 text-slate-700'
-                              }`}
-                            >
-                              {isWinner ? 'Sieg' : 'Niederlage'}
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-400 font-medium mt-0.5 flex items-center gap-2 flex-wrap">
-                            <span>Sätze: <strong className="text-slate-700 font-semibold">{setsFormatted}</strong></span>
-                            <span>&bull;</span>
-                            <span>{new Date(m.updatedAt || m.createdAt).toLocaleDateString('de-DE')}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Transparent Formula Breakdown */}
-                      <div className="bg-slate-50 rounded-xl p-2.5 md:p-3 border border-slate-200/80 flex flex-wrap items-center gap-2.5 text-xs md:self-center">
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-400 font-medium">Basis:</span>
-                          <span className="font-mono font-bold text-slate-700">+{basePart.toFixed(1)}</span>
-                        </div>
-
-                        <span className="text-slate-300 font-bold">+</span>
-
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-400 font-medium">Bonus:</span>
-                          <span className="font-mono font-bold text-slate-700">
-                            +{bonusPart.toFixed(1)}
-                          </span>
-                        </div>
-
-                        <span className="text-slate-300 font-bold">=</span>
-
-                        <div className="flex items-center gap-1 font-bold">
-                          <span className="text-slate-500">Gesamt:</span>
-                          <span
-                            className={`font-mono text-sm font-black ${
-                              delta >= 0 ? 'text-[var(--color-primary)]' : 'text-slate-700'
-                            }`}
-                          >
-                            {delta >= 0 ? '+' : ''}
-                            {delta.toFixed(1)} Pkt.
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
-                <p className="text-xs text-slate-500 font-medium">
-                  Noch keine gewerteten Matches. Sobald dein erstes Ergebnis eingetragen ist, wird hier die exakte Punkteberechnung aufgeschlüsselt.
-                </p>
-              </div>
-            )}
-          </div>
-
-
+          {/* MINI-KALENDER: SCHNELLVORSCHAU FREIE LIGA-SLOTS (2H+) */}
+          <HobbyligaMiniKalender
+            currentUser={currentUser}
+            clubId={clubId}
+            userClubs={userClubs}
+            onSwitchClub={onSwitchClub}
+            bookings={bookings || []}
+            settings={settings}
+            courts={settings?.courts}
+            pendingChallengedUser={pendingChallengedUser}
+            onClearChallengedUser={() => setPendingChallengedUser(null)}
+            onSelectSlot={handleSelectSlot}
+          />
         </div>
 
-        {/* RIGHT COLUMN: Letztes Ergebnis & Rangliste */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Card: Letztes Ergebnis */}
-          <div className="bg-[var(--bg-surface,white)] rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col p-5 md:p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <i className="fa-solid fa-clock-rotate-left text-[var(--color-primary)]"></i> Letztes Ergebnis
-              </h3>
-              {latestCompletedMatch && (
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/60">
-                  {formatRelativeDate(latestCompletedMatch.updatedAt || latestCompletedMatch.createdAt)}
-                </span>
-              )}
-            </div>
-
-            {latestCompletedMatch ? (
-              (() => {
-                const p1Name = getUserName(latestCompletedMatch.player1UserId);
-                const p2Name = getUserName(latestCompletedMatch.player2UserId);
-                const isP1Winner = latestCompletedMatch.result?.winnerId === latestCompletedMatch.player1UserId;
-                const isP2Winner = latestCompletedMatch.result?.winnerId === latestCompletedMatch.player2UserId;
-
-                const setsFormatted = latestCompletedMatch.result?.sets
-                  ? latestCompletedMatch.result.sets.map(s => `${s.p1}:${s.p2}`).join(', ')
-                  : '6:4, 6:3';
-
-                const winnerDelta = isP1Winner
-                  ? latestCompletedMatch.pointsAwarded?.player1
-                  : (isP2Winner ? latestCompletedMatch.pointsAwarded?.player2 : undefined);
-
-                return (
-                  <div className="space-y-3.5">
-                    {/* Players Matchup */}
-                    <div className="flex items-center justify-between gap-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      {/* Player 1 */}
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                          isP1Winner ? "bg-emerald-100 text-emerald-800 ring-2 ring-emerald-500/30" : "bg-slate-200 text-slate-600"
-                        }`}>
-                          {isP1Winner ? <i className="fa-solid fa-crown text-[10px] text-amber-500" /> : <i className="fa-solid fa-user text-[10px]" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className={`text-xs font-bold truncate ${isP1Winner ? "text-slate-900 font-black" : "text-slate-600"}`}>
-                            {p1Name}
-                          </div>
-                          {isP1Winner && (
-                            <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block">Sieger</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 shrink-0">VS</span>
-
-                      {/* Player 2 */}
-                      <div className="flex items-center gap-2 flex-1 min-w-0 justify-end text-right">
-                        <div className="min-w-0 flex-1">
-                          <div className={`text-xs font-bold truncate ${isP2Winner ? "text-slate-900 font-black" : "text-slate-600"}`}>
-                            {p2Name}
-                          </div>
-                          {isP2Winner && (
-                            <span className="text-[9px] font-extrabold text-emerald-600 uppercase tracking-wider block">Sieger</span>
-                          )}
-                        </div>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                          isP2Winner ? "bg-emerald-100 text-emerald-800 ring-2 ring-emerald-500/30" : "bg-slate-200 text-slate-600"
-                        }`}>
-                          {isP2Winner ? <i className="fa-solid fa-crown text-[10px] text-amber-500" /> : <i className="fa-solid fa-user text-[10px]" />}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Stats summary */}
-                    <div className="flex items-center justify-between text-xs pt-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-slate-400 font-medium text-[11px]">Sätze:</span>
-                        <span className="font-black text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/80">
-                          {setsFormatted}
-                        </span>
-                      </div>
-
-                      {typeof winnerDelta === 'number' && !isNaN(winnerDelta) && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-400 font-medium text-[11px]">Punkte:</span>
-                          <span className="font-black text-[var(--color-primary)]">
-                            +{Math.abs(winnerDelta).toFixed(1)} Pkt.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()
-            ) : (
-              /* Empty state */
-              <div className="p-4 bg-slate-50/80 rounded-xl border border-dashed border-slate-200 text-center space-y-1.5">
-                <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-xs">
-                  <i className="fa-regular fa-calendar-xmark" />
-                </div>
-                <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-xs mx-auto">
-                  Noch keine absolvierten Matches in der Hobbyliga. Trage das erste Spiel ein!
-                </p>
-              </div>
-            )}
+        {/* RIGHT COLUMN: Kombinierter Match-Feed (Anstehende Matches & Letzte Ergebnisse) & Rangliste */}
+        <div className="lg:col-span-1 flex flex-col space-y-4 lg:space-y-6 h-full">
+          <div className="shrink-0">
+            <HobbyligaCombinedMatchFeed
+              pendingMatches={pendingUserMatches}
+              upcomingMatches={upcomingFeedMatches}
+              completedMatches={completedFeedMatches}
+              currentUser={currentUser}
+              getUserName={getUserName}
+              getUserObject={getUserObject}
+              getUserRank={getUserRank}
+              formatDate={formatRelativeDate}
+              onEnterResult={(match) => {
+                setSelectedMatchForEntry(match);
+                setIsResultDrawerOpen(true);
+              }}
+              onEditMatch={handleEditMatch}
+              onCancelMatch={handleCancelMatchResult}
+              onRebook={(match) => {
+                const opponentId =
+                  match.player1UserId === currentUser.id
+                    ? match.player2UserId
+                    : match.player1UserId;
+                handleChallengePlayer(opponentId, getUserName(opponentId));
+              }}
+            />
           </div>
-
-          <div className="bg-[var(--bg-surface,white)] rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-              {activeLeagues.length <= 1 ? (
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <i className="fa-solid fa-ranking-star text-[var(--color-primary)]"></i> Rangliste
-                  </h3>
-                  {activeLeagues[0] && (
-                    <span className="text-xs font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1 rounded-xl shadow-xs">
-                      {activeLeagues[0].name}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                      <i className="fa-solid fa-ranking-star text-[var(--color-primary)]"></i> Rangliste
-                    </h3>
-                  </div>
-
-                  {/* League Switcher (Decoupled of gender icons, purely dynamic names) */}
-                  {activeLeagues.length <= 3 ? (
-                    <div className="relative flex items-center bg-slate-100 p-1 rounded-xl w-full">
-                      {activeLeagues.map((league) => {
-                        const isSelected = activeLeagueId === league.id;
-                        return (
-                          <button
-                            key={league.id}
-                            type="button"
-                            onClick={() => setActiveLeagueId(league.id)}
-                            className={
-                              "relative z-10 flex-1 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center justify-center gap-1.5 " +
-                              (isSelected ? "text-slate-900 font-black" : "text-slate-500 hover:text-slate-700")
-                            }
-                          >
-                            {isSelected && (
-                              <motion.div
-                                layoutId="rankLeagueTabIndicator"
-                                className="absolute inset-0 bg-white rounded-lg shadow-sm border border-slate-200/60"
-                                transition={{ type: "spring", stiffness: 450, damping: 32 }}
-                              />
-                            )}
-                            <span className="relative z-10">{league.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="relative w-full">
-                      <select
-                        value={activeLeagueId}
-                        onChange={(e) => setActiveLeagueId(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 shadow-sm focus:outline-none focus:border-[var(--color-primary)] cursor-pointer"
-                      >
-                        {activeLeagues.map((league) => (
-                          <option key={league.id} value={league.id}>
-                            {league.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr className="text-slate-500 uppercase tracking-wider font-bold text-[10px]">
-                    <th className="p-3 w-12 text-center">Rang</th>
-                    <th className="p-3">Spieler</th>
-                    <th className="p-3 text-right">Punkte</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredSortedProfiles.map((p, index) => {
-                    const isCurrentUser = p.userId === currentUser.id;
-                    const rankNum = getUserRank(p.userId);
-                    const isActivePlayer = p.active;
-                    
-                    return (
-                      <tr 
-                        key={p.userId} 
-                        className={"border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors " + (isCurrentUser ? "bg-[var(--color-primary)]/5 " : "") + (!isActivePlayer ? "opacity-60" : "")}
-                        onClick={() => {
-                          if (p.userId === currentUser.id) {
-                            setSelectedHistoryUser(currentUser);
-                          } else {
-                            const u = getUserObject(p.userId);
-                            if (u) {
-                              setSelectedContactUser(u);
-                              setSelectedContactRank(rankNum);
-                            }
-                          }
-                        }}
-                      >
-                        <td className="p-3 text-center">
-                          {rankNum ? (
-                            <span className="font-black text-slate-800 text-sm">{rankNum}</span>
-                          ) : (
-                            <span className="font-bold text-slate-300 text-xs">-</span>
-                          )}
-                        </td>
-                        <td className="p-3">
-                          <div className={"font-bold " + (isActivePlayer ? "text-slate-800" : "text-slate-400")}>
-                            {p.userName} {isCurrentUser && <span className="ml-1 text-[9px] bg-[var(--color-primary)]/20 text-[var(--color-primary)] px-1 rounded uppercase tracking-wider font-black">DU</span>}
-                          </div>
-                          {isActivePlayer && (
-                            <div className="text-[10px] text-slate-400 mt-0.5">
-                              {p.matchesCount} {p.matchesCount === 1 ? "Match" : "Matches"}
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-3 text-right">
-                          <div className={"font-black " + (isActivePlayer ? "text-[var(--color-primary)]" : "text-slate-300")}>
-                            {(p.livePoints ?? 0).toFixed(1)}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  
-                  {filteredSortedProfiles.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-slate-400 text-xs font-medium">Keine Spieler gefunden.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          
+          <HobbyligaKompaktRangliste
+            className="flex-1 min-h-[380px]"
+            filteredSortedProfiles={filteredSortedProfiles}
+            currentUser={currentUser}
+            clubId={clubId}
+            getUserObject={getUserObject}
+            getUserRank={getUserRank}
+            participatingClubs={participatingClubs}
+            matches={allClubMatches}
+            allProfiles={allProfiles}
+            getUserName={getUserName}
+          />
         </div>
       </div>
 
+      {/* BENTO-HERO: MEIN PUNKTE- & RANGVERLAUF (100% GRID-BREITE) */}
+      <div className="w-full col-span-full">
+        <PointsRankChart
+          currentUser={currentUser}
+          profile={profile}
+          allProfiles={allProfiles}
+          matches={matches}
+          users={users}
+          onNavigateToRules={() => {
+            window.location.hash = '#/hobbyliga/punkte-system';
+            setShowPointsDetail(true);
+          }}
+        />
+      </div>
+
+      {/* UNTERER ABSCHNITT: MATCH-HISTORIE */}
+      <div className="w-full space-y-6">
+        
+
+        {/* MATCH-HISTORIE & FORMEL-AUFSCHLÜSSELUNG */}
+        <HobbyligaMatchHistorie
+          currentUser={currentUser}
+          userCompletedMatches={userCompletedMatches}
+          effectiveConfig={effectiveConfig}
+          getUserName={getUserName}
+          onEditMatch={handleEditMatch}
+          onCancelMatch={handleCancelMatchResult}
+        />
+      </div>
       {/* Modals */}
       <LeagueResultDrawer
         isOpen={isResultDrawerOpen}
-        onClose={() => setIsResultDrawerOpen(false)}
+        onClose={() => {
+          setIsResultDrawerOpen(false);
+          setSelectedMatchForEdit(null);
+          setSelectedMatchForEntry(null);
+        }}
         currentUser={currentUser}
         profile={profile}
         allProfiles={allProfiles}
-        defaultConfig={defaultConfig}
-        prefilledMatchId={activeScheduledMatch ? activeScheduledMatch.id : undefined}
-        prefilledOpponentId={activeScheduledMatch ? (activeScheduledMatch.player1UserId === currentUser.id ? activeScheduledMatch.player2UserId : activeScheduledMatch.player1UserId) : undefined}
-        prefilledDate={activeScheduledMatch ? activeScheduledMatch.scheduledDate : undefined}
+        defaultConfig={defaultLeagueConfig}
+        editingMatch={selectedMatchForEdit}
+        match={selectedMatchForEdit || selectedMatchForEntry || activeScheduledMatch}
+        prefilledMatchId={
+          selectedMatchForEdit
+            ? selectedMatchForEdit.id
+            : (selectedMatchForEntry ? selectedMatchForEntry.id : (activeScheduledMatch ? activeScheduledMatch.id : undefined))
+        }
+        prefilledOpponentId={
+          selectedMatchForEdit
+            ? (selectedMatchForEdit.player1UserId === currentUser.id ? selectedMatchForEdit.player2UserId : selectedMatchForEdit.player1UserId)
+            : (selectedMatchForEntry
+                ? (selectedMatchForEntry.player1UserId === currentUser.id ? selectedMatchForEntry.player2UserId : selectedMatchForEntry.player1UserId)
+                : (activeScheduledMatch ? (activeScheduledMatch.player1UserId === currentUser.id ? activeScheduledMatch.player2UserId : activeScheduledMatch.player1UserId) : undefined))
+        }
+        prefilledDate={
+          selectedMatchForEdit
+            ? selectedMatchForEdit.scheduledDate
+            : (selectedMatchForEntry ? selectedMatchForEntry.scheduledDate : (activeScheduledMatch ? activeScheduledMatch.scheduledDate : undefined))
+        }
         onSuccess={() => {
           window.dispatchEvent(new Event('league-result-added'));
+          setIsResultDrawerOpen(false);
+          setSelectedMatchForEdit(null);
+          setSelectedMatchForEntry(null);
         }}
         getUserName={getUserName}
         leagueId={activeLeagueId}
+        primaryColor={settings?.primaryColor}
       />
       {isPartnerModalOpen && (
-        <PartnerSearchModal
+        <CreateAdModal
           currentUser={currentUser}
           userRank={getUserRank(currentUser.id)}
           existingSearch={searchToEdit || currentUserSearch}
@@ -1129,7 +865,11 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
             setSearchToEdit(null);
           }}
           onSave={handleSavePartnerSearch}
-          onDelete={() => handleDeletePartnerSearch(currentUser.id)}
+          onDelete={() => {
+            const target = searchToEdit || currentUserSearch;
+            const targetId = target?.id || target?.userId || currentUser.id;
+            return handleDeletePartnerSearch(targetId);
+          }}
         />
       )}
       {selectedContactUser && (
@@ -1150,6 +890,29 @@ export function LeagueDashboard({ currentUser, clubId, users, settings }: Props)
           onClose={() => setSelectedHistoryUser(null)}
         />
       )}
+      {/* SPECIALIZED HOBBYLIGA BOOKING DRAWER */}
+      <HobbyligaBookingDrawer
+        isOpen={isBookingDrawerOpen}
+        onClose={() => {
+          setIsBookingDrawerOpen(false);
+          setSelectedSlotForBooking(null);
+        }}
+        slot={selectedSlotForBooking}
+        currentUser={currentUser}
+        clubId={clubId}
+        users={users}
+        settings={settings}
+        userClubs={userClubs}
+        onSwitchClub={onSwitchClub}
+        activeLeagueId={activeLeagueId}
+        prefilledOpponent={pendingChallengedUser}
+        onBook={onBook}
+        onSuccess={() => {
+          setPendingChallengedUser(null);
+          setSelectedSlotForBooking(null);
+          setIsBookingDrawerOpen(false);
+        }}
+      />
     </div>
   );
 }

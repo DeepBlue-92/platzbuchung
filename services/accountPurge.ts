@@ -10,7 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { getNormalizedVereinsId, createGlobalBackup } from "./db";
+import { getNormalizedVereinsId } from "./db";
 import {
   recalculateLeaguePointsFrom,
   LEAGUE_MATCHES_COLLECTION,
@@ -290,12 +290,11 @@ export async function removeUsersFromClubBatch(
  */
 export async function purgeUserAccount(
   userId: string,
-  options?: { skipRecalculation?: boolean; createSafetyBackup?: boolean }
+  options?: { skipRecalculation?: boolean }
 ): Promise<{
   success: boolean;
   cancelledMatchesCount: number;
   oldestMatchDate: string | null;
-  backupsCreatedCount: number;
 }> {
   // 1. Identify all clubs where user has memberships or primary tenantId
   const userRef = doc(db, "users", userId);
@@ -330,23 +329,7 @@ export async function purgeUserAccount(
     }
   }
 
-  // 2. Create global safety backup if enabled
-  let backupsCreatedCount = 0;
-  if (options?.createSafetyBackup !== false && affectedClubIds.size > 0) {
-    try {
-      const userName = userData ? `${userData.firstName || ""} ${userData.lastName || ""}`.trim() || userData.username || userId : userId;
-      await createGlobalBackup(
-        "super-admin",
-        undefined,
-        `Automatisches Sicherheitsbackup vor Account-Purge (${userName})`
-      );
-      backupsCreatedCount = 1;
-    } catch (err) {
-      console.error("Global safety backup failed before account purge:", err);
-    }
-  }
-
-  // 3. Process & cancel league matches
+  // 2. Process & cancel league matches
   const matchesColl = collection(db, LEAGUE_MATCHES_COLLECTION);
   const [snap1, snap2] = await Promise.all([
     getDocs(query(matchesColl, where("player1UserId", "==", userId))),
@@ -387,7 +370,7 @@ export async function purgeUserAccount(
 
   await Promise.all(matchUpdatePromises);
 
-  // 4. Delete league profiles and partner searches
+  // 3. Delete league profiles and partner searches
   try {
     await deleteDoc(doc(db, LEAGUE_PROFILES_COLLECTION, userId));
   } catch (e) {}
@@ -399,12 +382,12 @@ export async function purgeUserAccount(
   // Delete all memberships
   await Promise.all(membershipDeletePromises);
 
-  // 5. Delete user doc from `users`
+  // 4. Delete user doc from `users`
   if (userSnap.exists()) {
     await deleteDoc(userRef);
   }
 
-  // 6. Recalculate league points if necessary
+  // 5. Recalculate league points if necessary
   if (oldestMatchDate && !options?.skipRecalculation) {
     await recalculateLeaguePointsFrom(oldestMatchDate);
   }
@@ -413,7 +396,6 @@ export async function purgeUserAccount(
     success: true,
     cancelledMatchesCount,
     oldestMatchDate,
-    backupsCreatedCount,
   };
 }
 
@@ -439,7 +421,7 @@ export async function purgeUserAccountsBatch(
     }
 
     try {
-      const res = await purgeUserAccount(uid, { skipRecalculation: true, createSafetyBackup: true });
+      const res = await purgeUserAccount(uid, { skipRecalculation: true });
       successCount++;
       totalCancelledMatches += res.cancelledMatchesCount;
       if (res.oldestMatchDate) {

@@ -26,9 +26,10 @@ export interface PrivacySafeCandidate {
 }
 
 // Helper to normalize strings for comparison
-export function normalizeString(str: string | undefined): string {
-  if (!str) return "";
-  return str
+export function normalizeString(str: any): string {
+  if (str === null || str === undefined) return "";
+  const s = String(str);
+  return s
     .toLowerCase()
     .trim()
     .replace(/ä/g, "ae")
@@ -38,16 +39,53 @@ export function normalizeString(str: string | undefined): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+// List of known test / placeholder phone number patterns to ignore
+const DUMMY_PHONE_PATTERNS = [
+  "123456",
+  "1234567",
+  "12345678",
+  "123456789",
+  "0123456789",
+  "08912345",
+  "8912345",
+  "000000",
+  "111111",
+  "222222",
+  "333333",
+  "444444",
+  "555555",
+  "666666",
+  "777777",
+  "888888",
+  "999999",
+  "00000000",
+  "11111111",
+  "99999999",
+];
+
 // Helper to normalize phone numbers (e.g., +49 170 1234567 -> 1701234567)
-export function normalizePhone(phone: string | undefined): string {
+export function normalizePhone(phone: any): string {
   if (!phone) return "";
-  let cleaned = phone.replace(/[^0-9]/g, "");
+  let cleaned = String(phone).replace(/[^0-9]/g, "");
   if (cleaned.startsWith("49")) {
     cleaned = cleaned.substring(2);
   }
   if (cleaned.startsWith("0")) {
     cleaned = cleaned.substring(1);
   }
+  
+  // Ignore dummy/test numbers
+  if (cleaned.length < 6) return "";
+  for (const dummy of DUMMY_PHONE_PATTERNS) {
+    if (cleaned === dummy || cleaned.endsWith(dummy)) {
+      return "";
+    }
+  }
+  // Check for repetitive sequences like all same digits
+  if (/^(\d)\1+$/.test(cleaned)) {
+    return "";
+  }
+
   return cleaned;
 }
 
@@ -82,7 +120,7 @@ export function levenshteinDistance(a: string, b: string): number {
 }
 
 // Calculate similarity ratio (0 to 1)
-export function calculateSimilarity(s1: string, s2: string): number {
+export function calculateSimilarity(s1: any, s2: any): number {
   const norm1 = normalizeString(s1);
   const norm2 = normalizeString(s2);
   if (!norm1 || !norm2) return 0;
@@ -97,57 +135,100 @@ export function calculateSimilarity(s1: string, s2: string): number {
 
 // Calculate matching score between two persons
 export function calculatePersonMatchScore(
-  p1: { firstName: string; lastName: string; email?: string; phone?: string; is_placeholder_email?: boolean },
-  p2: { firstName: string; lastName: string; email?: string; phone?: string; is_placeholder_email?: boolean }
+  p1: { firstName?: string; lastName?: string; name?: string; email?: string; phone?: string; birthDate?: string; is_placeholder_email?: boolean },
+  p2: { firstName?: string; lastName?: string; name?: string; email?: string; phone?: string; birthDate?: string; is_placeholder_email?: boolean }
 ): { score: number; level: "Sehr hohe Übereinstimmung" | "Hohe Übereinstimmung" | "Mittlere Übereinstimmung"; matchedFields: string[] } {
+  if (!p1 || !p2) {
+    return { score: 0, level: "Mittlere Übereinstimmung", matchedFields: [] };
+  }
+
   let score = 0;
   const matchedFields: string[] = [];
 
-  const fNameSim = calculateSimilarity(p1.firstName, p2.firstName);
-  const lNameSim = calculateSimilarity(p1.lastName, p2.lastName);
+  const p1Fn = p1.firstName || (p1.name ? p1.name.split(" ")[0] : "");
+  const p1Ln = p1.lastName || (p1.name ? p1.name.split(" ").slice(1).join(" ") : "");
+  const p2Fn = p2.firstName || (p2.name ? p2.name.split(" ")[0] : "");
+  const p2Ln = p2.lastName || (p2.name ? p2.name.split(" ").slice(1).join(" ") : "");
+
+  const fNameSim = calculateSimilarity(p1Fn, p2Fn);
+  const lNameSim = calculateSimilarity(p1Ln, p2Ln);
 
   const p1IsPlaceholder = p1.is_placeholder_email || (p1.email && p1.email.startsWith("no-email.") && p1.email.endsWith("@internal.app"));
   const p2IsPlaceholder = p2.is_placeholder_email || (p2.email && p2.email.startsWith("no-email.") && p2.email.endsWith("@internal.app"));
 
+  // Check BirthDate match if both have one
+  const b1 = p1.birthDate ? String(p1.birthDate).trim().substring(0, 10) : "";
+  const b2 = p2.birthDate ? String(p2.birthDate).trim().substring(0, 10) : "";
+  const birthDateMatch = b1 && b2 && b1 === b2;
+
   // Exact full name match
-  if (fNameSim === 1 && lNameSim === 1) {
+  let hasExactName = false;
+  let hasStrongName = false;
+  if (fNameSim === 1 && lNameSim === 1 && normalizeString(p1Fn).length > 1 && normalizeString(p1Ln).length > 1) {
     score += 70;
     matchedFields.push("Identischer Vor- & Nachname");
+    hasExactName = true;
+    hasStrongName = true;
   } else if (lNameSim === 1 && fNameSim >= 0.7) {
     score += 55;
     matchedFields.push("Identischer Nachname & ähnlicher Vorname");
+    hasStrongName = true;
   } else if (fNameSim === 1 && lNameSim >= 0.7) {
     score += 50;
     matchedFields.push("Identischer Vorname & ähnlicher Nachname");
+    hasStrongName = true;
   } else if (fNameSim >= 0.8 && lNameSim >= 0.8) {
     score += 45;
     matchedFields.push("Hohe Name-Ähnlichkeit");
+    hasStrongName = true;
+  }
+
+  // BirthDate combination bonus (Name + Vorname + Geburtsdatum -> >= 85%)
+  if (birthDateMatch) {
+    if (hasExactName) {
+      score = Math.max(score, 95);
+      matchedFields.push("Identisches Geburtsdatum");
+    } else if (hasStrongName) {
+      score = Math.max(score, 85);
+      matchedFields.push("Identisches Geburtsdatum & Namensübereinstimmung");
+    }
   }
 
   // Exact Email match (only if neither is a placeholder email)
   const e1 = normalizeString(p1.email);
   const e2 = normalizeString(p2.email);
   if (!p1IsPlaceholder && !p2IsPlaceholder && e1 && e2 && e1 === e2) {
-    score += 95;
+    score = Math.max(score + 95, 95);
     matchedFields.push("Identische E-Mail-Adresse");
   }
 
-  // Placeholder email matching rule for background matcher
-  if ((p1IsPlaceholder || p2IsPlaceholder) && fNameSim === 1 && lNameSim === 1) {
-    score += 15; // Elevates exact name match for placeholder email users to 85% (Sehr hohe Übereinstimmung)
+  // Placeholder email matching rule
+  if ((p1IsPlaceholder || p2IsPlaceholder) && hasExactName) {
+    score = Math.max(score, 85);
     matchedFields.push("Platzhalter-E-Mail & Namensübereinstimmung");
   }
 
-  // Exact Phone match
+  // Phone match:
+  // Rule: Identical phone number alone gives maximum 20-25% score.
+  // Phone match MUST be paired with name match to produce a high score.
   const ph1 = normalizePhone(p1.phone);
   const ph2 = normalizePhone(p2.phone);
-  if (ph1 && ph2 && ph1.length >= 6 && ph1 === ph2) {
-    score += 90;
-    matchedFields.push("Identische Telefonnummer");
+  if (ph1 && ph2 && ph1 === ph2) {
+    if (hasExactName) {
+      score = Math.max(score + 25, 90);
+      matchedFields.push("Identische Telefonnummer");
+    } else if (hasStrongName) {
+      score = Math.max(score + 25, 75);
+      matchedFields.push("Identische Telefonnummer");
+    } else {
+      // Standalone phone number without name match gets low score (20%)
+      score += 20;
+      matchedFields.push("Identische Telefonnummer (ohne Namensübereinstimmung)");
+    }
   }
 
   // Cap at 100
-  score = Math.min(100, score);
+  score = Math.min(100, Math.round(score));
 
   let level: "Sehr hohe Übereinstimmung" | "Hohe Übereinstimmung" | "Mittlere Übereinstimmung" = "Mittlere Übereinstimmung";
   if (score >= 85) {
@@ -201,12 +282,16 @@ export function findSystemDuplicates(
   ignoredPairs: string[] = []
 ): DuplicatePair[] {
   const duplicates: DuplicatePair[] = [];
-  const ignoredSet = new Set(ignoredPairs);
+  if (!Array.isArray(allPersons) || allPersons.length === 0) return duplicates;
+  const safeMemberships = Array.isArray(allMemberships) ? allMemberships : [];
+  const ignoredSet = new Set(Array.isArray(ignoredPairs) ? ignoredPairs : []);
 
   for (let i = 0; i < allPersons.length; i++) {
     for (let j = i + 1; j < allPersons.length; j++) {
       const p1 = allPersons[i];
       const p2 = allPersons[j];
+
+      if (!p1 || !p2 || !p1.id || !p2.id) continue;
 
       // Skip identical IDs
       if (p1.id === p2.id) continue;
@@ -217,8 +302,8 @@ export function findSystemDuplicates(
       const { score, level, matchedFields } = calculatePersonMatchScore(p1, p2);
 
       if (score >= 40) {
-        const ms1 = allMemberships.filter((m) => m.personId === p1.id);
-        const ms2 = allMemberships.filter((m) => m.personId === p2.id);
+        const ms1 = safeMemberships.filter((m) => m && (m.personId === p1.id || m.userId === p1.id));
+        const ms2 = safeMemberships.filter((m) => m && (m.personId === p2.id || m.userId === p2.id));
 
         duplicates.push({
           id: `${p1.id}_${p2.id}`,
