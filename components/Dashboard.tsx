@@ -297,6 +297,8 @@ interface DashboardProps {
   settings?: ClubSettings;
   mobileViewType?: "day" | "week";
   onMobileViewTypeChange?: (v: "day" | "week") => void;
+  desktopViewType?: "day" | "week";
+  onDesktopViewTypeChange?: (v: "day" | "week") => void;
   mobileSelectedDate?: string;
   onMobileSelectedDateChange?: (d: string) => void;
   isPublicWochenplan?: boolean;
@@ -319,6 +321,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   settings,
   mobileViewType,
   onMobileViewTypeChange,
+  desktopViewType,
+  onDesktopViewTypeChange,
   mobileSelectedDate,
   onMobileSelectedDateChange,
   isPublicWochenplan = false,
@@ -1253,27 +1257,36 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [inlineLoginError, setInlineLoginError] = useState<string | null>(null);
   const [isPublicLoginModalOpen, setIsPublicLoginModalOpen] = useState(false);
 
-  const [viewTypeState, setViewTypeState] = useState<"day" | "week">(
-    window.innerWidth < 1024 ? "day" : "week",
-  );
+  const [internalMobileViewType, setInternalMobileViewType] = useState<"day" | "week">("day");
+  const [internalDesktopViewType, setInternalDesktopViewType] = useState<"day" | "week">("week");
+
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+  const effectiveMobileView = mobileViewType !== undefined ? mobileViewType : internalMobileViewType;
+  const effectiveDesktopView = desktopViewType !== undefined ? desktopViewType : internalDesktopViewType;
+
   const viewType = isPublicWochenplan
     ? "week"
-    : mobileViewType !== undefined
-      ? mobileViewType
-      : viewTypeState;
+    : isMobile
+      ? effectiveMobileView
+      : effectiveDesktopView;
+
   const setViewType = useCallback(
     (v: "day" | "week") => {
-      setViewTypeState(v);
-      onMobileViewTypeChange?.(v);
+      if (isMobile) {
+        setInternalMobileViewType(v);
+        onMobileViewTypeChange?.(v);
+      } else {
+        setInternalDesktopViewType(v);
+        onDesktopViewTypeChange?.(v);
+      }
     },
-    [onMobileViewTypeChange],
+    [isMobile, onMobileViewTypeChange, onDesktopViewTypeChange],
   );
   const [mobileDayLayout, setMobileDayLayout] = useState<
     "timeline" | "columns"
   >(window.innerWidth < 1024 ? "timeline" : "columns");
   const dateInputRef = useRef<HTMLInputElement>(null);
-
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [showCustomCalendar, setShowCustomCalendar] = useState(false);
   const [currentCalendarMonth, setCurrentCalendarMonth] = useState<Date>(
     new Date(),
@@ -1330,7 +1343,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+      setIsMobile(window.innerWidth < 1024);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);

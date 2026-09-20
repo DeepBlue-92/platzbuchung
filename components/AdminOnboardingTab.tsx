@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
 import {
   ClubSettings,
   DEFAULT_ONBOARDING_SETTINGS,
   saveSettings,
-  saveUser,
-  batchResetMemberOnboarding,
 } from "../services/db";
 import {
   User,
@@ -14,14 +10,13 @@ import {
 } from "../types";
 import { MemberOnboardingModal } from "./MemberOnboardingModal";
 import { OnboardingFieldMatrix } from "./onboarding/OnboardingFieldMatrix";
+import { OnboardingBatchActions } from "./onboarding/OnboardingBatchActions";
 import {
   CheckCircle2,
   Users,
   Eye,
-  RotateCcw,
   Save,
   AlertTriangle,
-  Film,
 } from "lucide-react";
 
 interface AdminOnboardingTabProps {
@@ -50,10 +45,6 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
-  const [isResettingBatch, setIsResettingBatch] = useState(false);
-  const [resetSuccessCount, setResetSuccessCount] = useState<number | null>(null);
-  const [resetError, setResetError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   // Sync state if settings prop changes from external source
@@ -85,52 +76,6 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
       setTimeout(() => setSaveError(null), 6000);
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleBatchReset = async () => {
-    setIsResettingBatch(true);
-    setResetError(null);
-    try {
-      const userList = Object.values(users);
-      let count = 0;
-      const updatedUsersMap: Record<string, User> = { ...users };
-
-      try {
-        count = await batchResetMemberOnboarding(currentClubId);
-      } catch (directErr) {
-        console.warn("Direct batch reset encountered an issue, falling back to individual updates:", directErr);
-        // Fallback to safe individual saveUser (with deduplicated collision handling)
-        for (const u of userList) {
-          const updated: User = {
-            ...u,
-            onboarding_pending: true,
-          };
-          await saveUser(currentClubId, updated);
-          count++;
-        }
-      }
-
-      for (const u of userList) {
-        const key = u.id || u.name;
-        updatedUsersMap[key] = {
-          ...u,
-          onboarding_pending: true,
-        };
-      }
-
-      if (onUpdateUsers) {
-        onUpdateUsers(updatedUsersMap);
-      }
-      setResetSuccessCount(count || userList.length);
-      setShowResetConfirmModal(false);
-      setTimeout(() => setResetSuccessCount(null), 5000);
-    } catch (err: any) {
-      console.error("Failed to batch reset onboarding:", err);
-      setResetError(err.message || "Fehler beim Zurücksetzen des Onboardings.");
-      setTimeout(() => setResetError(null), 6000);
-    } finally {
-      setIsResettingBatch(false);
     }
   };
 
@@ -195,7 +140,7 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
               }`}
             />
             <span>
-              Onboarding: {config.enable_onboarding ? "Aktiviert (Master Switch AN)" : "Deaktiviert (Master Switch AUS)"}
+              Onboarding: {config.enable_onboarding ? "Aktiviert" : "Deaktiviert"}
             </span>
           </div>
 
@@ -217,20 +162,6 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-100 text-rose-800 text-xs font-bold animate-in fade-in">
               <AlertTriangle className="w-4 h-4 text-rose-600" />
               <span>{saveError}</span>
-            </div>
-          )}
-
-          {resetSuccessCount !== null && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-100 text-blue-800 text-xs font-bold animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 text-blue-600" />
-              <span>Onboarding für {resetSuccessCount} Mitglieder aktiviert!</span>
-            </div>
-          )}
-
-          {resetError && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-100 text-rose-800 text-xs font-bold animate-in fade-in">
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
-              <span>{resetError}</span>
             </div>
           )}
         </div>
@@ -278,10 +209,10 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
                 htmlFor="toggle-enable-onboarding"
                 className="text-xs font-black text-slate-800 uppercase tracking-wide cursor-pointer block"
               >
-                Onboarding für Club aktivieren (Master Switch)
+                Onboarding für Club aktivieren
               </label>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Ist dieser Schalter aktiv, erscheint das Onboarding-Modal automatisch bei jedem Mitglied, das die Markierung &quot;onboarding_pending&quot; besitzt.
+                Ist dieser Schalter aktiv, erscheint das Onboarding-Modal automatisch bei jedem Mitglied, das die Markierung &quot;Onboarding ausstehend&quot; im Benutzerprofil besitzt.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
@@ -318,34 +249,6 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
                 checked={config.auto_enable_for_new_users}
                 onChange={(e) =>
                   setConfig({ ...config, auto_enable_for_new_users: e.target.checked })
-                }
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
-            </label>
-          </div>
-
-          {/* Show Animation Switch */}
-          <div className="flex items-start justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200 hover:border-[var(--color-primary)] transition-colors shadow-2xs">
-            <div>
-              <label
-                htmlFor="toggle-show-animation"
-                className="text-xs font-black text-slate-800 uppercase tracking-wide cursor-pointer block flex items-center gap-2"
-              >
-                <Film className="w-4 h-4 text-emerald-600" />
-                <span>Tennis Lottie-Animation anzeigen</span>
-              </label>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Zeigt auf Desktop-Bildschirmen im linken Hero-Bereich die animierte Vektor-Illustration.
-              </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-              <input
-                id="toggle-show-animation"
-                type="checkbox"
-                checked={config.show_animation}
-                onChange={(e) =>
-                  setConfig({ ...config, show_animation: e.target.checked })
                 }
                 className="sr-only peer"
               />
@@ -413,87 +316,12 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
         onChange={(key, val) => setConfig((prev) => ({ ...prev, [key]: val }))}
       />
 
-      {/* Section 4: Batch Action */}
-      <div className="bg-amber-50/70 border border-amber-200 p-6 sm:p-8 rounded-[1rem] space-y-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-        <div className="space-y-1">
-          <h3 className="text-sm font-black text-amber-900 uppercase flex items-center gap-2">
-            <i className="fa-solid fa-rotate-left"></i>{" "}
-            Stapelverarbeitung: Onboarding für alle Mitglieder erzwingen
-          </h3>
-          <p className="text-xs text-amber-800/80 leading-relaxed max-w-2xl">
-            Setzt den Status aller {usersList.length} Mitglieder dieses Vereins auf{" "}
-            <strong>onboarding_pending = true</strong>. Dadurch werden alle Mitglieder bei ihrem nächsten Login aufgefordert, den Bestätigungs-Dialog zu durchlaufen.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          id="admin-batch-reset-onboarding-btn"
-          onClick={() => setShowResetConfirmModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 shrink-0 flex items-center gap-2 cursor-pointer"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Für alle Mitglieder zurücksetzen</span>
-        </button>
-      </div>
-
-      {/* Reset Confirmation Modal */}
-      {typeof document !== "undefined" &&
-        createPortal(
-          <AnimatePresence>
-            {showResetConfirmModal && (
-              <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-4"
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-                    <AlertTriangle className="w-6 h-6" />
-                  </div>
-
-                  <div className="text-center space-y-2">
-                    <h3 className="text-lg font-bold text-slate-900">
-                      Onboarding für alle zurücksetzen?
-                    </h3>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      Möchtest du das Onboarding wirklich für alle{" "}
-                      <strong>{usersList.length} Mitglieder</strong> des Vereins zurücksetzen?
-                      Jedes Mitglied wird beim nächsten Login das Begrüßungsfenster sehen und seine Daten bestätigen müssen.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowResetConfirmModal(false)}
-                      disabled={isResettingBatch}
-                      className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer"
-                    >
-                      Abbrechen
-                    </button>
-                    <button
-                      type="button"
-                      id="confirm-batch-reset-btn"
-                      onClick={handleBatchReset}
-                      disabled={isResettingBatch}
-                      className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {isResettingBatch ? (
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4" />
-                      )}
-                      <span>Ja, zurücksetzen</span>
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
+      {/* Section 4: Batch Actions */}
+      <OnboardingBatchActions
+        currentClubId={currentClubId}
+        users={users}
+        onUpdateUsers={onUpdateUsers}
+      />
     </div>
   );
 };

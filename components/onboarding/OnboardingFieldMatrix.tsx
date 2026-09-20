@@ -164,7 +164,7 @@ export const OnboardingFieldMatrix: React.FC<OnboardingFieldMatrixProps> = ({
                       : "text-slate-500 hover:text-slate-900"
                   }`}
                 >
-                  {perm === "HIDDEN" ? "Ausgeblendet" : "Bearbeitbar (Aktiv)"}
+                  {perm === "HIDDEN" ? "Ausgeblendet" : "Bearbeitbar"}
                 </button>
               )
             )}

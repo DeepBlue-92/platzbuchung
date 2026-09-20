@@ -159,6 +159,7 @@ export interface ClubSettings {
     guests?: boolean;
     arbeitseinsaetze?: boolean;
     league?: boolean;
+    championship?: boolean;
   };
   rankingViewMode?: "pyramid" | "list";
   leagueSettings?: {
@@ -299,6 +300,7 @@ Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz a
     guests: true,
     arbeitseinsaetze: false,
     league: false,
+    championship: false,
   },
   rankingViewMode: "pyramid",
   leagueSettings: {
@@ -1005,6 +1007,36 @@ export async function batchResetMemberOnboarding(vereinsId: string): Promise<num
         vereinsId: data.vereinsId || data.tenantId || normalizedId,
         role: data.role || 'mitglied',
         onboarding_pending: true,
+      },
+      { merge: true }
+    );
+  });
+  await Promise.all(promises);
+  return docMap.size;
+}
+
+export async function batchCompleteMemberOnboarding(vereinsId: string): Promise<number> {
+  const normalizedId = getNormalizedVereinsId(vereinsId);
+  const [tenantSnap, vereinsSnap] = await Promise.all([
+    getDocs(query(collection(db, 'users'), where('tenantId', '==', normalizedId))),
+    getDocs(query(collection(db, 'users'), where('vereinsId', '==', normalizedId))),
+  ]);
+  const docMap = new Map<string, any>();
+  tenantSnap.docs.forEach((d) => docMap.set(d.id, d));
+  vereinsSnap.docs.forEach((d) => docMap.set(d.id, d));
+
+  const promises = Array.from(docMap.values()).map((docSnap) => {
+    const data = docSnap.data();
+    return setDoc(
+      doc(db, 'users', docSnap.id),
+      {
+        id: data.id || docSnap.id,
+        username: data.username || data.name || docSnap.id,
+        name: data.name || data.username || docSnap.id,
+        tenantId: data.tenantId || data.vereinsId || normalizedId,
+        vereinsId: data.vereinsId || data.tenantId || normalizedId,
+        role: data.role || 'mitglied',
+        onboarding_pending: false,
       },
       { merge: true }
     );

@@ -39,7 +39,7 @@ import AdminRankings from "./AdminRankings";
 import AdminChangelog from "./AdminChangelog";
 import { AdminDocumentation } from "./AdminDocumentation";
 import { motion, AnimatePresence } from "motion/react";
-import { Settings } from "lucide-react";
+import { Settings, Trophy } from "lucide-react";
 import {
   findCandidateDuplicatesForAdmin,
   addExistingPersonToClub,
@@ -48,6 +48,7 @@ import {
 import { UserAvatar } from "./UserAvatar";
 import { AvatarUploader } from "./AvatarUploader";
 import AdminOnboardingTab from "./AdminOnboardingTab";
+import { ChampionshipAdminTab } from "../features/championship/ChampionshipAdminTab";
 
 interface AdminSettingsProps {
   users: Record<string, User>;
@@ -71,6 +72,8 @@ interface AdminSettingsProps {
   onSaveBooking?: (booking: Booking) => Promise<void> | void;
   onDeleteBooking?: (id: string) => Promise<void> | void;
   isSuperAdminImpersonating?: boolean;
+  onNavigateToChampionship?: () => void;
+  initialTab?: string;
 }
 
 const TABS = [
@@ -82,6 +85,7 @@ const TABS = [
   { id: "onboarding", label: "Mitglieder-Onboarding", icon: "fa-user-check" },
   { id: "database", label: "Datenverwaltung", icon: "fa-database" },
   { id: "ranking", label: "Rangliste", icon: "fa-medal" },
+  { id: "championship", label: "Meisterschaft", icon: "fa-trophy" },
   { id: "arbeitseinsaetze", label: "Arbeitseinsätze", icon: "fa-briefcase" },
   { id: "updates", label: "Updates", icon: "fa-clock-rotate-left" },
   { id: "handbuch", label: "Handbuch", icon: "fa-book-open" },
@@ -107,6 +111,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   onSaveBooking,
   onDeleteBooking,
   isSuperAdminImpersonating = false,
+  onNavigateToChampionship,
+  initialTab,
 }) => {
   const currentClubId = settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen";
   const [currentTab, setCurrentTab] = useState<
@@ -119,10 +125,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     | "onboarding"
     | "database"
     | "ranking"
+    | "championship"
     | "arbeitseinsaetze"
     | "updates"
     | "handbuch"
-  >("allgemein");
+  >((initialTab as any) || "allgemein");
+
+  useEffect(() => {
+    if (initialTab) {
+      setCurrentTab(initialTab as any);
+    }
+  }, [initialTab]);
   const [pendingTab, setPendingTab] = useState<typeof currentTab | null>(null);
 
   const formatPlayerName = (name: string): string => {
@@ -726,7 +739,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const [linkCopiedClear, setLinkCopiedClear] = useState(false);
 
   // Settings State Drafts
-  const [clubName, setClubName] = useState(settings.clubName);
+  const [clubName, setClubName] = useState(settings.clubName || "");
   const [street, setStreet] = useState(settings.street || "");
   const [zip, setZip] = useState(settings.zip || "");
   const [city, setCity] = useState(settings.city || "");
@@ -737,9 +750,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     settings.customFacilityPhotoUrl ||
       (settings.facilityPhotoUrl ? settings.facilityPhotoUrl : "")
   );
-  const [logoUrl, setLogoUrl] = useState(settings.logoUrl);
+  const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
   const [headerLogoUrl, setHeaderLogoUrl] = useState(
-    settings.headerLogoUrl || settings.logoUrl,
+    settings.headerLogoUrl || settings.logoUrl || "",
   );
   const [faviconUrl, setFaviconUrl] = useState(
     settings.faviconUrl || "/favicon.svg",
@@ -871,6 +884,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     guests: settings.modules?.guests !== false,
     arbeitseinsaetze: settings.modules?.arbeitseinsaetze === true,
     league: settings.modules?.league === true,
+    championship: settings.modules?.championship === true,
   });
   const [reservationRules, setReservationRules] = useState({
     maxAdvanceDays: 14,
@@ -1146,7 +1160,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
   // Keep state drafts in sync with incoming settings
   useEffect(() => {
-    setClubName(settings.clubName);
+    setClubName(settings.clubName || "");
     setStreet(settings.street || "");
     setZip(settings.zip || "");
     setCity(settings.city || "");
@@ -1155,8 +1169,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       settings.customFacilityPhotoUrl ||
         (settings.facilityPhotoUrl ? settings.facilityPhotoUrl : "")
     );
-    setLogoUrl(settings.logoUrl);
-    setHeaderLogoUrl(settings.headerLogoUrl || settings.logoUrl);
+    setLogoUrl(settings.logoUrl || "");
+    setHeaderLogoUrl(settings.headerLogoUrl || settings.logoUrl || "");
     setFaviconUrl(settings.faviconUrl || "/favicon.svg");
     setCustomLogoUrl(
       settings.customLogoUrl ||
@@ -1215,6 +1229,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       guests: settings.modules?.guests !== false,
       arbeitseinsaetze: settings.modules?.arbeitseinsaetze === true,
       league: settings.modules?.league === true,
+      championship: settings.modules?.championship === true,
     });
     setReservationRules({
       maxAdvanceDays: 14,
@@ -1263,6 +1278,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           (modules.events ?? true) !== (settings.modules?.events ?? true) ||
           (modules.ranking ?? true) !== (settings.modules?.ranking ?? true) ||
           (modules.guests ?? true) !== (settings.modules?.guests ?? true) ||
+          (modules.championship ?? false) !== (settings.modules?.championship ?? false) ||
           modules.arbeitseinsaetze !== (settings.modules?.arbeitseinsaetze ?? false) ||
           (isSuperAdmin && (modules.league === true) !== (settings.modules?.league === true))
         );
@@ -1565,7 +1581,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       setStreet(settings.street || "");
       setZip(settings.zip || "");
       setCity(settings.city || "");
-      setModules(settings.modules || { events: true, ranking: true });
+      setModules({
+        events: settings.modules?.events !== false,
+        ranking: settings.modules?.ranking !== false,
+        guests: settings.modules?.guests !== false,
+        arbeitseinsaetze: settings.modules?.arbeitseinsaetze === true,
+        league: settings.modules?.league === true,
+        championship: settings.modules?.championship === true,
+      });
     } else if (tab === "arbeitseinsaetze") {
       setSollStunden(settings.arbeitseinsaetzeSettings?.sollStunden ?? 10);
       setAeCategories((settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheim-Reinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de")));
@@ -3129,7 +3152,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                           <input
                             type="checkbox"
-                            checked={modules.events}
+                            checked={!!modules.events}
                             onChange={(e) =>
                               setModules({
                                 ...modules,
@@ -3153,7 +3176,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                           <input
                             type="checkbox"
-                            checked={modules.ranking}
+                            checked={!!modules.ranking}
                             onChange={(e) =>
                               setModules({
                                 ...modules,
@@ -3164,7 +3187,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           />
                         </label>
 
-                        {/* 3. Gastspiele */}
+                        {/* 3. Meisterschaft */}
+                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
+                          <div className="flex-1 min-w-0 pr-4">
+                            <div className="font-black text-xs text-slate-800 uppercase">
+                              Meisterschaft
+                            </div>
+                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
+                              Aktiviert die offizielle Vereinsmeisterschaft (Vorlagen, Gruppenphasen & K.-o.-Endrunden)
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={!!modules.championship}
+                            onChange={(e) =>
+                              setModules({
+                                ...modules,
+                                championship: e.target.checked,
+                              })
+                            }
+                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                          />
+                        </label>
+
+                        {/* 4. Gastspiele */}
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
                           <div className="flex-1 min-w-0 pr-4">
                             <div className="font-black text-xs text-slate-800 uppercase">
@@ -3188,7 +3234,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           />
                         </label>
 
-                        {/* 4. Arbeitseinsätze */}
+                        {/* 5. Arbeitseinsätze */}
                         <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
                           <div className="flex-1 min-w-0 pr-4">
                             <div className="font-black text-xs text-slate-800 uppercase">
@@ -3200,7 +3246,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                           <input
                             type="checkbox"
-                            checked={modules.arbeitseinsaetze}
+                            checked={!!modules.arbeitseinsaetze}
                             onChange={(e) =>
                               setModules({
                                 ...modules,
@@ -3226,7 +3272,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </label>
                           <input 
                             type="text"
-                            value={clubName}
+                            value={clubName || ""}
                             onChange={(e) => setClubName(e.target.value)}
                             placeholder="z. B. SV Neuhausen"
                             className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
@@ -3246,7 +3292,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               </span>
                               <input 
                                 type="text"
-                                value={street}
+                                value={street || ""}
                                 onChange={(e) => setStreet(e.target.value)}
                                 placeholder="z. B. Sportweg 4"
                                 className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
@@ -3259,7 +3305,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 </span>
                                 <input 
                                   type="text"
-                                  value={zip}
+                                  value={zip || ""}
                                   onChange={(e) => setZip(e.target.value)}
                                   placeholder="z. B. 84030"
                                   className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
@@ -3271,7 +3317,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 </span>
                                 <input 
                                   type="text"
-                                  value={city}
+                                  value={city || ""}
                                   onChange={(e) => setCity(e.target.value)}
                                   placeholder="z. B. Ergolding"
                                   className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
@@ -8813,7 +8859,19 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                 </div>
               )}
 
-              {/* TAB 6: MEISTERSCHAFT */}
+              {/* TAB: MEISTERSCHAFT */}
+              {currentTab === "championship" && (
+                <ChampionshipAdminTab
+                  clubId={currentClubId}
+                  users={users}
+                  currentUser={currentUser}
+                  onNavigateToPlayerView={() => {
+                    if (onNavigateToChampionship) {
+                      onNavigateToChampionship();
+                    }
+                  }}
+                />
+              )}
 
               {/* TAB: VERANSTALTUNGEN */}
               {currentTab === "tournaments" && (

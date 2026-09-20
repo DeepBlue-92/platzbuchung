@@ -114,7 +114,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
     if (tournament) {
       setEditingTournamentId(tournament.id);
       setFormData({
-        title: tournament.title,
+        title: tournament.title || "",
         date: tournament.date || "",
         startTime: tournament.startTime || "",
         endTime: tournament.endTime || "",
@@ -783,7 +783,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                     <input 
                       type="text"
                       required
-                      value={formData.title}
+                      value={formData.title || ""}
                       onChange={(e) =>
                         setFormData({ ...formData, title: e.target.value })
                       }
@@ -798,7 +798,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                     </label>
                     <input 
                       type="date"
-                      value={formData.date}
+                      value={formData.date || ""}
                       onChange={(e) =>
                         setFormData({ ...formData, date: e.target.value })
                       }
@@ -813,7 +813,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                       </label>
                       <input 
                         type="time"
-                        value={formData.startTime}
+                        value={formData.startTime || ""}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
@@ -829,7 +829,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                       </label>
                       <input 
                         type="time"
-                        value={formData.endTime}
+                        value={formData.endTime || ""}
                         onChange={(e) =>
                           setFormData({ ...formData, endTime: e.target.value })
                         }

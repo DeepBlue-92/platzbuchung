@@ -347,6 +347,20 @@ service cloud.firestore {
         allow update: if isSignedIn() || isClubAdmin(vereinsId);
         allow delete: if isClubAdmin(vereinsId);
       }
+
+      // Championship Templates
+      match /championship_templates/{templateId} {
+        allow read: if isSignedIn() || belongsToVerein(vereinsId);
+        allow create, update, delete: if isSuperAdmin() || isClubAdmin(vereinsId);
+      }
+
+      // Championship Tournaments
+      match /championship_tournaments/{tournamentId} {
+        allow read: if isSignedIn() || belongsToVerein(vereinsId);
+        allow create: if isSuperAdmin() || isClubAdmin(vereinsId);
+        allow update: if isSuperAdmin() || isClubAdmin(vereinsId) || (isSignedIn() && belongsToVerein(vereinsId));
+        allow delete: if isSuperAdmin() || isClubAdmin(vereinsId);
+      }
     }
   }
 }

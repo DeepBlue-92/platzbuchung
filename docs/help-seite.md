@@ -14,6 +14,7 @@ Die Erstellung und Verwaltung von Veranstaltungen und Turnieren ist direkt auf d
 - **Papierkorb:** Gelöschte Events werden in einen Papierkorb verschoben und tauchen unten auf der Veranstaltungs-Seite auf. Dort können diese bei Bedarf wiederhergestellt werden. Der Papierkorb wird automatisch aufgeräumt – Events, die länger als 30 Tage gelöscht sind, werden endgültig entfernt.
 
 ### Buchungs- & Reservierungs-System
+- **Standardansicht nach Gerät (Mobil vs. Desktop):** Auf mobilen Endgeräten (Smartphones und Bildschirmen unter 1024px) öffnet sich die Reservierungsübersicht standardmäßig als übersichtlicher **Tagesplan** mit direkter Stundeneinteilung und Platzspalten. Auf Desktop-Computern bleibt die Standardansicht wie gewohnt der **Wochenplan** mit der gesamten Wochenübersicht. Über die Navigationsleiste kann der Nutzer jederzeit frei zwischen Tages- und Wochenansicht wechseln.
 - **Klarname statt Benutzername:** Im gesamten Buchungs- und Reservierungssystem (inklusive Kalender-Raster, Detail-Overlays und der Buchungslisten im Administrationsbereich) wird für die Darstellung der Spieler und Buchenden primär der echte Name in der gut lesbaren Formatierung "Nachname, Vorname" verwendet, sofern diese Angaben im Benutzerprofil ausgefüllt sind. Der interne Benutzername dient nur noch als automatisches Fallback, falls kein echter Name existiert.
 
 ### Schnittstellen (Öffentliche Feeds)
@@ -34,11 +35,83 @@ Für Partnervereine (wie z. B. die **DJK Furth**) steht eine optimierte, öffent
 ### Mitglieder-Onboarding (Begrüßungsfenster)
 Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Mitglieder-Onboarding** (gestaltet im einheitlichen Design und voller Seitenbreite wie die Mitgliederverwaltung) festlegen, was Mitglieder beim ersten oder nächsten Einloggen sehen.
 - **Volle Seitenbreite & Übersicht:** Die Verwaltungsseite nutzt die gesamte Breite des Bildschirms mit dem gewohnten Header-Karten-Design, Status-Pillen und direkter Vorschau-Möglichkeit.
-- **Hauptschalter (Master Switch):** Bestimmt, ob das Begrüßungsfenster für Mitglieder beim Login überhaupt aufgerufen wird.
+- **Hauptschalter:** Bestimmt, ob das Begrüßungsfenster für Mitglieder beim Login überhaupt aufgerufen wird.
 - **Felder anpassen:** Für jedes persönliche Profilfeld (wie Vorname, Nachname, Telefon, Geschlecht, Geburtsdatum, Passwort) kann der Verein einstellen, ob das Feld frei bearbeitbar, nur lesbar oder komplett ausgeblendet sein soll.
-- **Modernes Split-Design:** Auf Laptops und Computern erscheint das Begrüßungsfenster in einem breiten zweigeteilten Layout. Links begrüßt eine sanfte Tennis-Animation zusammen mit dem Willkommenstext das Mitglied. Rechts befinden sich die persönlichen Datenfelder in übersichtlichen Kacheln.
-- **Smartphone-Optimierung:** Auf Mobiltelefonen wird die Animation automatisch ausgeblendet, damit das Display nicht überladen wird und alle Eingabefelder direkt erreichbar sind.
-- **Bestätigen & Hinweis ausblenden:** Am unteren Rand des Formulars befindet sich ein Kontrollkästchen mit der Beschriftung *„Diesen Hinweis nicht mehr anzeigen“* (standardmäßig nicht angehakt). Setzt das Mitglied dort einen Haken und klickt auf *Bestätigen & Weiter*, wird das Begrüßungsfenster bei zukünftigen Anmeldungen nicht mehr angezeigt.
-- **Stapelverarbeitung (Onboarding zurücksetzen):** Mit dem Knopf *Für alle Mitglieder zurücksetzen* können Administratoren mit einem Klick veranlassen, dass alle Mitglieder des Vereins beim nächsten Einloggen erneut durch den Datenabgleich und das Begrüßungsfenster geführt werden.
-- **Erfolgs- und Fehlermeldungen:** Nach dem Speichern oder Zurücksetzen zeigt ein klarer Infobalken direkt an, ob die Aktion erfolgreich war oder ob fehlende Berechtigungen vorliegen.
+- **Schreibgeschützte Felder:** Wenn Stammdaten (z. B. Geburtsdatum oder Geschlecht zur Liga-Einteilung) im Admin-Menü auf schreibgeschützt gesetzt sind, werden die Eingabefelder mit einem sanft abgedunkelten Hintergrund (`bg-slate-100`) und gesperrtem Mauszeiger dargestellt, während das Kachellayout ohne überflüssige Badges oder Hinweistexte maximal sauber und aufgeräumt bleibt.
+- **Klare Formular-Hierarchie & volle Breite:** Die Bereiche sind logisch nach Relevanz von oben nach unten geordnet:
+  1. *Persönlicher Name* (Vorname und Nachname)
+  2. *Demographie* (Geburtsdatum und Geschlecht in voller Breite ohne Abschneiden von Datumswerten)
+  3. *Passwort festlegen (Optional)* (sicherheitsrelevante Einstellungen mit 8 Zeichen Mindestanforderung)
+  4. *Profilbild & Avatar* (optische Personalisierung im aufgeräumten Design vor dem Bestätigen)
+- **Hintergrund-Scrollsperre:** Bei geöffnetem Onboarding-Fenster wird das Scrollen des Seitenhintergrunds im Browser gesperrt, sodass das Scrollrad ausschließlich innerhalb der Onboarding-Karte wirkt.
+- **Modernes Split-Design:** Auf Computern und Bildschirmen ab Desktop-Größe erscheint das Begrüßungsfenster in einem luftigen zweigeteilten Layout. Links begrüßt direkt über der Hauptüberschrift eine lebendige Tennis-Lottie-Animation im Hochkontrast-Look das Mitglied. Rechts befinden sich die persönlichen Datenfelder in kompakten Kacheln, die auf Standard-Desktop-Displays ohne internen Scrollbalken vollständig überblickbar sind.
+- **Smartphone-Optimierung:** Auf mobilen Geräten unterhalb des Desktop-Breakpoints wird die Animation automatisch ausgeblendet und die Spalten werden vertikal gestapelt, damit der Begrüßungstext und alle Formularfelder übersichtlich und ohne Gedränge bedient werden können.
+- **Passwort-Sicherheit:** Wird im Onboarding die Vergabe eines neuen Passworts genutzt, gilt eine barrierefreie Mindestanforderung von 8 Zeichen (mit passendem Hilfetext und Eingabeüberprüfung).
+- **Klares Avatar-Design:** Der Bereich für das persönliche Profilbild zeigt eine kompakte Kachel ohne doppelte Überschriftenzeilen.
+- **Bestätigen oder Später anzeigen:** Am unteren Rand des Formulars befindet sich links neben dem Button *„Bestätigen“* ein dezenter Textlink *„Später anzeigen“*. Klickt das Mitglied auf *„Später anzeigen“*, schließt sich das Fenster für die laufende Sitzung, ohne die Stammdaten oder die Kennzeichnung „Onboarding ausstehend“ in der Datenbank zu verändern. Beim nächsten Anmelden wird das Begrüßungsfenster automatisch erneut angezeigt. Erst mit Klick auf *„Bestätigen“* werden die aktualisierten Daten in der Datenbank gespeichert und das Onboarding gilt dauerhaft als abgeschlossen.
+- **Stapelverarbeitung (Einschalten & Ausschalten für alle):** Im unteren Bereich der Einstellungen stehen zwei Knöpfe für die gesamte Mitgliedschaft bereit:
+  - *Für alle einschalten:* Setzt bei allen Mitgliedern die Kennzeichnung „Onboarding ausstehend“, sodass jeder beim nächsten Einloggen das Begrüßungsfenster sieht und seine Stammdaten bestätigen muss (ideal z. B. zu Beginn einer neuen Saison oder nach Ergänzung neuer Pflichtfelder).
+  - *Für alle ausschalten:* Markiert das Onboarding für alle Mitglieder sofort als erledigt, sodass niemand mehr beim Login dazu aufgefordert wird.
+  - Beide Aktionen sind mit einem Sicherheits-Dialog versehen, damit Änderungen nicht versehentlich ausgelöst werden.
+- **Erfolgs- und Fehlermeldungen:** Nach dem Speichern oder Ausführen einer Stapelaktion zeigt ein klarer Infobalken direkt an, ob die Aktion erfolgreich war oder ob ein Fehler aufgetreten ist.
+
+### Vereinsmeisterschaft (Modul)
+Das offizielle Vereinsmeisterschafts-Modul ermöglicht die Austragung von Sommer- und Wintermeisterschaften mit automatischer Tabellen- und Turnierbaumberechnung.
+
+- **Zugang für alle Mitglieder:**
+  - *Am Computer (Desktop):* Direkt in der oberen Menüleiste über den Reiter **Meisterschaft** (gekennzeichnet durch das Pokal-Symbol 🏆 / `Trophy`). Zur klaren Unterscheidung nutzt die Hobby-Liga das Wappen-Symbol 🛡️ / `Shield`.
+  - *Am Smartphone (Mobil):* Über das Menü **Weiteres / Mehr** (Drei-Punkte-Symbol) aufrufbar.
+- **Persönliche Status-Kachel ("Mein Status"):**
+  - Sobald ein Mitglied eingeloggt ist und an einer laufenden Meisterschaft teilnimmt, sieht es ganz oben seine persönliche Spielübersicht:
+    - Nächster ausstehender Gegner inklusive Frist (Deadline) für die aktuelle Runde.
+    - Schnelleingabe-Knopf *„Ergebnis eintragen“*, um das Match ohne Suchen direkt zu erfassen.
+    - Direkte Verknüpfung *„Freies Spiel reservieren“*, um zu freien Buchungszeiten einen Platz zu sichern.
+- **Unabhängige Platzbuchung:**
+  - Spieler reservieren für Meisterschaftsspiele ganz normal einen freien Platz im Buchungssystem (freies Spiel). Es ist keine starre Vorbefüllung nötig. Der Eintrag des Spielergebnisses erfolgt völlig unabhängig von der Platzbuchung direkt in der Meisterschaftsansicht.
+- **Gruppenphase & Live-Tabellen:**
+  - Zeigt alle Gruppen der Vorrunde (z. B. Gruppe A & B mit je 4 Spielern).
+  - *Faire Tie-Break-Rangfolge:* Bei Punktgleichheit entscheidet automatisch die offizielle Kaskade:
+    1. Anzahl Siege
+    2. Direkter Vergleich (bei exakt 2 punktgleichen Spielern)
+    3. Satzdifferenz
+    4. Spiel- bzw. Gamedifferenz
+    5. Erzielte Games
+  - Klickt man auf einen Spieler in der Tabelle, filtert die Begegnungsliste automatisch nach allen Spielen dieser Person.
+- **K.-o.-Turnierbaum (Endrunde):**
+  - Zeigt Halbfinale und Finale mit grafischen Verbindungslinien.
+  - Auf Desktop-Bildschirmen als mehrspaltiger Baum dargestellt; auf Smartphones als umschaltbare Phasen-Reiter, damit nichts abgeschnitten wird.
+  - Gewinner ziehen nach Eintragen des Ergebnisses automatisch in die nächste Runde ein.
+- **Ergebniseingabe & Walkover (w/o):**
+  - Reguläre Eingabe von 2 Gewinnsätzen inklusive Champions-Tiebreak im 3. Satz.
+  - *Automatische Verletzungs-/Ausfall-Wertung:* Fällt ein Spieler verletzungsbedingt aus und wird als „Ausgeschieden“ markiert, werden alle noch *offenen* Vorrundenspiele für die jeweiligen Gegner automatisch als 6:0, 6:0 Walkover gewertet. Bereits tatsächlich gespielte Partien bleiben mit ihrem echten Ergebnis bestehen.
+- **Turnier-Verwaltung & Vorlagen (Für Administratoren):**
+  - *Aktivierung in den Systemeinstellungen:* Unter **Einstellungen** ➔ **Allgemein** im Bereich **Module aktivieren** lässt sich die **Meisterschaft** (platziert direkt nach der Rangliste und vor den Gastspielen) für den Verein global ein- oder ausschalten. Standardmäßig ist die Meisterschaft deaktiviert. Erst nach der Aktivierung wird der Reiter in der oberen Kopfleiste für Mitglieder sichtbar.
+  - *Eigenständiger Admin-Reiter:* In der horizontalen Menüleiste der System-Einstellungen steht Administratoren der eigenständige Reiter **Meisterschaft** (Trophäen-Icon 🏆) zur Verfügung.
+  - *Zwei getrennte Verwaltungsbereiche:*
+    - **Turniere:** Übersicht aller aktiven, archivierten und gelöschten Meisterschaften. Über den Button *„Neue Meisterschaft“* (direkt bei den Statusfiltern) führt ein komfortabler Einrichtungsassistent in drei Schritten (Auswahl der Vorlage, Festlegung von Namen und Fristen sowie Zuweisung der Spieler zu Gruppen und Setzplätzen) durch den Turnierstart.
+    - **Turnier-Vorlagen:** Übersicht aller gespeicherten Spielformate.
+      - *Vollwertiger In-Page-Editor:* Beim Klick auf *„Neue Vorlage erstellen“* oder *„Vorlage bearbeiten“* öffnet sich ein übersichtliches, ganzseitiges Editor-Formular direkt auf der Admin-Seite. Über den Button *„← Zurück zur Vorlagen-Übersicht“* oben links oder im Fußbereich gelangt man jederzeit ohne Speichern zurück zur Liste.
+      - *Standardisiertes Match-Format:* Meisterschaftsspiele folgen stets der offiziellen Regelung (2 Gewinnsätze / Best of 3 mit Match-Tie-Break bis 10 Punkte als 3. Entscheidungssatz). Manuelle Format-Konfigurationen sind daher nicht nötig und wurden zugunsten maximaler Übersichtlichkeit aus dem Formular entfernt.
+      - *Disziplin & Grunddaten:*
+        - **Disziplin:** Schnelle Auswahl über ein sauberes Dropdown (*„Einzel (1 vs. 1)“* oder *„Doppel (2 vs. 2)“*) ohne störende Schaltflächen oder Icons.
+        - **Regel bei Punktgleichstand:** Unkomplizierte Auswahl zwischen dem *Direkten Vergleich* und der *Satz- & Spieledifferenz* in einem kompakten Auswahlfeld ohne überflüssige Zusatztexte.
+      - *Chronologische Phasen-Pipeline:* Die einzelnen Stufen des Turniers sind von oben nach unten geordnet und mit dezenten Flusslinien samt Pfeil (↓) verknüpft. Über Pfeiltasten (nach oben / unten) kann der Administrator die Reihenfolge flexibel anpassen.
+      - *Abschluss-Zusammenfassung des Turniermodus (Bento-Karte):* Am Ende der Pipeline fasst eine eigenständige Bento-Karte die gesamte Kette in klarer Vereinssprache zusammen (z. B. *„1. Gruppenphase: 2 Gruppen à 4 Spieler ➔ 2. K.-o.-Phase: 4 Teilnehmer im K.-o.-Modus ➔ 3. Finaltag: Großes Finale & Spiel um Platz 3“*) inklusive Bestätigungs-Badge (*„✓ Pipeline schlüssig: 4 Aufsteiger füllen das 4er-Feld exakt“*).
+      - *Phasen am Pipeline-Ende anhängen:* Über die gestrichelte Aktions-Kachel am Ende der Kette lassen sich weitere Gruppenphasen, K.-o.-Endrunden oder ein *Finaltag / Event* chronologisch anfügen.
+      - *Kompakte Datums- und Fristen-Eingabe:*
+        - **Reguläre Phasen (Gruppenphase, K.-o.-Runden):** Kompaktes Inline-Feld mit dem Label *„Zu spielen bis“* ohne störenden Erläuterungstext.
+        - **Finaltag / Event:** Kompaktes Inline-Feld mit dem Label *„Datum“*.
+        - **Keine doppelten Namensfelder & Auto-Synchronisation:** Der editierbare Phasenname direkt im Karten-Header dient als eindeutige Benennung; redundante Zweitfelder wie „Rundenbezeichnung“ entfallen.
+      - *Strikte Trennung von K.-o.-Runden:* Jede K.-o.-Karte repräsentiert genau eine konkrete Stufe mit eigener Frist (*Achtelfinale: 16 Spieler / 8 Matches*, *Viertelfinale: 8 Spieler / 4 Matches*, *Halbfinale: 4 Spieler / 2 Matches*, *Finale: 2 Spieler / 1 Match*). Beim Ändern der Stufe synchronisiert sich der Phasentitel oben links automatisch mit der gewählten Rundenbezeichnung (z. B. *„Halbfinale“*), bleibt aber frei anpassbar.
+      - *Modulare Platzierungsspiele am Finaltag (Ausspielungs-Tiefe):*
+        - Das starre Dropdown früherer Versionen wurde durch eine dynamische Einstellung *„Ausspielung der Plätze bis:“* ersetzt.
+        - Die Optionen berechnen sich automatisch anhand der Teilnehmerzahl der Vorrunde in 2er-Schritten (*„Nur Finale (Platz 1 & 2)“*, *„+ Spiel um Platz 3“*, *„+ Spiel um Platz 5“*, *„+ Spiel um Platz 7“* usw.).
+        - Eine informative Infobox zeigt unmittelbar an, wie viele Matches angesetzt sind und welche Plätze die Teilnehmer am Event-Tag ausspielen (z. B. *„Insgesamt 4 Matches am Finaltag angesetzt. Alle 8 teilnehmenden Mitglieder bestreiten ihr jeweiliges Platzierungsspiel.“*).
+        - Das Feld *„Datum“* mit Kalender-Picker legt das genaue Event-Datum fest.
+- **Turnier-Fortschrittsdiagramm ("Turnier-Reise"):**
+  - Oben in der Meisterschaftsansicht visualisiert ein interaktiver Stepper den gesamten Turnierablauf von der ersten Gruppenphase bis zum Finale.
+  - Jede Phase zeigt ihren aktuellen Bearbeitungsstand (z. B. *„6 / 12 Spiele absolviert“* mit Fortschrittsbalken), den Phasenstatus (*Abgeschlossen*, *Aktiv*, *Bevorstehend*) sowie Fristen oder Event-Termine.
+  - Mit einem Klick auf eine Phase im Diagramm springt die Ansicht direkt zum passenden Reiter (z. B. Gruppenphase oder K.-o.-Baum).
+  - *Vorlagen-Schutz (Gesperrt bei Verwendung):* Vorlagen, die bereits in aktiven oder archivierten Meisterschaften zum Einsatz kommen, werden automatisch mit einem Schlosssymbol geschützt (`Gesperrt`). So wird verhindert, dass laufende Wettbewerbe nachträglich verfälscht werden. Mit einem Klick auf *„Duplizieren“* lässt sich jedoch sofort eine bearbeitbare Kopie erstellen.
+  - *Papierkorb mit 30-Tage-Frist:* Gelöschte Meisterschaften verbleiben 30 Tage lang im Papierkorb und können mit einem Klick samt aller Ergebnisse und Historien wiederhergestellt werden, bevor sie endgültig bereinigt werden.
 

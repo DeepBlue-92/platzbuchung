@@ -38,6 +38,8 @@ interface AvatarUploaderProps {
   avatarIcon?: string | null;
   onChange: (data: { avatarUrl?: string | null; avatarIcon?: string | null }) => void;
   primaryColor?: string;
+  hideTitle?: boolean;
+  compact?: boolean;
 }
 
 export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
@@ -47,6 +49,8 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
   avatarIcon: explicitIcon,
   onChange,
   primaryColor = "var(--color-primary)",
+  hideTitle = false,
+  compact = false,
 }) => {
   const [internalAvatarUrl, setInternalAvatarUrl] = useState<string | null | undefined>(
     explicitUrl !== undefined ? explicitUrl : user?.avatarUrl
@@ -154,15 +158,19 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
   };
 
   return (
-    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-4">
-      <div className="flex flex-col sm:flex-row items-center gap-4">
+    <div
+      className={`bg-slate-50 border border-slate-200/80 rounded-2xl ${
+        compact ? "p-2.5 sm:p-3 space-y-2.5" : "p-4 space-y-4"
+      }`}
+    >
+      <div className={`flex flex-col sm:flex-row items-center ${compact ? "gap-3" : "gap-4"}`}>
         {/* Avatar Display */}
         <div className="relative group shrink-0">
           <UserAvatar
             user={user}
             avatarUrl={activeAvatarUrl}
             avatarIcon={activeAvatarIcon}
-            size="xl"
+            size={compact ? "lg" : "xl"}
             showBorder
             borderColor="border-white shadow-md"
             className="ring-2 ring-slate-200"
@@ -175,30 +183,32 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 setSelectedImageSrc(activeAvatarUrl);
                 setCropModalOpen(true);
               }}
-              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white border border-slate-300 shadow-sm flex items-center justify-center text-slate-600 hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+              className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white border border-slate-300 shadow-sm flex items-center justify-center text-slate-600 hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
               title="Ausschnitt anpassen"
             >
-              <Crop className="w-3.5 h-3.5" />
+              <Crop className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
         </div>
 
         {/* Content & Actions */}
-        <div className="flex-1 min-w-0 text-center sm:text-left space-y-2">
-          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-              Profilbild &amp; Avatar
-            </h4>
-          </div>
+        <div className="flex-1 min-w-0 text-center sm:text-left space-y-1.5">
+          {!hideTitle && (
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                Profilbild &amp; Avatar
+              </h4>
+            </div>
+          )}
 
           <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
             {activeAvatarUrl
-              ? "Dein aktuelles Profilbild. Du kannst jederzeit ein neues hochladen oder zu einem Icon wechseln."
+              ? "Dein aktuelles Profilbild. Du kannst jederzeit ein neues hochladen oder ein Icon wählen."
               : "Lade ein Foto hoch oder wähle eines unserer Sport-Icons als Profilbild."}
           </p>
 
           {/* Buttons */}
-          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-0.5">
             <input
               ref={fileInputRef}
               id="avatar-file-upload-input"

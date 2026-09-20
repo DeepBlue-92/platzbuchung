@@ -5,6 +5,7 @@ import {
   PartyPopper,
   Medal,
   Trophy,
+  Shield,
   UserPlus,
   Briefcase,
   BarChart3,
@@ -35,6 +36,7 @@ import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import { UserAvatar } from "./components/UserAvatar";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { LeagueDashboard } from "./components/LeagueDashboard";
+import { ChampionshipHub } from "./features/championship/ChampionshipHub";
 import { RichTextRenderer } from "./components/RichText";
 import { User, Booking, Role, Tournament, RankingState, UserClub } from "./types";
 import { getUserClubs, isClubAdmin, isSuperAdmin } from "./lib/userUtils";
@@ -295,6 +297,9 @@ const App: React.FC = () => {
     if (hash.includes("hobbyliga") || hash.includes("league") || hash.includes("punkte-system") || hash.includes("rules")) {
       return "league";
     }
+    if (hash.includes("championship") || hash.includes("meisterschaft")) {
+      return "championship";
+    }
     const allowedViews = [
       "reservation",
       "reports",
@@ -304,6 +309,7 @@ const App: React.FC = () => {
       "adminSettings",
       "guests",
       "league",
+      "championship",
       "arbeitseinsaetze",
       "impressum",
     ];
@@ -331,10 +337,13 @@ const App: React.FC = () => {
     | "impressum"
     | "adminSettings"
     | "guests"
+    | "league"
+    | "championship"
+    | "arbeitseinsaetze"
   >(getInitialView);
-  const [mobileViewType, setMobileViewType] = useState<"day" | "week">(
-    window.innerWidth < 1024 ? "day" : "week",
-  );
+  const [adminInitialTab, setAdminInitialTab] = useState<string>("allgemein");
+  const [mobileViewType, setMobileViewType] = useState<"day" | "week">("day");
+  const [desktopViewType, setDesktopViewType] = useState<"day" | "week">("week");
   const [mobileSelectedDate, setMobileSelectedDate] = useState<string>(() => {
     const today = new Date();
     const pad = (n: number) => n.toString().padStart(2, "0");
@@ -454,6 +463,22 @@ const App: React.FC = () => {
   }, []);
   const [showPublicHelp, setShowPublicHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [onboardingDismissedForSession, setOnboardingDismissedForSession] = useState(false);
+
+  // Reset session-based onboarding dismissal whenever a user signs in, switches, or signs out
+  useEffect(() => {
+    setOnboardingDismissedForSession(false);
+  }, [currentUser?.id]);
+
+  // Keep currentUser onboarding status synchronized with Firestore users listener
+  useEffect(() => {
+    if (!currentUser?.id || !users) return;
+    const key = (currentUser.id || currentUser.name).toLowerCase().replace(/\s/g, "");
+    const dbUser = users[key] || users[currentUser.id];
+    if (dbUser && dbUser.onboarding_pending !== undefined && dbUser.onboarding_pending !== currentUser.onboarding_pending) {
+      setCurrentUser((prev) => (prev ? { ...prev, onboarding_pending: dbUser.onboarding_pending } : null));
+    }
+  }, [users, currentUser?.id, currentUser?.onboarding_pending]);
 
   const [superAdminContext, setSuperAdminContext] = useState<User | null>(() => {
     try {
@@ -986,12 +1011,6 @@ const App: React.FC = () => {
     }
   }, [currentVereinsId, isPublicWochenplanRoute]);
 
-  useEffect(() => {
-    if (currentVereinsId && currentVereinsId !== "super-admin") {
-      setMobileViewType(window.innerWidth < 1024 ? "day" : "week");
-    }
-  }, [currentVereinsId]);
-
   // Deep linking and Auth Guard Redirects
   useEffect(() => {
     const handleDeepLinking = () => {
@@ -1340,6 +1359,7 @@ const App: React.FC = () => {
         currentVereinsId,
       );
       setCurrentUser(u);
+      setOnboardingDismissedForSession(false);
       setError("");
       setShowPublicHelp(false);
 
@@ -1391,6 +1411,7 @@ const App: React.FC = () => {
     setProxyUser(null);
     setSuperAdminContext(null);
     setCurrentUser(null);
+    setOnboardingDismissedForSession(false);
   };
 
   const handleSwitchClub = (newVereinsId: string) => {
@@ -2688,8 +2709,16 @@ const App: React.FC = () => {
     {
       id: "league",
       label: "Liga",
-      IconComponent: Trophy,
+      IconComponent: Shield,
       show: isLeagueEnabled,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "championship",
+      label: "Meisterschaft",
+      IconComponent: Trophy,
+      show: settings.modules?.championship === true,
       barClass: "flex",
       dropdownClass: "hidden",
     },
@@ -2895,6 +2924,10 @@ const App: React.FC = () => {
   }
   else if (view === "league") { 
     mobileHeaderTitle = "Liga"; 
+    MobileHeaderIconComp = Trophy; 
+  }
+  else if (view === "championship") { 
+    mobileHeaderTitle = "Meisterschaft"; 
     MobileHeaderIconComp = Trophy; 
   }
   else if (view === "reports") { 
@@ -3479,6 +3512,8 @@ const App: React.FC = () => {
                       }
                       setView("reservation");
                     }}
+                    onNavigateToChampionship={() => setView("championship")}
+                    initialTab={adminInitialTab}
                   />
                 </div>
               ) : view === "tournaments" ? (
@@ -3556,6 +3591,29 @@ const App: React.FC = () => {
                     <h3 className="text-base font-bold text-slate-700">Liga nicht aktiv</h3>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm">
                       Die Liga ist aktuell für diesen Verein oder systemweit vom Superadministrator nicht freigeschaltet.
+                    </p>
+                  </div>
+                )
+              ) : view === "championship" ? (
+                settings.modules?.championship === true || isAdmin ? (
+                  <div className="w-full flex-grow flex flex-col min-h-0">
+                    <ChampionshipHub
+                      currentUser={proxyUser || currentUser}
+                      clubId={currentVereinsId}
+                      users={users}
+                      onNavigateToReservations={() => setView("reservation")}
+                      onNavigateToAdmin={() => {
+                        setAdminInitialTab("championship");
+                        handleSetView("adminSettings");
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-500">
+                    <i className="fa-solid fa-lock text-4xl text-slate-300 mb-3"></i>
+                    <h3 className="text-base font-bold text-slate-700">Meisterschaft nicht aktiv</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                      Das Modul Meisterschaft ist aktuell für diesen Verein in den Vereins-Einstellungen nicht freigeschaltet.
                     </p>
                   </div>
                 )
@@ -3639,9 +3697,28 @@ const App: React.FC = () => {
                               : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
                           }`}
                         >
-                          <Trophy className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
+                          <Shield className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
                           <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
                             Liga
+                          </span>
+                        </button>
+                      )}
+
+                      {settings.modules?.championship === true && (
+                        <button
+                          onClick={() => {
+                            setView("championship");
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className={`flex flex-col items-center justify-center gap-1 p-1 rounded-xl border-2 text-center transition-all active:scale-[0.97] duration-150 h-16 w-full ${
+                            view === "championship"
+                              ? "border-[var(--color-primary)] bg-slate-50 text-[var(--color-primary)] font-black"
+                              : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
+                          }`}
+                        >
+                          <Trophy className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
+                          <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
+                            Meisterschaft
                           </span>
                         </button>
                       )}
@@ -3903,6 +3980,8 @@ const App: React.FC = () => {
                   onSwitchClub={handleSwitchClub}
                   mobileViewType={mobileViewType}
                   onMobileViewTypeChange={setMobileViewType}
+                  desktopViewType={desktopViewType}
+                  onDesktopViewTypeChange={setDesktopViewType}
                   mobileSelectedDate={mobileSelectedDate}
                   onMobileSelectedDateChange={(d) => {
                     setMobileSelectedDate(d);
@@ -3911,6 +3990,7 @@ const App: React.FC = () => {
                   isPublicWochenplan={isPublicWochenplanRoute && !currentUser}
                   onPublicLoginSuccess={(loggedInUser) => {
                     setCurrentUser(loggedInUser);
+                    setOnboardingDismissedForSession(false);
                   }}
                   onDismissOnboardingHints={handleDismissOnboardingHints}
                 />
@@ -4007,6 +4087,7 @@ const App: React.FC = () => {
         {settings.club_onboarding_settings?.enable_onboarding &&
           currentUser &&
           currentUser.onboarding_pending &&
+          !onboardingDismissedForSession &&
           !proxyUser && (
             <MemberOnboardingModal
               currentUser={currentUser}
@@ -4016,6 +4097,9 @@ const App: React.FC = () => {
                 setCurrentUser(updatedUser);
                 const key = (updatedUser.id || updatedUser.name).toLowerCase().replace(/\s/g, '');
                 setUsers((prev) => ({ ...prev, [key]: updatedUser }));
+              }}
+              onClose={() => {
+                setOnboardingDismissedForSession(true);
               }}
             />
         )}
