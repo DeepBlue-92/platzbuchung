@@ -3381,7 +3381,7 @@ const App: React.FC = () => {
                   />
                 </div>
               ) : view === "adminSettings" && isAdmin ? (
-                <div className="flex flex-col h-full">
+                <div className="w-full flex flex-col h-full">
                   
                   <AdminSettings
                     users={users}

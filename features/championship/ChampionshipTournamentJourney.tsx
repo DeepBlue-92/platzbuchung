@@ -73,7 +73,8 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
     }
 
     const isFinalsDay = stage.type === 'finals_day' || !!stage.isFinalsDay;
-    const deadlineInfo = !isFinalsDay && stage.deadlineDate ? getDeadlineCountdownInfo(stage.deadlineDate) : null;
+    const stageDeadline = tournament.stageDeadlines?.[stage.id];
+    const deadlineInfo = !isFinalsDay && stageDeadline ? getDeadlineCountdownInfo(stageDeadline) : null;
     const completionPercent = totalMatches > 0 ? Math.round((completedMatches / totalMatches) * 100) : 0;
 
     return {
@@ -84,6 +85,7 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
       completionPercent,
       deadlineInfo,
       isFinalsDay,
+      stageDeadline,
     };
   });
 
@@ -230,8 +232,8 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
                     <div className="text-amber-800 flex items-center gap-1.5 flex-wrap">
                       <Flag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       <span>
-                        {item.stage.eventDate
-                          ? `Event: ${formatEventDate(item.stage.eventDate, false)}`
+                        {item.stageDeadline
+                          ? `Event: ${formatEventDate(item.stageDeadline, false)}`
                           : 'Event-Datum noch offen'}
                       </span>
                     </div>

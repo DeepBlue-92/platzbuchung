@@ -242,6 +242,38 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
     );
   }
 
+  // In-Page Tournament Start Wizard View (integrated directly into the page instead of popup)
+  if (isWizardOpen) {
+    return (
+      <div className="w-full">
+        <ChampionshipTournamentStartWizard
+          isOpen={true}
+          inline={true}
+          onClose={() => {
+            setIsWizardOpen(false);
+            setWizardTemplateId(undefined);
+          }}
+          clubId={clubId}
+          templates={templates}
+          users={users}
+          initialSelectedTemplateId={wizardTemplateId}
+          onTournamentCreated={(tourn) => {
+            showFeedback(`Meisterschaft "${tourn.title}" erfolgreich gestartet!`);
+            setIsWizardOpen(false);
+            setWizardTemplateId(undefined);
+            setSubTab('tournaments');
+            setStatusFilter('active');
+          }}
+          onCreateNewTemplate={() => {
+            setIsWizardOpen(false);
+            setWizardTemplateId(undefined);
+            handleOpenNewTemplate();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-200">
       {/* Top Banner / Header */}
@@ -365,7 +397,7 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {templates.map((tpl) => {
                 const locked = isTemplateLocked(tpl);
                 const groupStage = tpl.stages?.find((s) => s.type === 'group');
@@ -576,7 +608,7 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
               {filteredTournaments.map((tourn) => {
                 const matchCount = tourn.matches?.length || 0;
                 const completedMatches =
@@ -742,24 +774,6 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
           )}
         </div>
       )}
-
-      {/* Modals */}
-      <ChampionshipTournamentStartWizard
-        isOpen={isWizardOpen}
-        onClose={() => {
-          setIsWizardOpen(false);
-          setWizardTemplateId(undefined);
-        }}
-        clubId={clubId}
-        templates={templates}
-        users={users}
-        initialSelectedTemplateId={wizardTemplateId}
-        onTournamentCreated={(tourn) => {
-          showFeedback(`Meisterschaft "${tourn.title}" erfolgreich gestartet!`);
-          setSubTab('tournaments');
-          setStatusFilter('active');
-        }}
-      />
     </div>
   );
 };

@@ -63,6 +63,23 @@ export async function saveChampionshipTemplate(
   template: TournamentTemplate
 ): Promise<void> {
   const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  if (!vereinsId) {
+    console.error('saveChampionshipTemplate: Vereins-ID fehlt oder ist leer.', { rawVereinsId });
+    throw new Error('Fehlende Vereins-ID: Die Vorlage konnte keinem Verein zugeordnet werden.');
+  }
+  if (!template || !template.id) {
+    console.error('saveChampionshipTemplate: Ungültige Vorlage oder fehlende ID.', { template });
+    throw new Error('Ungültige Vorlage: Vorlagen-ID ist ein Pflichtfeld.');
+  }
+  if (!template.title || !template.title.trim()) {
+    console.error('saveChampionshipTemplate: Pflichtfeld "Titel" fehlt.', { template });
+    throw new Error('Bitte geben Sie einen Titel für die Vorlage an.');
+  }
+  if (!template.stages || template.stages.length === 0) {
+    console.error('saveChampionshipTemplate: Pflichtfeld "Stufen" ist leer.', { template });
+    throw new Error('Eine Vorlage muss mindestens eine Turnierstufe enthalten.');
+  }
+
   const path = `vereine/${vereinsId}/championship_templates/${template.id}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_templates', template.id);
 
@@ -74,7 +91,9 @@ export async function saveChampionshipTemplate(
 
   try {
     await setDoc(docRef, cleanData, { merge: true });
+    console.log(`[ChampionshipService] Vorlage erfolgreich gespeichert: ${path}`);
   } catch (error) {
+    console.error(`[ChampionshipService] Fehler beim Schreiben nach ${path}:`, error);
     handleFirestoreError(error, OperationType.WRITE, path, true);
   }
 }
@@ -84,12 +103,18 @@ export async function deleteChampionshipTemplate(
   templateId: string
 ): Promise<void> {
   const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  if (!vereinsId || !templateId) {
+    console.error('deleteChampionshipTemplate: Parameter fehlen', { vereinsId, templateId });
+    throw new Error('Vereins-ID oder Vorlagen-ID fehlt.');
+  }
   const path = `vereine/${vereinsId}/championship_templates/${templateId}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_templates', templateId);
 
   try {
     await deleteDoc(docRef);
+    console.log(`[ChampionshipService] Vorlage gelöscht: ${path}`);
   } catch (error) {
+    console.error(`[ChampionshipService] Fehler beim Löschen von ${path}:`, error);
     handleFirestoreError(error, OperationType.DELETE, path, true);
   }
 }
@@ -132,6 +157,15 @@ export async function saveChampionshipTournament(
   tournament: TournamentInstance
 ): Promise<void> {
   const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  if (!vereinsId) {
+    console.error('saveChampionshipTournament: Vereins-ID fehlt oder ist leer.', { rawVereinsId });
+    throw new Error('Fehlende Vereins-ID: Das Turnier konnte keinem Verein zugeordnet werden.');
+  }
+  if (!tournament || !tournament.id) {
+    console.error('saveChampionshipTournament: Ungültiges Turnier oder fehlende ID.', { tournament });
+    throw new Error('Ungültiges Turnier: Turnier-ID ist ein Pflichtfeld.');
+  }
+
   const path = `vereine/${vereinsId}/championship_tournaments/${tournament.id}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_tournaments', tournament.id);
 
@@ -143,7 +177,9 @@ export async function saveChampionshipTournament(
 
   try {
     await setDoc(docRef, cleanData, { merge: true });
+    console.log(`[ChampionshipService] Turnier erfolgreich gespeichert: ${path}`);
   } catch (error) {
+    console.error(`[ChampionshipService] Fehler beim Schreiben nach ${path}:`, error);
     handleFirestoreError(error, OperationType.WRITE, path, true);
   }
 }

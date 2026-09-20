@@ -24,7 +24,7 @@ export interface TournamentStageConfig {
   roundName?: string; // e.g. "Halbfinale", "Finale", "Viertelfinale"
   bracketSize?: number; // 2, 4, 8, 16, 32
   placementMatchesMaxRank?: number; // e.g. 2 for "Nur Finale (Platz 1 & 2)", 4 for "+ Platz 3", 6 for "+ Platz 5", 8 for "+ Platz 7"
-  // Timing / Deadlines:
+  // Timing / Deadlines (Konkret für Meisterschaftsobjekt TournamentInstance, nicht in Templates):
   deadlineDate?: string; // e.g. "2026-07-15" (Zu spielen bis)
   eventDate?: string; // e.g. "2026-08-15" (Festes Event-Datum für finals_day)
   isFinalsDay?: boolean; // Flag to easily treat stage as Club Event Day
@@ -141,7 +141,9 @@ export interface TournamentInstance {
   participants: Participant[];
   groups: Group[];
   matches: Match[];
-  stageDeadlines: Record<string, string>; // stageId -> ISO Date string
+  stageDeadlines: Record<string, string>; // stageId -> ISO Date string ("Zu spielen bis" bzw. "Datum" beim Finaltag)
+  startDate?: string;
+  endDate?: string;
   status: TournamentStatus;
   deletedAt?: string | null; // For soft-delete (30-day trash retention)
   createdAt: string;

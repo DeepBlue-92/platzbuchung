@@ -69,8 +69,9 @@ export const ChampionshipBracketView: React.FC<ChampionshipBracketViewProps> = (
 
     const stage = tournament.stages.find((s) => s.id === match.stageId);
     const isFinalsDay = stage?.type === 'finals_day' || stage?.isFinalsDay;
-    const eventDate = match.scheduledDate || stage?.eventDate;
-    const deadline = match.deadlineDate || stage?.deadlineDate;
+    const stageDeadline = stage ? tournament.stageDeadlines?.[stage.id] : undefined;
+    const eventDate = match.scheduledDate || (isFinalsDay ? stageDeadline : undefined);
+    const deadline = match.deadlineDate || (!isFinalsDay ? stageDeadline : undefined);
 
     return (
       <div
@@ -216,14 +217,15 @@ export const ChampionshipBracketView: React.FC<ChampionshipBracketViewProps> = (
                     {stage.name}
                   </h4>
                 </div>
-                {stage.eventDate ? (
-                  <span className="text-[10px] text-amber-800 font-bold block mt-1">
-                    Event-Tag: {formatEventDate(stage.eventDate)}
-                  </span>
-                ) : (stage.deadlineDate || deadline) ? (
+                {(stage.type === 'finals_day' || stage.isFinalsDay) ? (
+                  deadline ? (
+                    <span className="text-[10px] text-amber-800 font-bold block mt-1">
+                      Event-Tag: {formatEventDate(deadline)}
+                    </span>
+                  ) : null
+                ) : deadline ? (
                   (() => {
-                    const dl = stage.deadlineDate || deadline!;
-                    const cd = getDeadlineCountdownInfo(dl);
+                    const cd = getDeadlineCountdownInfo(deadline);
                     return (
                       <span
                         className={`text-[10px] font-bold inline-block mt-1 px-1.5 py-0.5 rounded ${

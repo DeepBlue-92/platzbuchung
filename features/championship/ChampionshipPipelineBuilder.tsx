@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Layers, HelpCircle, Calendar, ShieldAlert } from 'lucide-react';
+import { ArrowRight, Layers, HelpCircle, Calendar, ShieldAlert, Flag } from 'lucide-react';
 import { TournamentStageConfig, TieBreakRuleType, MatchFormat } from '../../types/championship';
 
 interface ChampionshipPipelineBuilderProps {
@@ -68,25 +68,40 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
           Runden-Fristen (Deadlines)
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {stages.map((stage) => (
-            <div key={stage.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Frist: {stage.name}
-              </label>
-              <input
-                type="date"
-                disabled={isReadOnly}
-                value={stageDeadlines[stage.id] || ''}
-                onChange={(e) => onChangeDeadline(stage.id, e.target.value)}
-                className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg p-2 disabled:bg-slate-100 cursor-pointer"
-              />
-            </div>
-          ))}
+          {stages.map((stage) => {
+            const isFinals = stage.type === 'finals_day' || stage.isFinalsDay;
+            return (
+              <div
+                key={stage.id}
+                className={`p-3 rounded-xl border ${
+                  isFinals ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-50 border-slate-200/60'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  {isFinals ? (
+                    <Flag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  ) : (
+                    <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  )}
+                  <label className="block text-[11px] font-bold text-slate-800 truncate">
+                    {isFinals ? `Datum: ${stage.name}` : `Zu spielen bis: ${stage.name}`}
+                  </label>
+                </div>
+                <input
+                  type="date"
+                  disabled={isReadOnly}
+                  value={stageDeadlines[stage.id] || ''}
+                  onChange={(e) => onChangeDeadline(stage.id, e.target.value)}
+                  className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg p-2 disabled:bg-slate-100 cursor-pointer focus:ring-2 focus:ring-[var(--color-primary)]"
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Rules & Format */}
-      <div className="max-w-xl">
+      <div className="w-full">
         {/* Tie-break rule configuration */}
         <div className="p-4 bg-white border border-slate-200/80 rounded-2xl space-y-3 shadow-xs">
           <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">

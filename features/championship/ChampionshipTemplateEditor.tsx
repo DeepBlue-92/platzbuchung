@@ -10,7 +10,6 @@ import {
   Copy,
   CheckCircle2,
   AlertTriangle,
-  Info,
   ChevronDown,
   Calendar,
   Flag,
@@ -40,8 +39,6 @@ const normalizeStages = (rawStages?: TournamentStageConfig[]): TournamentStageCo
         advancingPerGroup: 2,
         roundName: '',
         bracketSize: 4,
-        deadlineDate: '',
-        eventDate: '',
         isFinalsDay: false,
       },
       {
@@ -54,8 +51,6 @@ const normalizeStages = (rawStages?: TournamentStageConfig[]): TournamentStageCo
         groupCount: 2,
         playersPerGroup: 4,
         advancingPerGroup: 2,
-        deadlineDate: '',
-        eventDate: '',
         isFinalsDay: false,
       },
     ];
@@ -71,8 +66,6 @@ const normalizeStages = (rawStages?: TournamentStageConfig[]): TournamentStageCo
     bracketSize: s.bracketSize ?? 4,
     placementMatchesMaxRank: s.placementMatchesMaxRank ?? (s.type === 'finals_day' ? (s.bracketSize === 4 ? 4 : 2) : undefined),
     roundName: s.roundName || (s.type === 'finals_day' ? 'Großes Finale & Platzierungsspiele' : s.type === 'knockout' ? 'Halbfinale & Finale' : ''),
-    deadlineDate: s.deadlineDate || '',
-    eventDate: s.eventDate || '',
     isFinalsDay: s.type === 'finals_day' || !!s.isFinalsDay,
   }));
 };
@@ -153,8 +146,6 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
           groupCount: 2,
           playersPerGroup: 4,
           advancingPerGroup: 2,
-          deadlineDate: '',
-          eventDate: '',
           isFinalsDay: false,
         },
       ]);
@@ -169,8 +160,6 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
           bracketSize: 4,
           placementMatchesMaxRank: 4,
           roundName: 'Großes Finale & Platzierungsspiele',
-          deadlineDate: '',
-          eventDate: '',
           isFinalsDay: true,
         },
       ]);
@@ -184,8 +173,6 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
           order: newOrder,
           bracketSize: 4,
           roundName: 'Halbfinale',
-          deadlineDate: '',
-          eventDate: '',
           isFinalsDay: false,
         },
       ]);
@@ -304,8 +291,6 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
           bracketSize: s.type === 'knockout' || s.type === 'finals_day' ? Number(s.bracketSize) || 2 : undefined,
           roundName: s.type === 'knockout' || s.type === 'finals_day' ? s.roundName || 'Endrunde' : undefined,
           placementMatchesMaxRank: s.type === 'finals_day' ? (Number(s.placementMatchesMaxRank) || 4) : undefined,
-          deadlineDate: s.type !== 'finals_day' ? (s.deadlineDate || '') : undefined,
-          eventDate: s.type === 'finals_day' ? (s.eventDate || '') : undefined,
           isFinalsDay: s.type === 'finals_day' || !!s.isFinalsDay,
         })),
         tieBreakRule,
@@ -322,7 +307,21 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
       await saveChampionshipTemplate(clubId, payload);
       if (onSaved) onSaved(payload);
     } catch (err: any) {
-      setError(err?.message || 'Fehler beim Speichern der Vorlage.');
+      console.error('[ChampionshipTemplateEditor] Fehler beim Speichern:', err);
+      let msg = 'Fehler beim Speichern der Vorlage.';
+      if (typeof err?.message === 'string') {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed.error?.includes('insufficient permissions')) {
+            msg = 'Berechtigungsfehler: Bitte stellen Sie sicher, dass Sie als Administrator angemeldet sind.';
+          } else if (parsed.error) {
+            msg = `Fehler beim Speichern: ${parsed.error}`;
+          }
+        } catch {
+          msg = err.message;
+        }
+      }
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -343,7 +342,17 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
       await saveChampionshipTemplate(clubId, duplicated);
       if (onSaved) onSaved(duplicated);
     } catch (err: any) {
-      setError(err?.message || 'Kopieren fehlgeschlagen.');
+      console.error('[ChampionshipTemplateEditor] Fehler beim Duplizieren:', err);
+      let msg = 'Kopieren fehlgeschlagen.';
+      if (typeof err?.message === 'string') {
+        try {
+          const parsed = JSON.parse(err.message);
+          if (parsed.error) msg = `Fehler beim Kopieren: ${parsed.error}`;
+        } catch {
+          msg = err.message;
+        }
+      }
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -351,55 +360,97 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
 
   // Helper for pipeline transition calculations between adjacent phases
   const getPipelineTransitionInfo = (stageA: TournamentStageConfig, stageB: TournamentStageConfig, idxA: number) => {
-    if (stageA.type === 'group' && (stageB.type === 'knockout' || stageB.type === 'finals_day')) {
+    // 1. Transition: Group Stage -> Knockout or Finals Day
+    if (stageA.type === 'group' && (stageB.type === 'knockout' || stageB.type === 'finals_day' || stageB.isFinalsDay)) {
       const groupCount = stageA.groupCount || 2;
       const playersPerGroup = stageA.playersPerGroup || 4;
       const advancingPerGroup = stageA.advancingPerGroup || 2;
-      const totalQualifiers = groupCount * advancingPerGroup;
-      const bracketSize = stageB.bracketSize || 4;
-      const isExact = totalQualifiers === bracketSize;
+      const advancingPlayers = groupCount * advancingPerGroup;
+
+      const isFinalsB = stageB.type === 'finals_day' || !!stageB.isFinalsDay;
+      const bracketSize = isFinalsB
+        ? (stageB.placementMatchesMaxRank ?? (stageB.bracketSize || 4))
+        : (stageB.bracketSize || 4);
+      const isExact = advancingPlayers === bracketSize;
 
       return {
-        summaryText: `${groupCount} Gruppen à ${playersPerGroup} Spieler → Top ${advancingPerGroup} qualifizieren sich → ${totalQualifiers} Finalisten für Phase ${idxA + 2}`,
-        totalQualifiers,
+        summaryText: `${groupCount} Gruppen à ${playersPerGroup} Spieler → Top ${advancingPerGroup} weiter (${advancingPlayers} Qualifikanten) → Phase ${idxA + 2} (${stageB.name})`,
+        totalQualifiers: advancingPlayers,
         bracketSize,
         isExact,
         message: isExact
-          ? `Passgenau: ${totalQualifiers} Qualifikanten füllen das ${bracketSize}er Feld (${stageB.roundName || 'Endrunde'}) exakt aus.`
-          : totalQualifiers < bracketSize
-          ? `Hinweis: ${totalQualifiers} Qualifikanten aus Phase ${idxA + 1}, aber das Feld ist für ${bracketSize} Teilnehmer ausgelegt (Freilose erforderlich).`
-          : `Hinweis: ${totalQualifiers} Qualifikanten aus Phase ${idxA + 1} überschreiten das ${bracketSize}er Feld.`,
+          ? `Passgenau: ${advancingPlayers} Qualifikanten füllen das ${bracketSize}er Feld (${stageB.name || 'Endrunde'}) exakt aus.`
+          : advancingPlayers < bracketSize
+          ? `Hinweis: ${advancingPlayers} Qualifikanten aus Phase ${idxA + 1}, aber das Feld ist für ${bracketSize} Teilnehmer ausgelegt (Freilose erforderlich).`
+          : `Hinweis: ${advancingPlayers} Qualifikanten aus Phase ${idxA + 1} überschreiten das ${bracketSize}er Feld.`,
       };
     }
 
-    if ((stageA.type === 'knockout' || stageA.type === 'finals_day') && (stageB.type === 'knockout' || stageB.type === 'finals_day')) {
-      const prevBracket = stageA.bracketSize || 4;
-      const winnersCount = Math.max(1, Math.floor(prevBracket / 2));
-      const nextBracket = stageB.bracketSize || 2;
-      const isExact = winnersCount === nextBracket;
+    // 2. Transition: Knockout / Finals Day -> Knockout or Finals Day
+    if ((stageA.type === 'knockout' || stageA.type === 'finals_day') && (stageB.type === 'knockout' || stageB.type === 'finals_day' || stageB.isFinalsDay)) {
+      const playerCountA = stageA.bracketSize || 4;
+      const matchCountA = Math.max(1, Math.floor(playerCountA / 2));
+      const winnersCountA = matchCountA;
+      const losersCountA = matchCountA;
+
+      const isFinalsB = stageB.type === 'finals_day' || !!stageB.isFinalsDay;
+
+      if (isFinalsB) {
+        const placementMaxRank = stageB.placementMatchesMaxRank ?? (stageB.bracketSize === 2 ? 2 : 4);
+
+        // Halbfinale (4 Spieler / 2 Matches): 2 Sieger fürs Finale, 2 Verlierer fürs Spiel um Platz 3
+        if (placementMaxRank >= 4 || stageB.bracketSize === 4) {
+          const isExact = playerCountA === 4 || matchCountA === 2;
+          return {
+            summaryText: `${winnersCountA} Sieger (Finale) & ${losersCountA} Verlierer (Platz 3) → Phase ${idxA + 2} (${stageB.name})`,
+            totalQualifiers: winnersCountA + losersCountA,
+            bracketSize: 4,
+            isExact: isExact,
+            message: isExact
+              ? `Aus Stufe ${idxA + 1} (${stageA.name}) gehen ${winnersCountA} Sieger (fürs Finale) und ${losersCountA} Verlierer (für Spiel um Platz 3) hervor – beide Matches am Finaltag sind damit vollständig belegt.`
+              : `Hinweis: Teilnehmerzahl aus Stufe ${idxA + 1} passt nicht zum Finaltag.`,
+          };
+        } else {
+          // Nur Großes Finale (Platz 1 & 2)
+          const isExact = winnersCountA === 2;
+          return {
+            summaryText: `${winnersCountA} Sieger ziehen ins Finale von Phase ${idxA + 2} (${stageB.name}) ein`,
+            totalQualifiers: winnersCountA,
+            bracketSize: 2,
+            isExact: isExact,
+            message: isExact
+              ? `Die ${winnersCountA} Sieger bestreiten das Finale am Finaltag.`
+              : `Hinweis: ${winnersCountA} Sieger treffen auf das Finale.`,
+          };
+        }
+      }
+
+      // Reguläre K.-o.-Runde zu nächster K.-o.-Runde
+      const playerCountB = stageB.bracketSize || 2;
+      const isExact = winnersCountA === playerCountB;
 
       return {
-        summaryText: `${winnersCount} Sieger aus Phase ${idxA + 1} ziehen in Phase ${idxA + 2} (${stageB.name}) ein`,
-        totalQualifiers: winnersCount,
-        bracketSize: nextBracket,
+        summaryText: `${winnersCountA} Sieger aus Phase ${idxA + 1} ziehen in Phase ${idxA + 2} (${stageB.name}) ein`,
+        totalQualifiers: winnersCountA,
+        bracketSize: playerCountB,
         isExact,
         message: isExact
-          ? `Die ${winnersCount} Sieger bestreiten die Endspiele in Phase ${idxA + 2}.`
-          : `Hinweis: ${winnersCount} Sieger treffen auf ein ${nextBracket}er Feld.`,
+          ? `Die ${winnersCountA} Sieger bestreiten die Endspiele in Phase ${idxA + 2}.`
+          : `Hinweis: ${winnersCountA} Sieger treffen auf ein ${playerCountB}er Feld.`,
       };
     }
 
     if (stageA.type === 'group' && stageB.type === 'group') {
       const groupCountA = stageA.groupCount || 2;
       const advancingA = stageA.advancingPerGroup || 2;
-      const totalQualifiers = groupCountA * advancingA;
+      const advancingPlayers = groupCountA * advancingA;
 
       return {
-        summaryText: `${groupCountA} Gruppen → Top ${advancingA} weiter → ${totalQualifiers} Spieler erreichen Phase ${idxA + 2} (${stageB.name})`,
-        totalQualifiers,
+        summaryText: `${groupCountA} Gruppen → Top ${advancingA} weiter → ${advancingPlayers} Spieler erreichen Phase ${idxA + 2} (${stageB.name})`,
+        totalQualifiers: advancingPlayers,
         bracketSize: undefined,
         isExact: true,
-        message: `${totalQualifiers} Qualifikanten spielen in der nächsten Gruppenphase weiter.`,
+        message: `${advancingPlayers} Qualifikanten spielen in der nächsten Gruppenphase weiter.`,
       };
     }
 
@@ -476,9 +527,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
     }
 
     const validationText = isConsistent
-      ? (successes.length > 0
-          ? `✓ Pipeline schlüssig: ${successes.join(' • ')}`
-          : '✓ Pipeline schlüssig: Phasenreihenfolge ist logisch aufgebaut')
+      ? '✓ Pipeline schlüssig: Alle Runden und Teilnehmerzahlen gehen exakt auf.'
       : `Hinweis: ${issues[0] || 'Phasenübertragung erfordert Anpassung'}`;
 
     return {
@@ -491,7 +540,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
   const pipelineSummary = getOverallPipelineSummary();
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 animate-in fade-in duration-200">
+    <div className="w-full space-y-6 animate-in fade-in duration-200">
       {/* Top Header & Navigation */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -597,7 +646,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
 
       {/* Form Content (Natural Page Scroll) */}
       <form onSubmit={handleSave} className="space-y-6">
-        {/* SECTION 1: Disziplin & Grunddaten */}
+        {/* SECTION 1: Grunddaten */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-5">
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
             <div className="w-7 h-7 rounded-xl bg-emerald-50 text-[var(--color-primary)] font-black text-xs flex items-center justify-center">
@@ -605,10 +654,10 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
-                Disziplin &amp; Grunddaten
+                Grunddaten
               </h3>
               <p className="text-xs text-slate-500 font-medium">
-                Titel der Vorlage und offizielle Wertungsregeln bei Punktgleichheit
+                Titel und Regelwerk
               </p>
             </div>
           </div>
@@ -931,63 +980,6 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
                         </div>
                       </div>
                     )}
-
-                    {/* Deadline or Event Date Scheduling Configuration (Compact Inline Input) */}
-                    <div className="mt-3 pt-3 border-t border-slate-200/80 bg-white/70 -mx-2 -mb-2 px-3 py-2.5 rounded-xl">
-                      {stage.type === 'finals_day' ? (
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                            <Flag className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Datum</span>
-                          </label>
-
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="date"
-                              value={stage.eventDate || ''}
-                              onChange={(e) => handleUpdateStage(idx, { eventDate: e.target.value })}
-                              disabled={isLocked}
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                            />
-                            {stage.eventDate && !isLocked && (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStage(idx, { eventDate: '' })}
-                                className="text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer underline"
-                              >
-                                Löschen
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                            <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Zu spielen bis</span>
-                          </label>
-
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="date"
-                              value={stage.deadlineDate || ''}
-                              onChange={(e) => handleUpdateStage(idx, { deadlineDate: e.target.value })}
-                              disabled={isLocked}
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                            />
-                            {stage.deadlineDate && !isLocked && (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateStage(idx, { deadlineDate: '' })}
-                                className="text-[11px] text-slate-400 hover:text-slate-700 cursor-pointer underline"
-                              >
-                                Löschen
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
 
                   {/* Discrete Chronological Connector Line with Arrow Icon between adjacent phases */}

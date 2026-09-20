@@ -46,7 +46,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
     );
   }
 
-  const groupDeadline = groupStage?.deadlineDate || tournament.stageDeadlines?.[groupStage?.id || ''];
+  const groupDeadline = tournament.stageDeadlines?.[groupStage?.id || ''];
   const countdownInfo = groupDeadline ? getDeadlineCountdownInfo(groupDeadline) : null;
 
   return (

@@ -192,8 +192,9 @@ export const ChampionshipMatchList: React.FC<ChampionshipMatchListProps> = ({
                   {/* Scheduling / Deadline / Finalstag Badge */}
                   {(() => {
                     const isFinalsDay = stage?.type === 'finals_day' || stage?.isFinalsDay;
-                    const eventDate = match.scheduledDate || stage?.eventDate;
-                    const deadline = match.deadlineDate || stage?.deadlineDate;
+                    const stageDeadline = stage ? tournament.stageDeadlines?.[stage.id] : undefined;
+                    const eventDate = match.scheduledDate || (isFinalsDay ? stageDeadline : undefined);
+                    const deadline = match.deadlineDate || (!isFinalsDay ? stageDeadline : undefined);
 
                     if (isFinalsDay && eventDate) {
                       return (

@@ -92,7 +92,7 @@ Das offizielle Vereinsmeisterschafts-Modul ermöglicht die Austragung von Sommer
     - **Turnier-Vorlagen:** Übersicht aller gespeicherten Spielformate.
       - *Vollwertiger In-Page-Editor:* Beim Klick auf *„Neue Vorlage erstellen“* oder *„Vorlage bearbeiten“* öffnet sich ein übersichtliches, ganzseitiges Editor-Formular direkt auf der Admin-Seite. Über den Button *„← Zurück zur Vorlagen-Übersicht“* oben links oder im Fußbereich gelangt man jederzeit ohne Speichern zurück zur Liste.
       - *Standardisiertes Match-Format:* Meisterschaftsspiele folgen stets der offiziellen Regelung (2 Gewinnsätze / Best of 3 mit Match-Tie-Break bis 10 Punkte als 3. Entscheidungssatz). Manuelle Format-Konfigurationen sind daher nicht nötig und wurden zugunsten maximaler Übersichtlichkeit aus dem Formular entfernt.
-      - *Disziplin & Grunddaten:*
+      - *Grunddaten (Titel und Regelwerk):*
         - **Disziplin:** Schnelle Auswahl über ein sauberes Dropdown (*„Einzel (1 vs. 1)“* oder *„Doppel (2 vs. 2)“*) ohne störende Schaltflächen oder Icons.
         - **Regel bei Punktgleichstand:** Unkomplizierte Auswahl zwischen dem *Direkten Vergleich* und der *Satz- & Spieledifferenz* in einem kompakten Auswahlfeld ohne überflüssige Zusatztexte.
       - *Chronologische Phasen-Pipeline:* Die einzelnen Stufen des Turniers sind von oben nach unten geordnet und mit dezenten Flusslinien samt Pfeil (↓) verknüpft. Über Pfeiltasten (nach oben / unten) kann der Administrator die Reihenfolge flexibel anpassen.
