@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Trophy,
-  Table,
-  GitFork,
   ListOrdered,
   Settings,
   Plus,
   Calendar,
   AlertCircle,
+  FileText,
 } from 'lucide-react';
 import {
   TournamentInstance,
   TournamentTemplate,
   Match,
   MatchResult,
+  ChampionshipAuditLogEntry,
 } from '../../types/championship';
 import {
   listenToChampionshipTemplates,
@@ -22,13 +22,15 @@ import {
   purgeExpiredTrashTournaments,
 } from '../../services/championshipService';
 import { propagateWinnersInTournament } from '../../utils/championshipCalculator';
-import { ChampionshipHeroStatus } from './ChampionshipHeroStatus';
+import { formatParticipantById } from '../../utils/championshipNameResolver';
+import { determineActiveChampionshipTab } from '../../utils/championshipScheduling';
 import { ChampionshipGroupView } from './ChampionshipGroupView';
 import { ChampionshipBracketView } from './ChampionshipBracketView';
 import { ChampionshipMatchList } from './ChampionshipMatchList';
 import { ChampionshipResultModal } from './ChampionshipResultModal';
 import { ChampionshipAdmin } from './ChampionshipAdmin';
-import { ChampionshipTournamentJourney } from './ChampionshipTournamentJourney';
+import { ChampionshipBentoHeader } from './ChampionshipBentoHeader';
+import { ChampionshipAuditLogView } from './ChampionshipAuditLogView';
 import { User, Role } from '../../types';
 
 interface ChampionshipHubProps {
@@ -54,6 +56,7 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   const [activeTab, setActiveTab] = useState<'groups' | 'bracket' | 'matches' | 'admin'>(
     initialAdminView ? 'admin' : 'groups'
   );
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [selectedParticipantFilter, setSelectedParticipantFilter] = useState<string | null>(null);
 
   // Result entry modal
@@ -102,9 +105,102 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
     activeTournaments[0] ||
     null;
 
-  // Save match result
+  // Automatically switch to the active tournament phase based on maintained dates/deadlines
+  const prevEvaluatedTournamentIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!currentTournament || initialAdminView) return;
+
+    if (prevEvaluatedTournamentIdRef.current !== currentTournament.id) {
+      prevEvaluatedTournamentIdRef.current = currentTournament.id;
+      const activePhase = determineActiveChampionshipTab(currentTournament);
+      setActiveTab((prev) => {
+        // Do not kick out of admin or audit-log if administrator is managing
+        if (prev === 'admin' || prev === 'audit-log') return prev;
+        return activePhase;
+      });
+    }
+  }, [currentTournament?.id, currentTournament?.stageDeadlines, initialAdminView]);
+
+  // Save match result with transaction audit log
   const handleSaveResult = async (matchId: string, result: MatchResult) => {
     if (!currentTournament) return;
+
+    const existingMatch = currentTournament.matches.find((m) => m.id === matchId);
+
+    // Format scores for readable transaction history
+    const formatScoreSummary = (res?: MatchResult | null) => {
+      if (!res) return null;
+      if (res.isWalkover) {
+        if (!res.walkoverReason || res.walkoverReason === 'Verletzung / Aufgabe' || res.walkoverReason === 'Aufgabe') {
+          return 'w/o (Aufgabe)';
+        }
+        return `w/o (${res.walkoverReason})`;
+      }
+      if (!res.sets || res.sets.length === 0) return 'Ergebnis erfasst';
+      return res.sets
+        .map((s) => {
+          if (s.isChampionsTiebreak) {
+            return `${s.player1Games}:${s.player2Games} (MTB)`;
+          }
+          return `${s.player1Games}:${s.player2Games}`;
+        })
+        .join(', ');
+    };
+
+    const previousResultSummary = formatScoreSummary(existingMatch?.result);
+    const newResultSummary = formatScoreSummary(result) || 'Ergebnis erfasst';
+
+    const stage = currentTournament.stages.find((s) => s.id === existingMatch?.stageId);
+    const stageName = stage?.name || existingMatch?.roundLabel || 'Begegnung';
+
+    const p1Name = formatParticipantById(
+      existingMatch?.participant1Id,
+      currentTournament.participants,
+      users
+    );
+    const p2Name = formatParticipantById(
+      existingMatch?.participant2Id,
+      currentTournament.participants,
+      users
+    );
+    const wName = formatParticipantById(
+      result.winnerParticipantId,
+      currentTournament.participants,
+      users
+    );
+
+    const submitterName =
+      (currentUser?.firstName && currentUser?.lastName
+        ? `${currentUser.firstName} ${currentUser.lastName}`
+        : currentUser?.name) ||
+      result.enteredByUserName ||
+      'Benutzer';
+
+    const actionType: ChampionshipAuditLogEntry['action'] = result.isWalkover
+      ? 'walkover'
+      : existingMatch?.result
+      ? 'update_result'
+      : 'create_result';
+
+    const newAuditEntry: ChampionshipAuditLogEntry = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      timestamp: new Date().toISOString(),
+      userId: currentUser?.id || result.enteredByUserId || 'unknown',
+      userName: submitterName,
+      userRole: (currentUser?.role as string) || 'user',
+      action: actionType,
+      matchId,
+      roundLabel: existingMatch?.roundLabel || 'Begegnung',
+      stageName,
+      participant1Name: p1Name,
+      participant2Name: p2Name,
+      previousResultSummary,
+      newResultSummary,
+      winnerName: wName,
+      isWalkover: !!result.isWalkover,
+      walkoverReason: result.walkoverReason,
+    };
 
     const updatedMatches = currentTournament.matches.map((m) => {
       if (m.id === matchId) {
@@ -123,9 +219,12 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
       currentTournament.stages
     );
 
+    const updatedAuditLog = [newAuditEntry, ...(currentTournament.auditLog || [])];
+
     const updatedTournament: TournamentInstance = {
       ...currentTournament,
       matches: propagatedMatches,
+      auditLog: updatedAuditLog,
       updatedAt: new Date().toISOString(),
     };
 
@@ -139,63 +238,36 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
 
   return (
     <div className="w-full space-y-6 pb-12">
-      {/* Header & Tournament Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-50 rounded-2xl text-[var(--color-primary)]">
-            <Trophy className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-                Vereinsmeisterschaft
-              </h2>
-              {currentTournament && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                  {currentTournament.discipline === 'singles' ? 'Einzel' : 'Doppel'}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Gruppenspiele, Live-Tabellen, K.-o.-Endrunde & Vereinsmeister
-            </p>
-          </div>
-        </div>
-
-        {/* Tournament Switcher */}
-        {activeTournaments.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 hidden sm:inline">Turnier:</span>
-            <select
-              value={selectedTournamentId}
-              onChange={(e) => setSelectedTournamentId(e.target.value)}
-              className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:ring-1 focus:ring-[var(--color-primary)] cursor-pointer"
-            >
-              {activeTournaments.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Dynamic "Mein Status" Hero Section */}
-      <ChampionshipHeroStatus
-        currentUser={currentUser}
-        currentTournament={currentTournament}
-        onEnterResult={handleOpenResultModal}
-        onBookCourt={onNavigateToReservations}
-        users={users}
-      />
-
-      {/* Visual Tournament Progress Stepper ("Tournament Journey") */}
-      {currentTournament && currentTournament.stages && currentTournament.stages.length > 0 && (
-        <ChampionshipTournamentJourney
-          stages={currentTournament.stages}
-          matches={currentTournament.matches || []}
+      {/* Unified Hero Bento Header (Title, Tournament Progress, and Integrated Navigation) */}
+      {currentTournament && (
+        <ChampionshipBentoHeader
+          tournament={currentTournament}
+          activeTournaments={activeTournaments}
+          selectedTournamentId={selectedTournamentId}
+          onSelectTournamentId={(nextId) => {
+            setSelectedTournamentId(nextId);
+            const nextTourn = activeTournaments.find((t) => t.id === nextId);
+            if (nextTourn && activeTab !== 'admin') {
+              setActiveTab(determineActiveChampionshipTab(nextTourn));
+            }
+          }}
+          isAdmin={isAdmin}
+          onNavigateToAdmin={onNavigateToAdmin}
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            setSelectedStageId(null);
+          }}
+          selectedStageId={
+            selectedStageId ||
+            (activeTab === 'groups'
+              ? currentTournament.stages?.find((s) => s.type === 'group')?.id
+              : currentTournament.stages?.find(
+                  (s) => s.type === 'knockout' || s.type === 'finals_day' || s.isFinalsDay
+                )?.id)
+          }
           onSelectStage={(stageId, stageType) => {
+            setSelectedStageId(stageId);
             if (stageType === 'group') {
               setActiveTab('groups');
             } else {
@@ -204,67 +276,6 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
           }}
         />
       )}
-
-      {/* Navigation Tabs Bar */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('groups')}
-            className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'groups'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <Table className="w-3.5 h-3.5" />
-            <span>Gruppenphase</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('bracket')}
-            className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'bracket'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <GitFork className="w-3.5 h-3.5 rotate-90" />
-            <span>K.-o.-Baum</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('matches')}
-            className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'matches'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-            }`}
-          >
-            <ListOrdered className="w-3.5 h-3.5" />
-            <span>Alle Begegnungen</span>
-          </button>
-
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => {
-                if (onNavigateToAdmin) {
-                  onNavigateToAdmin();
-                } else {
-                  setActiveTab('admin');
-                }
-              }}
-              className="flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold transition-all cursor-pointer text-emerald-700 bg-emerald-50 hover:bg-emerald-100/70"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>Turnier-Verwaltung</span>
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Main Tab Content */}
       {activeTab === 'admin' && isAdmin ? (
@@ -288,10 +299,9 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
               selectedParticipantId={selectedParticipantFilter}
               onSelectParticipant={(pId) => {
                 setSelectedParticipantFilter(pId);
-                if (pId) {
-                  setActiveTab('matches');
-                }
               }}
+              onEnterResult={handleOpenResultModal}
+              currentUser={currentUser}
               users={users}
             />
           )}
@@ -301,6 +311,9 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
               tournament={currentTournament}
               onMatchClick={handleOpenResultModal}
               users={users}
+              currentUser={currentUser}
+              isAdmin={isAdmin}
+              selectedStageId={selectedStageId}
             />
           )}
 

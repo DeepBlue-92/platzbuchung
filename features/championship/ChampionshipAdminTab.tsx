@@ -37,6 +37,7 @@ import {
   archiveChampionshipTournament,
   activateChampionshipTournament,
   purgeExpiredTrashTournaments,
+  championshipService,
 } from '../../services/championshipService';
 import { ChampionshipTemplateEditor } from './ChampionshipTemplateEditor';
 import { ChampionshipTournamentStartWizard } from './ChampionshipTournamentStartWizard';
@@ -74,6 +75,14 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
     text: string;
     type: 'success' | 'error';
   } | null>(null);
+
+  // Deletion confirmation state
+  const [templateToDelete, setTemplateToDelete] = useState<TournamentTemplate | null>(null);
+  const [isDeletingTemplate, setIsDeletingTemplate] = useState<boolean>(false);
+
+  // Tournament trash confirmation state
+  const [tournamentToTrash, setTournamentToTrash] = useState<TournamentInstance | null>(null);
+  const [isTrashingTournament, setIsTrashingTournament] = useState<boolean>(false);
 
   // Subscribe to real-time templates and tournaments
   useEffect(() => {
@@ -138,19 +147,32 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
     }
   };
 
-  const handleDeleteTemplate = async (tpl: TournamentTemplate) => {
+  const handleDeleteTemplate = (tpl: TournamentTemplate) => {
     if (isTemplateLocked(tpl)) {
       showFeedback('Gesperrte Vorlagen in aktiver Verwendung können nicht gelöscht werden.', 'error');
       return;
     }
-    if (!window.confirm(`Möchtest du die Vorlage "${tpl.title}" wirklich löschen?`)) {
-      return;
-    }
+    setTemplateToDelete(tpl);
+  };
+
+  const handleConfirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    const tpl = templateToDelete;
+    setIsDeletingTemplate(true);
+
     try {
-      await deleteChampionshipTemplate(clubId, tpl.id);
-      showFeedback('Vorlage wurde gelöscht.');
+      // Sofort reaktiv die Liste im UI aktualisieren (ohne Seiten-Reload)
+      setTemplates((prev) => prev.filter((t) => t.id !== tpl.id));
+
+      // Löschen über championshipService
+      await championshipService.deleteTemplate(clubId, tpl.id);
+
+      showFeedback('Vorlage gelöscht.');
+      setTemplateToDelete(null);
     } catch (e: any) {
       showFeedback(e?.message || 'Fehler beim Löschen.', 'error');
+    } finally {
+      setIsDeletingTemplate(false);
     }
   };
 
@@ -178,19 +200,36 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
     }
   };
 
-  const handleTrashTournament = async (t: TournamentInstance) => {
-    if (
-      !window.confirm(
-        `Möchtest du "${t.title}" in den Papierkorb verschieben?\n(Bleibt dort 30 Tage lang wiederherstellbar)`
-      )
-    ) {
-      return;
-    }
+  const handleTrashTournament = (t: TournamentInstance) => {
+    setTournamentToTrash(t);
+  };
+
+  const handleConfirmTrashTournament = async () => {
+    if (!tournamentToTrash) return;
+    const t = tournamentToTrash;
+    setIsTrashingTournament(true);
+
     try {
+      // Optimistic UI update: immediately move to trash in local state
+      setTournaments((prev) =>
+        prev.map((item) =>
+          item.id === t.id
+            ? {
+                ...item,
+                status: 'trash' as TournamentStatus,
+                deletedAt: new Date().toISOString(),
+              }
+            : item
+        )
+      );
+
       await softDeleteChampionshipTournament(clubId, t.id);
       showFeedback(`"${t.title}" in den Papierkorb verschoben.`);
+      setTournamentToTrash(null);
     } catch (e: any) {
       showFeedback(e?.message || 'Verschieben fehlgeschlagen.', 'error');
+    } finally {
+      setIsTrashingTournament(false);
     }
   };
 
@@ -277,20 +316,16 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
   return (
     <div className="w-full space-y-6 animate-in fade-in duration-200">
       {/* Top Banner / Header */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm relative overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-[var(--color-primary)] text-white rounded-2xl shadow-sm">
-              <Trophy className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                Meisterschafts-Verwaltung
-              </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                Konfiguriere Vorlagen und steuere laufende, archivierte sowie geplante Clubmeisterschaften.
-              </p>
-            </div>
+          <div>
+            <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2.5 text-[var(--color-primary)]">
+              <Trophy className="w-5 h-5 shrink-0" />
+              <span>Meisterschafts-Verwaltung</span>
+            </h3>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Konfiguriere Vorlagen und steuere laufende, archivierte sowie geplante Clubmeisterschaften.
+            </p>
           </div>
         </div>
 
@@ -626,38 +661,34 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
                       {/* Top status & Discipline */}
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div>
-                          <span
-                            className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full mb-1.5 ${
-                              tourn.status === 'active'
-                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                                : tourn.status === 'archived'
-                                ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                                : tourn.status === 'trash'
-                                ? 'bg-rose-100 text-rose-900 border border-rose-200'
-                                : 'bg-amber-100 text-amber-900 border border-amber-200'
-                            }`}
-                          >
+                          {tourn.status !== 'trash' && (
                             <span
-                              className={`w-1.5 h-1.5 rounded-full ${
+                              className={`inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full mb-1.5 ${
                                 tourn.status === 'active'
-                                  ? 'bg-emerald-600'
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
                                   : tourn.status === 'archived'
-                                  ? 'bg-slate-500'
-                                  : tourn.status === 'trash'
-                                  ? 'bg-rose-600'
-                                  : 'bg-amber-500'
+                                  ? 'bg-slate-100 text-slate-700 border border-slate-200'
+                                  : 'bg-amber-100 text-amber-900 border border-amber-200'
                               }`}
-                            />
-                            <span>
-                              {tourn.status === 'active'
-                                ? 'Aktiv'
-                                : tourn.status === 'archived'
-                                ? 'Archiviert'
-                                : tourn.status === 'trash'
-                                ? 'Papierkorb'
-                                : 'Entwurf'}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  tourn.status === 'active'
+                                    ? 'bg-emerald-600'
+                                    : tourn.status === 'archived'
+                                    ? 'bg-slate-500'
+                                    : 'bg-amber-500'
+                                }`}
+                              />
+                              <span>
+                                {tourn.status === 'active'
+                                  ? 'Aktiv'
+                                  : tourn.status === 'archived'
+                                  ? 'Archiviert'
+                                  : 'Entwurf'}
+                              </span>
                             </span>
-                          </span>
+                          )}
 
                           <h4 className="font-bold text-base text-slate-900 leading-snug">
                             {tourn.title}
@@ -772,6 +803,107 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Bestätigungsdialog: Vorlage löschen */}
+      {templateToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in"
+          onClick={() => !isDeletingTemplate && setTemplateToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="p-3 bg-rose-50 text-rose-600 rounded-2xl shrink-0 border border-rose-100">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <h3 className="text-sm font-black text-slate-900">
+                  Vorlage löschen
+                </h3>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  Vorlage wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+                </p>
+                {templateToDelete.title && (
+                  <div className="mt-1 text-xs font-bold text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg inline-block">
+                    {templateToDelete.title}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setTemplateToDelete(null)}
+                disabled={isDeletingTemplate}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTemplate}
+                disabled={isDeletingTemplate}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingTemplate ? 'Löschen...' : 'Löschen'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Bestätigungsdialog: Meisterschaft in den Papierkorb verschieben */}
+      {tournamentToTrash && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in"
+          onClick={() => !isTrashingTournament && setTournamentToTrash(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl shrink-0 border border-amber-200">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <h3 className="text-sm font-black text-slate-900">
+                  In den Papierkorb verschieben
+                </h3>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                  Möchtest du die Meisterschaft <strong>"{tournamentToTrash.title}"</strong> in den Papierkorb verschieben?
+                </p>
+                <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-[11px] text-slate-500 font-medium space-y-1">
+                  <div>ℹ️ Im Papierkorb bleibt die Meisterschaft <strong>30 Tage lang</strong> erhalten und kann jederzeit wiederhergestellt werden.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setTournamentToTrash(null)}
+                disabled={isTrashingTournament}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmTrashTournament}
+                disabled={isTrashingTournament}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isTrashingTournament ? 'Verschieben...' : 'In den Papierkorb'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

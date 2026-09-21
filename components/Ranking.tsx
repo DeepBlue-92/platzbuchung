@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Trophy } from "lucide-react";
+import { Medal } from "lucide-react";
 import { RankingState, User, RankingEntry, Role, Person } from "../types";
 import { ClubSettings } from "../services/db";
 import { motion, AnimatePresence } from "motion/react";
@@ -291,7 +291,7 @@ const RankingView: React.FC<RankingProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-emerald-50 rounded-2xl text-[var(--color-primary)] shrink-0">
-              <Trophy className="w-5 h-5 text-[var(--color-primary)]" strokeWidth={1.8} />
+              <Medal className="w-5 h-5 text-[var(--color-primary)]" strokeWidth={1.8} />
             </div>
             <div>
               <div className="flex items-baseline gap-2">

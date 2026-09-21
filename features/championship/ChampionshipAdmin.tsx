@@ -43,6 +43,7 @@ interface ChampionshipAdminProps {
   users: Record<string, User>;
   onSelectTournament: (tournamentId: string) => void;
   activeTournamentId: string;
+  onNavigateToAuditLog?: () => void;
 }
 
 export const ChampionshipAdmin: React.FC<ChampionshipAdminProps> = ({
@@ -53,6 +54,7 @@ export const ChampionshipAdmin: React.FC<ChampionshipAdminProps> = ({
   users,
   onSelectTournament,
   activeTournamentId,
+  onNavigateToAuditLog,
 }) => {
   const [adminTab, setAdminTab] = useState<'manage' | 'trash'>('manage');
   const [isAssignerOpen, setIsAssignerOpen] = useState<boolean>(false);

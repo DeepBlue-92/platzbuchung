@@ -1,14 +1,17 @@
-import React from 'react';
-import { Trophy, HelpCircle, UserCheck, AlertCircle, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Trophy, HelpCircle, Calendar, CheckCircle2, Clock, X, Edit3, ArrowRight, UserCheck } from 'lucide-react';
 import { Group, Match, Participant, TournamentInstance } from '../../types/championship';
 import { calculateGroupStandings } from '../../utils/championshipCalculator';
-import { getDeadlineCountdownInfo } from '../../utils/championshipScheduling';
+import { resolveParticipantDisplayName } from '../../utils/championshipNameResolver';
+import { ChampionshipMatchCard } from './ChampionshipMatchCard';
 import { User } from '../../types';
 
 interface ChampionshipGroupViewProps {
   tournament: TournamentInstance;
   onSelectParticipant?: (participantId: string | null) => void;
   selectedParticipantId?: string | null;
+  onEnterResult?: (match: Match) => void;
+  currentUser?: User | null;
   users: Record<string, User>;
 }
 
@@ -16,24 +19,32 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
   tournament,
   onSelectParticipant,
   selectedParticipantId,
+  onEnterResult,
+  currentUser,
   users,
 }) => {
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(
+    selectedParticipantId || null
+  );
+
+  useEffect(() => {
+    if (selectedParticipantId !== undefined) {
+      setInternalSelectedId(selectedParticipantId);
+    }
+  }, [selectedParticipantId]);
+
   const groupStage = tournament.stages.find((s) => s.type === 'group');
   const advancingSlots = groupStage?.advancingPerGroup ?? 2;
 
-  const getPlayerDisplayName = (playerId: string): string => {
-    const u = users[playerId.toLowerCase().replace(/\s/g, '')] || users[playerId];
-    if (u) {
-      const first = u.firstName || '';
-      const last = u.lastName || '';
-      if (first && last) return `${first} ${last}`;
-      return u.name || playerId;
-    }
-    return playerId;
+  const handleRowClick = (participantId: string) => {
+    const next = internalSelectedId === participantId ? null : participantId;
+    setInternalSelectedId(next);
+    onSelectParticipant?.(next);
   };
 
-  const formatParticipant = (p: Participant): string => {
-    return p.playerIds.map(getPlayerDisplayName).join(' / ');
+  const handleResetFilter = () => {
+    setInternalSelectedId(null);
+    onSelectParticipant?.(null);
   };
 
   if (!tournament.groups || tournament.groups.length === 0) {
@@ -46,45 +57,32 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
     );
   }
 
-  const groupDeadline = tournament.stageDeadlines?.[groupStage?.id || ''];
-  const countdownInfo = groupDeadline ? getDeadlineCountdownInfo(groupDeadline) : null;
+  // All matches belonging to the group stage
+  const allGroupMatches = tournament.matches.filter(
+    (m) => !groupStage || m.stageId === groupStage.id
+  );
+
+  // Filter matches based on selected player or show all group matches
+  const displayedMatches = internalSelectedId
+    ? allGroupMatches.filter(
+        (m) =>
+          m.participant1Id === internalSelectedId ||
+          m.participant2Id === internalSelectedId
+      )
+    : allGroupMatches;
+
+  // Selected player name for header badge
+  const participants = tournament.participants || [];
+  const selectedParticipant = internalSelectedId
+    ? participants.find((p) => p.id === internalSelectedId)
+    : null;
+  const selectedParticipantName = selectedParticipant
+    ? resolveParticipantDisplayName(selectedParticipant, users)
+    : null;
 
   return (
     <div className="space-y-6">
-      {countdownInfo && (
-        <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-100 text-blue-800 rounded-xl">
-              <Calendar className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-900">
-                Frist für alle Gruppenphase-Matches
-              </h4>
-              <p className="text-[11px] text-slate-500 font-medium">
-                Alle Gruppenspiele müssen bis zum Stichtag ausgetragen und eingetragen sein.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
-            <span className="text-xs font-black text-slate-800">
-              Bis {countdownInfo.formattedDate}
-            </span>
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                countdownInfo.isOverdue
-                  ? 'bg-rose-100 text-rose-800'
-                  : countdownInfo.isUrgent
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-blue-100 text-blue-800'
-              }`}
-            >
-              {countdownInfo.daysRemainingText}
-            </span>
-          </div>
-        </div>
-      )}
-
+      {/* Group Tables Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {tournament.groups.map((group) => {
           const standings = calculateGroupStandings(
@@ -117,42 +115,41 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                   <thead>
                     <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400 bg-slate-50/50">
                       <th className="py-2.5 px-3 w-10 text-center">#</th>
-                      <th className="py-2.5 px-3">Spieler / Team</th>
-                      <th className="py-2.5 px-2 text-center" title="Gespielte Matches">Sp</th>
-                      <th className="py-2.5 px-2 text-center text-emerald-700" title="Siege">S</th>
-                      <th className="py-2.5 px-2 text-center text-rose-600" title="Niederlagen">N</th>
-                      <th className="py-2.5 px-2 text-center hidden sm:table-cell" title="Satzverhältnis">Sätze</th>
-                      <th className="py-2.5 px-2 text-center font-bold" title="Satzdifferenz">SDiff</th>
-                      <th className="py-2.5 px-2 text-center hidden md:table-cell" title="Spieleverhältnis">Spiele</th>
-                      <th className="py-2.5 px-2 text-center font-bold" title="Gamedifferenz">GDiff</th>
-                      <th className="py-2.5 px-3 text-center font-black text-slate-900" title="Punkte">Pkt</th>
+                      <th className="py-2.5 px-3 min-w-[140px]">Spieler / Team</th>
+                      <th className="py-2.5 px-1.5 w-11 text-center" title="Gespielte Matches">Sp</th>
+                      <th className="py-2.5 px-1.5 w-10 text-center text-emerald-700" title="Siege">S</th>
+                      <th className="py-2.5 px-1.5 w-10 text-center text-rose-600" title="Niederlagen">N</th>
+                      <th className="py-2.5 px-1.5 w-16 text-center hidden sm:table-cell" title="Satzverhältnis">Sätze</th>
+                      <th className="py-2.5 px-1.5 w-14 text-center font-bold" title="Satzdifferenz">SDiff</th>
+                      <th className="py-2.5 px-1.5 w-20 text-center hidden md:table-cell" title="Spieleverhältnis">Spiele</th>
+                      <th className="py-2.5 px-1.5 w-14 text-center font-bold" title="Gamedifferenz">GDiff</th>
+                      <th className="py-2.5 px-2 w-12 text-center font-black text-slate-900" title="Punkte">Pkt</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {standings.map((row) => {
-                      const isSelected = selectedParticipantId === row.participantId;
-                      const displayName = formatParticipant(row.participant);
+                      const isSelected = internalSelectedId === row.participantId;
+                      const displayName = resolveParticipantDisplayName(row.participant, users);
 
                       return (
                         <tr
                           key={row.participantId}
-                          onClick={() =>
-                            onSelectParticipant?.(
-                              isSelected ? null : row.participantId
-                            )
-                          }
-                          className={`transition-colors cursor-pointer ${
+                          onClick={() => handleRowClick(row.participantId)}
+                          className={`transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-emerald-50/80 font-bold'
+                              ? 'bg-emerald-100/80 font-bold border-l-4 border-emerald-600 shadow-xs'
                               : row.isAdvancing
-                              ? 'bg-emerald-50/25 hover:bg-emerald-50/50'
+                              ? 'bg-emerald-50/25 hover:bg-emerald-50/60'
                               : 'hover:bg-slate-50'
                           }`}
+                          title="Klicken, um nur die Spiele dieses Spielers anzuzeigen"
                         >
                           <td className="py-3 px-3 text-center">
                             <span
                               className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-black ${
-                                row.isAdvancing
+                                isSelected
+                                  ? 'bg-emerald-700 text-white shadow-xs'
+                                  : row.isAdvancing
                                   ? 'bg-emerald-500 text-white shadow-xs'
                                   : 'text-slate-400'
                               }`}
@@ -179,22 +176,28 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                             </div>
                           </td>
 
-                          <td className="py-3 px-2 text-center text-slate-500">{row.matchesPlayed}</td>
-                          <td className="py-3 px-2 text-center font-bold text-emerald-600">{row.wins}</td>
-                          <td className="py-3 px-2 text-center text-slate-400">{row.losses}</td>
-                          <td className="py-3 px-2 text-center text-slate-500 hidden sm:table-cell">
+                          <td className="py-3 px-1.5 w-11 text-center font-mono tabular-nums text-slate-500">
+                            {row.matchesPlayed}
+                          </td>
+                          <td className="py-3 px-1.5 w-10 text-center font-mono tabular-nums font-bold text-emerald-600">
+                            {row.wins}
+                          </td>
+                          <td className="py-3 px-1.5 w-10 text-center font-mono tabular-nums text-slate-400">
+                            {row.losses}
+                          </td>
+                          <td className="py-3 px-1.5 w-16 text-center font-mono tabular-nums text-slate-600 hidden sm:table-cell">
                             {row.setsWon}:{row.setsLost}
                           </td>
-                          <td className="py-3 px-2 text-center font-bold text-slate-700">
+                          <td className="py-3 px-1.5 w-14 text-center font-mono tabular-nums font-bold text-slate-700">
                             {row.setDiff > 0 ? `+${row.setDiff}` : row.setDiff}
                           </td>
-                          <td className="py-3 px-2 text-center text-slate-500 hidden md:table-cell">
+                          <td className="py-3 px-1.5 w-20 text-center font-mono tabular-nums text-slate-600 hidden md:table-cell">
                             {row.gamesWon}:{row.gamesLost}
                           </td>
-                          <td className="py-3 px-2 text-center font-bold text-slate-700">
+                          <td className="py-3 px-1.5 w-14 text-center font-mono tabular-nums font-bold text-slate-700">
                             {row.gameDiff > 0 ? `+${row.gameDiff}` : row.gameDiff}
                           </td>
-                          <td className="py-3 px-3 text-center font-black text-slate-900 text-sm">
+                          <td className="py-3 px-2 w-12 text-center font-mono tabular-nums font-black text-slate-900 text-sm">
                             {row.points}
                           </td>
                         </tr>
@@ -209,15 +212,84 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
       </div>
 
       {/* Tie Break rule hint */}
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-500 font-medium">
-        <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" />
-        <span>
-          <strong>Kriterium bei Punktgleichheit:</strong>{' '}
-          {tournament.tieBreakRule === 'head_to_head'
-            ? 'Direkter Vergleich (bei 2 Spielern), danach Satzdifferenz und Gamedifferenz.'
-            : 'Satzdifferenz, danach Gamedifferenz.'}
-          {' '}Klicke auf einen Spieler, um nur seine Spiele anzuzeigen.
-        </span>
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 font-medium">
+        <div className="flex items-center gap-2">
+          <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" />
+          <span>
+            <strong>Kriterium bei Punktgleichheit:</strong>{' '}
+            {tournament.tieBreakRule === 'head_to_head'
+              ? 'Direkter Vergleich (bei 2 Spielern), danach Satzdifferenz und Gamedifferenz.'
+              : 'Satzdifferenz, danach Gamedifferenz.'}
+            {' '}Klicke auf einen Spieler in der Tabelle, um seine Spiele zu filtern.
+          </span>
+        </div>
+        {internalSelectedId && (
+          <button
+            type="button"
+            onClick={handleResetFilter}
+            className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 shrink-0 underline cursor-pointer"
+          >
+            Filter zurücksetzen
+          </button>
+        )}
+      </div>
+
+      {/* Embedded Match List below groups */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
+        {/* Header with Title and Reset Filter Button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+                {internalSelectedId
+                  ? `Spiele von: ${selectedParticipantName}`
+                  : 'Ausstehende & nächste Begegnungen'}
+              </h3>
+              {internalSelectedId && (
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full border border-emerald-200">
+                  Gefiltert
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              {internalSelectedId
+                ? `Zeigt alle Gruppenphase-Partien mit Beteiligung von ${selectedParticipantName}`
+                : 'Gruppenspiele der aktiven Phase mit aktuellem Stand und Schnelleintrag'}
+            </p>
+          </div>
+
+          {internalSelectedId && (
+            <button
+              type="button"
+              onClick={handleResetFilter}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold rounded-xl transition-colors cursor-pointer self-start sm:self-auto"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Filter zurücksetzen (Alle anzeigen)</span>
+            </button>
+          )}
+        </div>
+
+        {/* Single-Column Match List */}
+        {displayedMatches.length === 0 ? (
+          <div className="py-8 text-center text-xs text-slate-500 font-medium">
+            Keine Begegnungen für diesen Filter gefunden.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {displayedMatches.map((match) => (
+              <ChampionshipMatchCard
+                key={match.id}
+                match={match}
+                tournament={tournament}
+                users={users}
+                currentUser={currentUser}
+                isAdmin={currentUser?.role === 'admin' || currentUser?.role === 'superadmin'}
+                onEnterResult={onEnterResult}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

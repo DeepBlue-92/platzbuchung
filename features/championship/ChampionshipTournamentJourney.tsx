@@ -1,12 +1,9 @@
 import React from 'react';
 import {
-  Calendar,
   CheckCircle2,
-  Clock,
   Sparkles,
   ChevronRight,
   Trophy,
-  Flag,
 } from 'lucide-react';
 import { TournamentStageConfig, Match } from '../../types/championship';
 import {
@@ -24,19 +21,30 @@ export interface StageProgressItem {
   completionPercent: number;
   deadlineInfo: ReturnType<typeof getDeadlineCountdownInfo>;
   isFinalsDay: boolean;
+  isDateMode?: boolean;
+  stageDeadline?: string;
+  deadlineText?: string;
+  isDeadlineOverdue?: boolean;
+  isDeadlineUrgent?: boolean;
 }
 
 interface ChampionshipTournamentJourneyProps {
   stages: TournamentStageConfig[];
   matches: Match[];
+  stageDeadlines?: Record<string, string>;
+  stageDeadlineTypes?: Record<string, 'deadline' | 'date'>;
   selectedStageId?: string | null;
+  activeTab?: 'groups' | 'bracket' | 'matches' | 'admin';
   onSelectStage?: (stageId: string, stageType: 'group' | 'knockout' | 'finals_day') => void;
 }
 
 export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourneyProps> = ({
   stages,
   matches,
+  stageDeadlines = {},
+  stageDeadlineTypes = {},
   selectedStageId,
+  activeTab,
   onSelectStage,
 }) => {
   if (!stages || stages.length === 0) {
@@ -46,7 +54,13 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
   // Sort stages chronologically
   const sortedStages = [...stages].sort((a, b) => a.order - b.order);
 
-  // Compute status and match progress per stage
+  // Overall tournament progress
+  const totalTournamentMatches = matches.length;
+  const totalCompletedMatches = matches.filter(
+    (m) => m.status === 'completed' || m.status === 'walkover'
+  ).length;
+
+  // Determine active phase in tournament progression
   let previousStageCompleted = true;
 
   const stageProgressList: StageProgressItem[] = sortedStages.map((stage, idx) => {
@@ -57,7 +71,9 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
     ).length;
 
     const isCompleted = totalMatches > 0 && completedMatches === totalMatches;
-    const hasStarted = completedMatches > 0 || (totalMatches > 0 && stageMatches.some((m) => m.participant1Id && m.participant2Id));
+    const hasStarted =
+      completedMatches > 0 ||
+      (totalMatches > 0 && stageMatches.some((m) => m.participant1Id && m.participant2Id));
 
     let status: StageProgressStatus = 'future';
     if (isCompleted) {
@@ -73,13 +89,57 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
     }
 
     const isFinalsDay = stage.type === 'finals_day' || !!stage.isFinalsDay;
-    const mode = tournament.stageDeadlineTypes?.[stage.id] ||
+    const mode =
+      stageDeadlineTypes?.[stage.id] ||
       stage.deadlineType ||
       (isFinalsDay ? 'date' : 'deadline');
     const isDateMode = mode === 'date';
-    const stageDeadline = tournament.stageDeadlines?.[stage.id];
-    const deadlineInfo = !isDateMode && stageDeadline ? getDeadlineCountdownInfo(stageDeadline) : null;
-    const completionPercent = totalMatches > 0 ? Math.round((completedMatches / totalMatches) * 100) : 0;
+    const stageDeadline = stageDeadlines?.[stage.id];
+    const deadlineInfo =
+      !isDateMode && stageDeadline ? getDeadlineCountdownInfo(stageDeadline) : null;
+    const completionPercent =
+      totalMatches > 0 ? Math.round((completedMatches / totalMatches) * 100) : 0;
+
+    // Check if this step is selected in the UI
+    const isStageSelected =
+      selectedStageId === stage.id ||
+      (!selectedStageId && activeTab === 'groups' && stage.type === 'group') ||
+      (!selectedStageId &&
+        activeTab === 'bracket' &&
+        (stage.type === 'knockout' || stage.type === 'finals_day'));
+
+    // Compute compact deadline / hint text
+    let deadlineText = '';
+    let isDeadlineOverdue = false;
+    let isDeadlineUrgent = false;
+
+    if (isDateMode) {
+      if (stageDeadline) {
+        const shortDate = formatEventDate(stageDeadline, false);
+        deadlineText = `${isFinalsDay ? 'Finaltag' : 'Spieltag'}: ${shortDate}`;
+      } else {
+        deadlineText = 'Termin offen';
+      }
+    } else if (deadlineInfo) {
+      const shortDate = deadlineInfo.formattedDate.replace(/\.\d{4}$/, '');
+      if (isStageSelected || status === 'active') {
+        // Active format: e.g. "Bis 12.10. (noch 21 Tage)"
+        if (deadlineInfo.isOverdue) {
+          deadlineText = `Bis ${shortDate} (abgelaufen)`;
+          isDeadlineOverdue = true;
+        } else if (deadlineInfo.daysRemainingText) {
+          deadlineText = `Bis ${shortDate} (${deadlineInfo.daysRemainingText})`;
+          isDeadlineUrgent = deadlineInfo.isUrgent ?? false;
+        } else {
+          deadlineText = `Bis ${shortDate}`;
+        }
+      } else {
+        // Planned/Future format: e.g. "Bis 02.11."
+        deadlineText = `Bis ${shortDate}`;
+      }
+    } else {
+      deadlineText = isCompleted ? 'Beendet' : 'Frist offen';
+    }
 
     return {
       stage,
@@ -91,41 +151,34 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
       isFinalsDay,
       isDateMode,
       stageDeadline,
+      deadlineText,
+      isDeadlineOverdue,
+      isDeadlineUrgent,
     };
   });
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
-      {/* Header with Title & Overall Progress */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-emerald-50 text-[var(--color-primary)] rounded-lg">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">
-              Turnier-Fortschritt
-            </h3>
-            <p className="text-[11px] text-slate-500 font-medium">
-              Aktuelle Phase, Fristen und Event-Termine auf einen Blick
-            </p>
-          </div>
+    <div className="bg-white border border-slate-200/90 rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs space-y-2">
+      {/* 4. Gesamt-Fortschritt integrieren (Rechtsbündig in der Stepper-Kopfzeile) */}
+      <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+          <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-700">
+            Turnier-Fortschritt
+          </h3>
         </div>
 
-        {/* Global Progress Pill */}
-        {matches.length > 0 && (
-          <div className="flex items-center gap-2 self-start sm:self-center">
+        {totalTournamentMatches > 0 && (
+          <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold text-slate-500">
-              Gesamt: {matches.filter((m) => m.status === 'completed' || m.status === 'walkover').length} / {matches.length} Spiele beendet
+              {totalCompletedMatches} / {totalTournamentMatches} Spiele abgeschlossen
             </span>
-            <div className="w-20 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+            <div className="w-16 sm:w-20 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/70 hidden xs:block">
               <div
                 className="bg-emerald-500 h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${Math.round(
-                    (matches.filter((m) => m.status === 'completed' || m.status === 'walkover').length /
-                      matches.length) *
-                      100
+                    (totalCompletedMatches / totalTournamentMatches) * 100
                   )}%`,
                 }}
               />
@@ -134,17 +187,25 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
         )}
       </div>
 
-      {/* Horizontal Stepper Timeline (Responsive with scroll-snap) */}
-      <div className="flex items-stretch gap-2.5 overflow-x-auto py-1 scroll-smooth snap-x snap-mandatory no-scrollbar">
+      {/* 1. & 2. Schlanker, kompakter horizontaler Stepper */}
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
         {stageProgressList.map((item, idx) => {
-          const isSelected = selectedStageId === item.stage.id;
+          const isSelected =
+            selectedStageId === item.stage.id ||
+            (!selectedStageId && activeTab === 'groups' && item.stage.type === 'group') ||
+            (!selectedStageId &&
+              activeTab === 'bracket' &&
+              (item.stage.type === 'knockout' || item.stage.type === 'finals_day'));
+
           const isCompleted = item.status === 'completed';
-          const isActive = item.status === 'active';
-          const isFuture = item.status === 'future';
+          const isFinalStage =
+            item.isFinalsDay ||
+            item.stage.type === 'finals_day' ||
+            item.stage.name.toLowerCase().includes('finale');
 
           return (
             <React.Fragment key={item.stage.id}>
-              {/* Step Card */}
+              {/* Step Button */}
               <button
                 type="button"
                 onClick={() => {
@@ -152,133 +213,86 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
                     onSelectStage(item.stage.id, item.stage.type);
                   }
                 }}
-                className={`flex-1 min-w-[220px] max-w-[280px] p-3.5 rounded-xl border text-left transition-all cursor-pointer snap-start relative flex flex-col justify-between ${
+                className={`flex items-center gap-2.5 px-3 py-1.5 sm:py-2 rounded-xl border text-left transition-all cursor-pointer shrink-0 flex-1 min-w-[170px] sm:min-w-[200px] ${
                   isSelected
-                    ? 'ring-2 ring-[var(--color-primary)] border-[var(--color-primary)] bg-emerald-50/20 shadow-xs'
-                    : isActive
-                    ? 'border-emerald-300 bg-emerald-50/15 hover:border-emerald-400'
+                    ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-200/80 shadow-xs'
                     : isCompleted
-                    ? 'border-slate-200 bg-slate-50/60 hover:bg-slate-100/70'
-                    : 'border-slate-200/70 bg-white opacity-70 hover:opacity-100'
+                    ? 'bg-slate-50/60 border-slate-200 hover:bg-slate-100/70 hover:border-slate-300'
+                    : 'bg-white border-slate-200 hover:bg-slate-50/80 hover:border-slate-300'
                 }`}
               >
-                {/* Top: Step Index & Status Badge */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${
-                        isCompleted
-                          ? 'bg-emerald-600 text-white'
-                          : isActive
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
-                    </span>
-                    <span
-                      className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                        item.isFinalsDay
-                          ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                          : item.stage.type === 'group'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-purple-100 text-purple-800'
-                      }`}
-                    >
-                      {item.isFinalsDay ? 'Finaltag' : item.stage.type === 'group' ? 'Gruppen' : 'K.-o.'}
-                    </span>
-                  </div>
-
-                  {/* Status Indicator */}
-                  {isCompleted && (
-                    <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
-                      Beendet
-                    </span>
-                  )}
-                  {isActive && (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
-                      Aktiv
-                    </span>
-                  )}
-                  {isFuture && (
-                    <span className="text-[10px] font-semibold text-slate-400">
-                      Geplant
-                    </span>
-                  )}
-                </div>
-
-                {/* Middle: Stage Name */}
-                <div className="mb-2">
-                  <strong className="text-xs font-bold text-slate-900 block truncate">
-                    {item.stage.name}
-                  </strong>
-                  <span className="text-[10px] text-slate-500 font-medium block">
-                    {item.totalMatches > 0
-                      ? `${item.completedMatches} von ${item.totalMatches} Spielen abgeschlossen`
-                      : 'Noch keine Matches zugewiesen'}
-                  </span>
-                </div>
-
-                {/* Progress bar per stage */}
-                {item.totalMatches > 0 && (
-                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2.5">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        isCompleted ? 'bg-emerald-500' : 'bg-[var(--color-primary)]'
-                      }`}
-                      style={{ width: `${item.completionPercent}%` }}
-                    />
-                  </div>
-                )}
-
-                {/* Bottom: Date / Deadline badge */}
-                <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[10px] font-bold">
-                  {item.isDateMode ? (
-                    <div className="text-amber-800 flex items-center gap-1.5 flex-wrap">
-                      <Flag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>
-                        {item.stageDeadline
-                          ? `${item.isFinalsDay ? 'Finaltag' : 'Spieltag'}: ${formatEventDate(item.stageDeadline, false)}`
-                          : 'Datum noch offen'}
-                      </span>
-                    </div>
-                  ) : item.deadlineInfo ? (
-                    <div
-                      className={`flex items-center gap-1.5 flex-wrap ${
-                        item.deadlineInfo.isOverdue
-                          ? 'text-rose-700'
-                          : item.deadlineInfo.isToday
-                          ? 'text-amber-700'
-                          : 'text-slate-700'
-                      }`}
-                    >
-                      <Calendar className="w-3.5 h-3.5 opacity-70 shrink-0" />
-                      <span>Bis {item.deadlineInfo.formattedDate}</span>
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
-                          item.deadlineInfo.isOverdue
-                            ? 'bg-rose-100 text-rose-800'
-                            : item.deadlineInfo.isToday
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {item.deadlineInfo.text}
-                      </span>
-                    </div>
+                {/* Step Indicator (Badge/Circle) */}
+                <div
+                  className={`w-6 h-6 rounded-full text-[11px] font-black flex items-center justify-center shrink-0 transition-colors ${
+                    isSelected
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : isCompleted
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-slate-100 text-slate-500 border border-slate-200'
+                  }`}
+                >
+                  {isCompleted ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                  ) : isFinalStage ? (
+                    <Trophy className="w-3 h-3" />
                   ) : (
-                    <span className="text-slate-400 font-normal italic flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      Keine Frist hinterlegt
-                    </span>
+                    <span>{idx + 1}</span>
                   )}
+                </div>
+
+                {/* Step Info */}
+                <div className="min-w-0 flex-1 leading-tight">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`text-xs truncate ${
+                        isSelected
+                          ? 'font-black text-emerald-950'
+                          : 'font-bold text-slate-800'
+                      }`}
+                    >
+                      {item.stage.name}
+                    </span>
+                  </div>
+
+                  <div className="text-[10px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                    {/* Status: e.g. "1/12 gespielt" if matches exist, or planned */}
+                    {item.totalMatches > 0 ? (
+                      <span
+                        className={
+                          isSelected
+                            ? 'text-emerald-800 font-bold'
+                            : 'text-slate-600 font-semibold'
+                        }
+                      >
+                        {item.completedMatches}/{item.totalMatches} gespielt
+                      </span>
+                    ) : null}
+
+                    {item.totalMatches > 0 && item.deadlineText && (
+                      <span className="text-slate-300">·</span>
+                    )}
+
+                    {item.deadlineText && (
+                      <span
+                        className={
+                          item.isDeadlineOverdue
+                            ? 'text-rose-600 font-bold'
+                            : item.isDeadlineUrgent
+                            ? 'text-amber-700 font-bold'
+                            : 'text-slate-500'
+                        }
+                      >
+                        {item.deadlineText}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
 
-              {/* Connecting arrow */}
+              {/* Connecting arrow/divider between steps */}
               {idx < stageProgressList.length - 1 && (
-                <div className="hidden sm:flex items-center text-slate-300 px-0.5 shrink-0 self-center">
-                  <ChevronRight className="w-4 h-4" />
+                <div className="flex items-center justify-center text-slate-300 shrink-0 px-0.5">
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </div>
               )}
             </React.Fragment>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, Copy, Plus, Trash2, Check, Shield } from 'lucide-react';
 import { TournamentTemplate } from '../../types/championship';
-import { saveChampionshipTemplate, deleteChampionshipTemplate } from '../../services/championshipService';
+import { saveChampionshipTemplate, championshipService } from '../../services/championshipService';
 
 interface ChampionshipTemplatesModalProps {
   isOpen: boolean;
@@ -20,6 +20,7 @@ export const ChampionshipTemplatesModal: React.FC<ChampionshipTemplatesModalProp
 }) => {
   const [saving, setSaving] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [templateToDelete, setTemplateToDelete] = useState<TournamentTemplate | null>(null);
 
   if (!isOpen) return null;
 
@@ -43,19 +44,22 @@ export const ChampionshipTemplatesModal: React.FC<ChampionshipTemplatesModalProp
     }
   };
 
-  const handleDelete = async (tpl: TournamentTemplate) => {
+  const handleDelete = (tpl: TournamentTemplate) => {
     if (tpl.isLocked) {
-      alert('Gesperrte Vorlagen können nicht gelöscht werden, da sie in Turnieren genutzt werden.');
+      setMessage('Gesperrte Vorlagen können nicht gelöscht werden, da sie in Turnieren genutzt werden.');
       return;
     }
-    if (!window.confirm(`Möchtest du die Vorlage "${tpl.title}" wirklich löschen?`)) {
-      return;
-    }
+    setTemplateToDelete(tpl);
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!templateToDelete) return;
+    const tpl = templateToDelete;
     setSaving(true);
     try {
-      await deleteChampionshipTemplate(clubId, tpl.id);
+      await championshipService.deleteTemplate(clubId, tpl.id);
       setMessage(`Vorlage gelöscht.`);
+      setTemplateToDelete(null);
     } catch (e: any) {
       setMessage(`Fehler beim Löschen: ${e?.message}`);
     } finally {
@@ -172,6 +176,47 @@ export const ChampionshipTemplatesModal: React.FC<ChampionshipTemplatesModalProp
             Schließen
           </button>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        {templateToDelete && (
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in"
+            onClick={() => !saving && setTemplateToDelete(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm p-5 space-y-4 animate-in zoom-in-95"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="space-y-1.5">
+                <h4 className="text-sm font-black text-slate-900">Vorlage löschen</h4>
+                <p className="text-xs text-slate-600">
+                  Vorlage wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+                </p>
+                <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 truncate">
+                  {templateToDelete.title}
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setTemplateToDelete(null)}
+                  disabled={saving}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={saving}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? 'Löschen...' : 'Löschen'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

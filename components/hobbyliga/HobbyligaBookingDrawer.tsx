@@ -897,11 +897,13 @@ export const HobbyligaBookingDrawer: React.FC<HobbyligaBookingDrawerProps> = ({
               {/* Austragungsort Card */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm shrink-0 overflow-hidden">
                 <div className="h-24 w-full relative bg-slate-200 rounded-t-xl overflow-hidden">
-                  <img
-                    src={venuePhoto}
-                    alt="Austragungsort Anlage"
-                    className="w-full h-full object-cover"
-                  />
+                  {venuePhoto ? (
+                    <img
+                      src={venuePhoto}
+                      alt="Austragungsort Anlage"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : null}
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent flex items-end justify-between p-3">
                     <div className="text-white min-w-0 flex-1">
                       <div className="text-[9px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5 leading-none mb-1">
@@ -1288,11 +1290,13 @@ export const HobbyligaBookingDrawer: React.FC<HobbyligaBookingDrawerProps> = ({
                 {/* Austragungsort Card */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm shrink-0 overflow-hidden">
                   <div className="h-28 w-full relative bg-slate-200 rounded-t-xl overflow-hidden">
-                    <img
-                      src={venuePhoto}
-                      alt="Austragungsort Anlage"
-                      className="w-full h-full object-cover"
-                    />
+                    {venuePhoto ? (
+                      <img
+                        src={venuePhoto}
+                        alt="Austragungsort Anlage"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent flex items-end justify-between p-3">
                       <div className="text-white min-w-0 flex-1">
                         <div className="text-[10px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5 leading-none mb-1">

@@ -2355,12 +2355,14 @@ const App: React.FC = () => {
                     <i className="fa-solid fa-server text-2xl sm:text-4xl lg:text-3xl text-[#1b4332]"></i>
                   ) : !isSettingsLoaded ? (
                     <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-600 rounded-full animate-spin"></div>
-                  ) : (
+                  ) : (settings.logoUrl || settings.headerLogoUrl) ? (
                     <img
                       src={settings.logoUrl || settings.headerLogoUrl}
                       alt="Club Logo"
                       className="w-full h-full object-contain drop-shadow-sm"
                     />
+                  ) : (
+                    <i className="fa-solid fa-baseball text-3xl sm:text-4xl text-emerald-800"></i>
                   )}
                 </div>
                 <h1
@@ -2707,18 +2709,18 @@ const App: React.FC = () => {
       dropdownClass: "hidden",
     },
     {
-      id: "league",
-      label: "Liga",
-      IconComponent: Shield,
-      show: isLeagueEnabled,
-      barClass: "flex",
-      dropdownClass: "hidden",
-    },
-    {
       id: "championship",
       label: "Meisterschaft",
       IconComponent: Trophy,
       show: settings.modules?.championship === true,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "league",
+      label: "Liga",
+      IconComponent: Shield,
+      show: isLeagueEnabled,
       barClass: "flex",
       dropdownClass: "hidden",
     },

@@ -4,6 +4,7 @@ import {
   onSnapshot,
   setDoc,
   deleteDoc,
+  getDoc,
   getDocs,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -99,16 +100,49 @@ export async function saveChampionshipTemplate(
 }
 
 export async function deleteChampionshipTemplate(
-  rawVereinsId: string,
-  templateId: string
+  arg1: string,
+  arg2?: string
 ): Promise<void> {
-  const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  let vereinsId: string;
+  let templateId: string;
+
+  if (arg2 !== undefined) {
+    vereinsId = getNormalizedVereinsId(arg1);
+    templateId = arg2;
+  } else {
+    templateId = arg1;
+    let storedClub = '';
+    try {
+      storedClub = localStorage.getItem('selectedClubId') || '';
+    } catch {
+      // ignore in environments without localStorage
+    }
+    vereinsId = getNormalizedVereinsId(storedClub || 'default');
+  }
+
   if (!vereinsId || !templateId) {
     console.error('deleteChampionshipTemplate: Parameter fehlen', { vereinsId, templateId });
     throw new Error('Vereins-ID oder Vorlagen-ID fehlt.');
   }
   const path = `vereine/${vereinsId}/championship_templates/${templateId}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_templates', templateId);
+
+  // Defensive Programmierung: Verhindere im Service das Löschen, falls isLocked === true ist
+  try {
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data?.isLocked === true) {
+        console.warn(`[ChampionshipService] Löschen verhindert: Vorlage "${templateId}" ist gesperrt (isLocked === true).`);
+        throw new Error('Gesperrte Vorlagen in aktiver Verwendung können nicht gelöscht werden.');
+      }
+    }
+  } catch (err: any) {
+    if (err?.message?.includes('Gesperrte Vorlagen in aktiver Verwendung können nicht gelöscht werden')) {
+      throw err;
+    }
+    console.warn('[ChampionshipService] Lock-Prüfung vor dem Löschen fehlgeschlagen/übersprungen:', err);
+  }
 
   try {
     await deleteDoc(docRef);
@@ -118,6 +152,8 @@ export async function deleteChampionshipTemplate(
     handleFirestoreError(error, OperationType.DELETE, path, true);
   }
 }
+
+export const deleteTemplate = deleteChampionshipTemplate;
 
 export function listenToChampionshipTournaments(
   rawVereinsId: string,
@@ -189,10 +225,31 @@ export async function saveChampionshipTournament(
  * Instant permanent deletion is prohibited in the UI.
  */
 export async function softDeleteChampionshipTournament(
-  rawVereinsId: string,
-  tournamentId: string
+  arg1: string,
+  arg2?: string
 ): Promise<void> {
-  const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  let vereinsId: string;
+  let tournamentId: string;
+
+  if (arg2 !== undefined) {
+    vereinsId = getNormalizedVereinsId(arg1);
+    tournamentId = arg2;
+  } else {
+    tournamentId = arg1;
+    let storedClub = '';
+    try {
+      storedClub = localStorage.getItem('selectedClubId') || '';
+    } catch {
+      // ignore
+    }
+    vereinsId = getNormalizedVereinsId(storedClub || 'default');
+  }
+
+  if (!vereinsId || !tournamentId) {
+    console.error('softDeleteChampionshipTournament: Parameter fehlen', { vereinsId, tournamentId });
+    throw new Error('Vereins-ID oder Turnier-ID fehlt.');
+  }
+
   const path = `vereine/${vereinsId}/championship_tournaments/${tournamentId}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_tournaments', tournamentId);
 
@@ -206,7 +263,9 @@ export async function softDeleteChampionshipTournament(
       },
       { merge: true }
     );
+    console.log(`[ChampionshipService] Meisterschaft in Papierkorb verschoben: ${path}`);
   } catch (error) {
+    console.error(`[ChampionshipService] Fehler beim Verschieben in den Papierkorb (${path}):`, error);
     handleFirestoreError(error, OperationType.WRITE, path, true);
   }
 }
@@ -215,10 +274,31 @@ export async function softDeleteChampionshipTournament(
  * Restore tournament from trash back to active status.
  */
 export async function restoreChampionshipTournament(
-  rawVereinsId: string,
-  tournamentId: string
+  arg1: string,
+  arg2?: string
 ): Promise<void> {
-  const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  let vereinsId: string;
+  let tournamentId: string;
+
+  if (arg2 !== undefined) {
+    vereinsId = getNormalizedVereinsId(arg1);
+    tournamentId = arg2;
+  } else {
+    tournamentId = arg1;
+    let storedClub = '';
+    try {
+      storedClub = localStorage.getItem('selectedClubId') || '';
+    } catch {
+      // ignore
+    }
+    vereinsId = getNormalizedVereinsId(storedClub || 'default');
+  }
+
+  if (!vereinsId || !tournamentId) {
+    console.error('restoreChampionshipTournament: Parameter fehlen', { vereinsId, tournamentId });
+    throw new Error('Vereins-ID oder Turnier-ID fehlt.');
+  }
+
   const path = `vereine/${vereinsId}/championship_tournaments/${tournamentId}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_tournaments', tournamentId);
 
@@ -232,7 +312,9 @@ export async function restoreChampionshipTournament(
       },
       { merge: true }
     );
+    console.log(`[ChampionshipService] Meisterschaft wiederhergestellt: ${path}`);
   } catch (error) {
+    console.error(`[ChampionshipService] Fehler beim Wiederherstellen (${path}):`, error);
     handleFirestoreError(error, OperationType.WRITE, path, true);
   }
 }
@@ -241,10 +323,31 @@ export async function restoreChampionshipTournament(
  * Archive tournament.
  */
 export async function archiveChampionshipTournament(
-  rawVereinsId: string,
-  tournamentId: string
+  arg1: string,
+  arg2?: string
 ): Promise<void> {
-  const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  let vereinsId: string;
+  let tournamentId: string;
+
+  if (arg2 !== undefined) {
+    vereinsId = getNormalizedVereinsId(arg1);
+    tournamentId = arg2;
+  } else {
+    tournamentId = arg1;
+    let storedClub = '';
+    try {
+      storedClub = localStorage.getItem('selectedClubId') || '';
+    } catch {
+      // ignore
+    }
+    vereinsId = getNormalizedVereinsId(storedClub || 'default');
+  }
+
+  if (!vereinsId || !tournamentId) {
+    console.error('archiveChampionshipTournament: Parameter fehlen', { vereinsId, tournamentId });
+    throw new Error('Vereins-ID oder Turnier-ID fehlt.');
+  }
+
   const path = `vereine/${vereinsId}/championship_tournaments/${tournamentId}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_tournaments', tournamentId);
 
@@ -257,7 +360,9 @@ export async function archiveChampionshipTournament(
       },
       { merge: true }
     );
+    console.log(`[ChampionshipService] Meisterschaft archiviert: ${path}`);
   } catch (error) {
+    console.error(`[ChampionshipService] Fehler beim Archivieren (${path}):`, error);
     handleFirestoreError(error, OperationType.WRITE, path, true);
   }
 }
@@ -266,10 +371,31 @@ export async function archiveChampionshipTournament(
  * Activate tournament (from draft or archived).
  */
 export async function activateChampionshipTournament(
-  rawVereinsId: string,
-  tournamentId: string
+  arg1: string,
+  arg2?: string
 ): Promise<void> {
-  const vereinsId = getNormalizedVereinsId(rawVereinsId);
+  let vereinsId: string;
+  let tournamentId: string;
+
+  if (arg2 !== undefined) {
+    vereinsId = getNormalizedVereinsId(arg1);
+    tournamentId = arg2;
+  } else {
+    tournamentId = arg1;
+    let storedClub = '';
+    try {
+      storedClub = localStorage.getItem('selectedClubId') || '';
+    } catch {
+      // ignore
+    }
+    vereinsId = getNormalizedVereinsId(storedClub || 'default');
+  }
+
+  if (!vereinsId || !tournamentId) {
+    console.error('activateChampionshipTournament: Parameter fehlen', { vereinsId, tournamentId });
+    throw new Error('Vereins-ID oder Turnier-ID fehlt.');
+  }
+
   const path = `vereine/${vereinsId}/championship_tournaments/${tournamentId}`;
   const docRef = doc(db, 'vereine', vereinsId, 'championship_tournaments', tournamentId);
 
@@ -283,7 +409,9 @@ export async function activateChampionshipTournament(
       },
       { merge: true }
     );
+    console.log(`[ChampionshipService] Meisterschaft aktiviert: ${path}`);
   } catch (error) {
+    console.error(`[ChampionshipService] Fehler beim Aktivieren (${path}):`, error);
     handleFirestoreError(error, OperationType.WRITE, path, true);
   }
 }
@@ -313,3 +441,26 @@ export async function purgeExpiredTrashTournaments(
     }
   }
 }
+
+export const championshipService = {
+  deleteTemplate: deleteChampionshipTemplate,
+  deleteChampionshipTemplate,
+  saveTemplate: saveChampionshipTemplate,
+  saveChampionshipTemplate,
+  listenToTemplates: listenToChampionshipTemplates,
+  listenToChampionshipTemplates,
+  listenToTournaments: listenToChampionshipTournaments,
+  listenToChampionshipTournaments,
+  saveTournament: saveChampionshipTournament,
+  saveChampionshipTournament,
+  archiveTournament: archiveChampionshipTournament,
+  archiveChampionshipTournament,
+  activateTournament: activateChampionshipTournament,
+  activateChampionshipTournament,
+  softDeleteTournament: softDeleteChampionshipTournament,
+  softDeleteChampionshipTournament,
+  trashTournament: softDeleteChampionshipTournament,
+  restoreTournament: restoreChampionshipTournament,
+  restoreChampionshipTournament,
+  purgeExpiredTrashTournaments,
+};

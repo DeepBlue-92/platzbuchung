@@ -3760,11 +3760,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                       {/* Austragungsort Card with Facility Switcher */}
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm shrink-0">
                         <div className="h-24 w-full relative bg-slate-200 overflow-hidden">
-                          <img
-                            src={venuePhoto}
-                            alt="Austragungsort Anlage"
-                            className="w-full h-full object-cover"
-                          />
+                          {venuePhoto ? (
+                            <img
+                              src={venuePhoto}
+                              alt="Austragungsort Anlage"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : null}
                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent flex items-end justify-between p-3">
                             <div className="text-white min-w-0 flex-1 pr-2">
                               <div className="text-[9px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5 leading-none mb-1">
@@ -5104,11 +5106,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                       {/* Austragungsort Card with Facility Switcher */}
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm shrink-0">
                         <div className="h-24 w-full relative bg-slate-200 overflow-hidden">
-                          <img
-                            src={venuePhoto}
-                            alt="Austragungsort Anlage"
-                            className="w-full h-full object-cover"
-                          />
+                          {venuePhoto ? (
+                            <img
+                              src={venuePhoto}
+                              alt="Austragungsort Anlage"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : null}
                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent flex items-end justify-between p-3">
                             <div className="text-white min-w-0 flex-1 pr-2">
                               <div className="text-[9px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5 leading-none mb-1">

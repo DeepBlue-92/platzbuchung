@@ -251,12 +251,14 @@ const Layout: React.FC<LayoutProps> = ({
               transition={{ duration: 0.25, ease: "easeInOut" }}
               className="absolute inset-0"
             >
-              <img
-                src={bannerUrl}
-                alt={`${clubName} Anlage`}
-                className="w-full h-full object-cover"
-                style={{ objectPosition: bannerPosition }}
-              />
+              {bannerUrl ? (
+                <img
+                  src={bannerUrl}
+                  alt={`${clubName} Anlage`}
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: bannerPosition }}
+                />
+              ) : null}
               {/* Gradient overlay for text readability */}
               <div
                 className="absolute inset-0 bg-gradient-to-r"
@@ -290,11 +292,13 @@ const Layout: React.FC<LayoutProps> = ({
                   className="flex items-center gap-2 sm:gap-3 shrink-0 cursor-pointer hover:opacity-80 transition-all duration-300 ease-in-out select-none"
                   title={showClubSwitcher ? "Verein wechseln" : clubName}
                 >
-                  <img
-                    src={logoUrl}
-                    alt={`${clubName} Logo`}
-                    className="w-7 h-7 md:w-8 md:h-8 object-contain drop-shadow-lg shrink-0 transition-all duration-300 ease-in-out"
-                  />
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={`${clubName} Logo`}
+                      className="w-7 h-7 md:w-8 md:h-8 object-contain drop-shadow-lg shrink-0 transition-all duration-300 ease-in-out"
+                    />
+                  ) : null}
                   <div className="text-white drop-shadow-2xl truncate min-w-0 flex items-center gap-1.5 transition-all duration-300 ease-in-out">
                     <h2
                       className="text-sm sm:text-base md:text-[14pt] font-bold tracking-tight leading-none truncate max-w-[200px] sm:max-w-[240px] md:max-w-[280px] transition-all duration-300 ease-in-out"

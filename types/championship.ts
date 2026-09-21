@@ -129,6 +129,26 @@ export interface GroupStandingRow {
   isAdvancing: boolean;
 }
 
+export interface ChampionshipAuditLogEntry {
+  id: string;
+  timestamp: string; // ISO string
+  userId: string;
+  userName: string;
+  userRole?: string;
+  action: 'create_result' | 'update_result' | 'delete_result' | 'walkover';
+  matchId: string;
+  roundLabel: string;
+  stageName?: string;
+  participant1Name: string;
+  participant2Name: string;
+  previousResultSummary?: string | null;
+  newResultSummary: string;
+  winnerName: string;
+  isWalkover?: boolean;
+  walkoverReason?: string;
+  details?: string;
+}
+
 export interface TournamentInstance {
   id: string;
   tenantId: string;
@@ -148,6 +168,7 @@ export interface TournamentInstance {
   endDate?: string;
   status: TournamentStatus;
   deletedAt?: string | null; // For soft-delete (30-day trash retention)
+  auditLog?: ChampionshipAuditLogEntry[];
   createdAt: string;
   updatedAt: string;
 }

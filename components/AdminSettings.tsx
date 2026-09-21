@@ -9664,12 +9664,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             </div>
             <div className="p-8 flex flex-col gap-8">
               <div className="w-full h-32 relative rounded-2xl border-4 border-[var(--color-accent)] overflow-hidden shadow-sm">
-                <img
-                  src={bannerUrl}
-                  alt="Banner Preview"
-                  className="w-full h-full object-cover"
-                  style={{ objectPosition: bannerPosition }}
-                />
+                {bannerUrl ? (
+                  <img
+                    src={bannerUrl}
+                    alt="Banner Preview"
+                    className="w-full h-full object-cover"
+                    style={{ objectPosition: bannerPosition }}
+                  />
+                ) : null}
                 <div className="absolute inset-0 border-2 border-white/20 pointer-events-none"></div>
               </div>
               <div className="grid grid-cols-3 gap-4">

@@ -2,6 +2,7 @@ import React from 'react';
 import { Trophy, Calendar, CheckCircle2, AlertCircle, ArrowRight, Clock, Award } from 'lucide-react';
 import { TournamentInstance, Match, Participant } from '../../types/championship';
 import { User } from '../../types';
+import { formatParticipantById, resolveParticipantDisplayName } from '../../utils/championshipNameResolver';
 
 interface ChampionshipHeroStatusProps {
   currentUser: User | null;
@@ -23,26 +24,19 @@ export const ChampionshipHeroStatus: React.FC<ChampionshipHeroStatusProps> = ({
   }
 
   // Find if current user is a participant in this tournament
-  const myParticipant = currentTournament.participants.find((p) =>
-    p.playerIds.includes(currentUser.id) || p.playerIds.includes(currentUser.name)
+  const participants = currentTournament.participants || [];
+  const myParticipant = participants.find((p) =>
+    p.playerIds.some((pId) =>
+      pId === currentUser.id ||
+      pId === currentUser.name ||
+      pId === (currentUser as any).authUid ||
+      (currentUser.email && pId.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (currentUser.name && pId.toLowerCase() === currentUser.name.toLowerCase().replace(/\s/g, ''))
+    )
   );
 
-  const getPlayerDisplayName = (playerId: string): string => {
-    const u = users[playerId.toLowerCase().replace(/\s/g, '')] || users[playerId];
-    if (u) {
-      const first = u.firstName || '';
-      const last = u.lastName || '';
-      if (first && last) return `${first} ${last}`;
-      return u.name || playerId;
-    }
-    return playerId;
-  };
-
   const formatParticipant = (pId: string | null): string => {
-    if (!pId) return 'Noch offen (TBD)';
-    const p = currentTournament.participants.find((x) => x.id === pId);
-    if (!p) return pId;
-    return p.playerIds.map(getPlayerDisplayName).join(' / ');
+    return formatParticipantById(pId, currentTournament.participants, users);
   };
 
   // Find next pending match for this participant

@@ -198,8 +198,8 @@
       "description": "Championship tournament templates defining stages, tiebreak and match format."
     },
     "vereine/{vereinsId}/championship_tournaments/{tournamentId}": {
-      "schema": { "title": "ChampionshipTournament", "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "status": { "type": "string" }, "stages": { "type": "array" }, "participants": { "type": "array" }, "matches": { "type": "array" } } },
-      "description": "Live championship tournament instances with participants, groups and matches."
+      "schema": { "title": "ChampionshipTournament", "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "status": { "type": "string" }, "stages": { "type": "array" }, "participants": { "type": "array" }, "matches": { "type": "array" }, "auditLog": { "type": "array" } } },
+      "description": "Live championship tournament instances with participants, groups, matches and audit log transactions."
     },
     "vereine/{vereinsId}/championships/{championshipId}": {
       "schema": { "title": "ChampionshipInstance", "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } },

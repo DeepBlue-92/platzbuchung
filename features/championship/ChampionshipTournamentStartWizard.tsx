@@ -857,7 +857,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
                                     <select
                                       value={group.id}
                                       onChange={(e) =>
-                                        handleMoveToGroup(p.id, group.id, e.target.value)
+                                        handleChangeParticipantGroup(p.id, e.target.value)
                                       }
                                       className="text-[10px] bg-white border border-slate-200 rounded px-1.5 py-0.5"
                                     >
