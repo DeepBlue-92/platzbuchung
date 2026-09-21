@@ -192,16 +192,21 @@ export const ChampionshipMatchList: React.FC<ChampionshipMatchListProps> = ({
                   {/* Scheduling / Deadline / Finalstag Badge */}
                   {(() => {
                     const isFinalsDay = stage?.type === 'finals_day' || stage?.isFinalsDay;
+                    const mode = (stage && tournament.stageDeadlineTypes?.[stage.id]) ||
+                      stage?.deadlineType ||
+                      (isFinalsDay ? 'date' : 'deadline');
+                    const isFixedDate = mode === 'date';
                     const stageDeadline = stage ? tournament.stageDeadlines?.[stage.id] : undefined;
-                    const eventDate = match.scheduledDate || (isFinalsDay ? stageDeadline : undefined);
-                    const deadline = match.deadlineDate || (!isFinalsDay ? stageDeadline : undefined);
+                    const eventDate = match.scheduledDate || (isFixedDate ? stageDeadline : undefined);
+                    const deadline = match.deadlineDate || (!isFixedDate ? stageDeadline : undefined);
 
-                    if (isFinalsDay && eventDate) {
+                    if (isFixedDate && eventDate) {
+                      const label = isFinalsDay ? 'Finaltag' : 'Spieltag';
                       return (
                         <div className="mb-3 px-2.5 py-1.5 bg-amber-50/80 border border-amber-200/70 rounded-xl flex items-center justify-between text-xs text-amber-900 font-medium">
                           <span className="flex items-center gap-1.5 font-bold">
                             <Flag className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                            Finaltag: {formatEventDate(eventDate)}
+                            {label}: {formatEventDate(eventDate)}
                           </span>
                           {(match.startTime || match.courtId) && (
                             <span className="text-[11px] text-amber-800 font-semibold bg-white/80 px-2 py-0.5 rounded-md border border-amber-200/50">

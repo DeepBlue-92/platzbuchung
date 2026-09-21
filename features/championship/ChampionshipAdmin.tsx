@@ -420,12 +420,24 @@ export const ChampionshipAdmin: React.FC<ChampionshipAdminProps> = ({
                     await saveChampionshipTournament(clubId, updated);
                   }}
                   stageDeadlines={currentTournament.stageDeadlines || {}}
+                  stageDeadlineTypes={currentTournament.stageDeadlineTypes || {}}
                   onChangeDeadline={async (stageId, dl) => {
                     const updated = {
                       ...currentTournament,
                       stageDeadlines: {
                         ...(currentTournament.stageDeadlines || {}),
                         [stageId]: dl,
+                      },
+                      updatedAt: new Date().toISOString(),
+                    };
+                    await saveChampionshipTournament(clubId, updated);
+                  }}
+                  onChangeDeadlineType={async (stageId, mode) => {
+                    const updated = {
+                      ...currentTournament,
+                      stageDeadlineTypes: {
+                        ...(currentTournament.stageDeadlineTypes || {}),
+                        [stageId]: mode,
                       },
                       updatedAt: new Date().toISOString(),
                     };

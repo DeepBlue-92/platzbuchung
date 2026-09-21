@@ -27,6 +27,7 @@ export interface TournamentStageConfig {
   // Timing / Deadlines (Konkret für Meisterschaftsobjekt TournamentInstance, nicht in Templates):
   deadlineDate?: string; // e.g. "2026-07-15" (Zu spielen bis)
   eventDate?: string; // e.g. "2026-08-15" (Festes Event-Datum für finals_day)
+  deadlineType?: 'deadline' | 'date'; // 'deadline' ("Zu spielen bis") oder 'date' ("Datum / Spieltag")
   isFinalsDay?: boolean; // Flag to easily treat stage as Club Event Day
 }
 
@@ -142,6 +143,7 @@ export interface TournamentInstance {
   groups: Group[];
   matches: Match[];
   stageDeadlines: Record<string, string>; // stageId -> ISO Date string ("Zu spielen bis" bzw. "Datum" beim Finaltag)
+  stageDeadlineTypes?: Record<string, 'deadline' | 'date'>; // stageId -> 'deadline' | 'date'
   startDate?: string;
   endDate?: string;
   status: TournamentStatus;

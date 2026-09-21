@@ -74,6 +74,12 @@ export const ChampionshipHeroStatus: React.FC<ChampionshipHeroStatusProps> = ({
     ? currentTournament.stageDeadlines?.[currentStage.id]
     : null;
 
+  const isFinalsDay = currentStage?.type === 'finals_day' || currentStage?.isFinalsDay;
+  const deadlineMode = (currentStage && currentTournament.stageDeadlineTypes?.[currentStage.id]) ||
+    currentStage?.deadlineType ||
+    (isFinalsDay ? 'date' : 'deadline');
+  const isFixedDate = deadlineMode === 'date';
+
   const opponentId = nextMatch
     ? nextMatch.participant1Id === myParticipant?.id
       ? nextMatch.participant2Id
@@ -125,7 +131,7 @@ export const ChampionshipHeroStatus: React.FC<ChampionshipHeroStatusProps> = ({
                   Phase: <strong className="text-white">{currentStage?.name || nextMatch.roundLabel}</strong>
                   {stageDeadline && (
                     <>
-                      {' '}· Runden-Frist:{' '}
+                      {' '}· {isFixedDate ? (isFinalsDay ? 'Finaltag' : 'Spieltag') : 'Zu spielen bis'}:{' '}
                       <span className="text-amber-300 font-bold inline-flex items-center gap-1">
                         <Clock className="w-3 h-3 inline" />
                         {new Date(stageDeadline).toLocaleDateString('de-DE', {

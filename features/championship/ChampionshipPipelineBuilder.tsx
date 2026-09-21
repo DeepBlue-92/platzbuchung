@@ -11,6 +11,8 @@ interface ChampionshipPipelineBuilderProps {
   onChangeMatchFormat: (format: MatchFormat) => void;
   stageDeadlines: Record<string, string>;
   onChangeDeadline: (stageId: string, deadline: string) => void;
+  stageDeadlineTypes?: Record<string, 'deadline' | 'date'>;
+  onChangeDeadlineType?: (stageId: string, type: 'deadline' | 'date') => void;
   isReadOnly?: boolean;
 }
 
@@ -23,6 +25,8 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
   onChangeMatchFormat,
   stageDeadlines,
   onChangeDeadline,
+  stageDeadlineTypes,
+  onChangeDeadlineType,
   isReadOnly = false,
 }) => {
   return (
@@ -69,31 +73,70 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {stages.map((stage) => {
+            const isGroup = stage.type === 'group';
             const isFinals = stage.type === 'finals_day' || stage.isFinalsDay;
+            const currentType: 'deadline' | 'date' = isGroup
+              ? 'deadline'
+              : (stageDeadlineTypes?.[stage.id] || (isFinals ? 'date' : 'deadline'));
+            const isDateMode = currentType === 'date';
+
             return (
               <div
                 key={stage.id}
-                className={`p-3 rounded-xl border ${
-                  isFinals ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-50 border-slate-200/60'
+                className={`p-3 rounded-xl border flex flex-col justify-between gap-2 ${
+                  isDateMode ? 'bg-amber-50/60 border-amber-200' : 'bg-slate-50 border-slate-200/60'
                 }`}
               >
-                <div className="flex items-center gap-1.5 mb-1">
-                  {isFinals ? (
-                    <Flag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  ) : (
-                    <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <div className="flex items-center justify-between gap-1.5 mb-1">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {isDateMode ? (
+                      <Flag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    ) : (
+                      <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    )}
+                    <label className="block text-[11px] font-bold text-slate-800 truncate">
+                      {stage.name}
+                    </label>
+                  </div>
+
+                  {!isGroup && !isReadOnly && onChangeDeadlineType && (
+                    <div className="inline-flex p-0.5 bg-slate-200/80 rounded-md shrink-0 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => onChangeDeadlineType(stage.id, 'deadline')}
+                        className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                          !isDateMode ? 'bg-white text-slate-900 font-bold shadow-2xs' : 'text-slate-600'
+                        }`}
+                        title="Zu spielen bis"
+                      >
+                        Frist
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onChangeDeadlineType(stage.id, 'date')}
+                        className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                          isDateMode ? 'bg-white text-amber-950 font-bold shadow-2xs' : 'text-slate-600'
+                        }`}
+                        title="Festes Datum"
+                      >
+                        Datum
+                      </button>
+                    </div>
                   )}
-                  <label className="block text-[11px] font-bold text-slate-800 truncate">
-                    {isFinals ? `Datum: ${stage.name}` : `Zu spielen bis: ${stage.name}`}
-                  </label>
                 </div>
-                <input
-                  type="date"
-                  disabled={isReadOnly}
-                  value={stageDeadlines[stage.id] || ''}
-                  onChange={(e) => onChangeDeadline(stage.id, e.target.value)}
-                  className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg p-2 disabled:bg-slate-100 cursor-pointer focus:ring-2 focus:ring-[var(--color-primary)]"
-                />
+
+                <div className="space-y-1">
+                  <span className="text-[10px] text-slate-500 font-medium block">
+                    {isDateMode ? 'Fester Spieltag/Event:' : 'Zu spielen bis:'}
+                  </span>
+                  <input
+                    type="date"
+                    disabled={isReadOnly}
+                    value={stageDeadlines[stage.id] || ''}
+                    onChange={(e) => onChangeDeadline(stage.id, e.target.value)}
+                    className="w-full text-xs font-medium bg-white border border-slate-300 rounded-lg p-2 disabled:bg-slate-100 cursor-pointer focus:ring-2 focus:ring-[var(--color-primary)]"
+                  />
+                </div>
               </div>
             );
           })}

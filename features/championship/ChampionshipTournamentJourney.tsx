@@ -73,8 +73,12 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
     }
 
     const isFinalsDay = stage.type === 'finals_day' || !!stage.isFinalsDay;
+    const mode = tournament.stageDeadlineTypes?.[stage.id] ||
+      stage.deadlineType ||
+      (isFinalsDay ? 'date' : 'deadline');
+    const isDateMode = mode === 'date';
     const stageDeadline = tournament.stageDeadlines?.[stage.id];
-    const deadlineInfo = !isFinalsDay && stageDeadline ? getDeadlineCountdownInfo(stageDeadline) : null;
+    const deadlineInfo = !isDateMode && stageDeadline ? getDeadlineCountdownInfo(stageDeadline) : null;
     const completionPercent = totalMatches > 0 ? Math.round((completedMatches / totalMatches) * 100) : 0;
 
     return {
@@ -85,6 +89,7 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
       completionPercent,
       deadlineInfo,
       isFinalsDay,
+      isDateMode,
       stageDeadline,
     };
   });
@@ -228,13 +233,13 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
 
                 {/* Bottom: Date / Deadline badge */}
                 <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[10px] font-bold">
-                  {item.isFinalsDay ? (
+                  {item.isDateMode ? (
                     <div className="text-amber-800 flex items-center gap-1.5 flex-wrap">
                       <Flag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       <span>
                         {item.stageDeadline
-                          ? `Event: ${formatEventDate(item.stageDeadline, false)}`
-                          : 'Event-Datum noch offen'}
+                          ? `${item.isFinalsDay ? 'Finaltag' : 'Spieltag'}: ${formatEventDate(item.stageDeadline, false)}`
+                          : 'Datum noch offen'}
                       </span>
                     </div>
                   ) : item.deadlineInfo ? (

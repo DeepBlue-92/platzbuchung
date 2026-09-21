@@ -18,8 +18,8 @@ import {
   UserCheck,
   UserPlus,
   Trash2,
-  Info,
   Flag,
+  Info,
 } from 'lucide-react';
 import {
   TournamentTemplate,
@@ -83,6 +83,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
     return d.toISOString().split('T')[0];
   });
   const [stageDeadlines, setStageDeadlines] = useState<Record<string, string>>({});
+  const [stageDeadlineTypes, setStageDeadlineTypes] = useState<Record<string, 'deadline' | 'date'>>({});
 
   // Step 3: Participants & Groups
   const [searchMemberQuery, setSearchMemberQuery] = useState<string>('');
@@ -99,12 +100,22 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
         `Clubmeisterschaft ${year} - ${selectedTemplate.discipline === 'doubles' ? 'Doppel' : 'Einzel'}`
       );
 
-      // Default deadlines for each stage in this tournament instance (dynamically calculated for this season)
+      // Default deadlines & types for each stage in this tournament instance (dynamically calculated for this season)
       const deadlines: Record<string, string> = {};
+      const deadlineTypes: Record<string, 'deadline' | 'date'> = {};
       const stages = selectedTemplate.stages || [];
       stages.forEach((st, idx) => {
         const d = new Date();
-        if (st.type === 'finals_day' || st.isFinalsDay) {
+        const isFinals = st.type === 'finals_day' || st.isFinalsDay;
+        if (st.type === 'group') {
+          deadlineTypes[st.id] = 'deadline';
+        } else if (isFinals) {
+          deadlineTypes[st.id] = 'date';
+        } else {
+          deadlineTypes[st.id] = 'deadline';
+        }
+
+        if (isFinals) {
           // Finals day default: 2-3 months out
           d.setDate(d.getDate() + Math.max(stages.length * 21, 60));
           deadlines[st.id] = d.toISOString().split('T')[0];
@@ -114,6 +125,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
         }
       });
       setStageDeadlines(deadlines);
+      setStageDeadlineTypes(deadlineTypes);
 
       // Initialize default groups from template config
       const groupStage = stages.find((s) => s.type === 'group');
@@ -281,24 +293,33 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
 
       // Configure stages specifically for this tournament instance with deadlines
       const instanceStages = selectedTemplate.stages.map((st) => {
+        const isGroup = st.type === 'group';
         const isFinals = st.type === 'finals_day' || !!st.isFinalsDay;
+        const mode: 'deadline' | 'date' = isGroup
+          ? 'deadline'
+          : (stageDeadlineTypes[st.id] || (isFinals ? 'date' : 'deadline'));
         const dl = stageDeadlines[st.id] || '';
         return {
           ...st,
-          deadlineDate: !isFinals ? dl || undefined : undefined,
-          eventDate: isFinals ? dl || undefined : undefined,
+          deadlineType: mode,
+          deadlineDate: mode === 'deadline' ? dl || undefined : undefined,
+          eventDate: mode === 'date' ? dl || undefined : undefined,
         };
       });
 
-      // Populate matches with stage deadlines
+      // Populate matches with stage deadlines according to selected mode
       const instanceMatches = generatedMatches.map((m) => {
         const st = selectedTemplate.stages.find((s) => s.id === m.stageId);
+        const isGroup = st?.type === 'group';
         const isFinals = st?.type === 'finals_day' || !!st?.isFinalsDay;
+        const mode: 'deadline' | 'date' = isGroup
+          ? 'deadline'
+          : (stageDeadlineTypes[m.stageId] || (isFinals ? 'date' : 'deadline'));
         const dl = stageDeadlines[m.stageId];
         return {
           ...m,
-          deadlineDate: !isFinals ? dl || undefined : undefined,
-          scheduledDate: isFinals ? dl || m.scheduledDate : m.scheduledDate,
+          deadlineDate: mode === 'deadline' ? dl || undefined : undefined,
+          scheduledDate: mode === 'date' ? dl || m.scheduledDate : m.scheduledDate,
         };
       });
 
@@ -312,6 +333,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
             ...s,
             deadlineDate: undefined,
             eventDate: undefined,
+            deadlineType: undefined,
           })),
         },
         title: trimmedTitle,
@@ -323,6 +345,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
         groups,
         matches: instanceMatches,
         stageDeadlines,
+        stageDeadlineTypes,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         status: 'active',
@@ -391,7 +414,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-slate-800 mb-1">Final-Wochenende / Ende</label>
+          <label className="block text-xs font-bold text-slate-800 mb-1">Enddatum</label>
           <input
             type="date"
             value={endDate || ''}
@@ -400,6 +423,10 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
           />
         </div>
       </div>
+      <p className="text-xs text-slate-500 flex items-center gap-1.5 -mt-1">
+        <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        <span>Die Meisterschaft wird Benutzern vom Start- bis zum Enddatum angezeigt.</span>
+      </p>
 
       <hr className="border-slate-100" />
 
@@ -414,29 +441,27 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
           </span>
         </div>
 
-        <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-start gap-2">
-          <Info className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-          <span>
-            Die Fristen („Zu spielen bis“) und das Datum des Finaltags werden im Meisterschafts-Objekt gespeichert. Die Vorlage bleibt dadurch neutral und jedes Jahr wiederverwendbar.
-          </span>
-        </div>
-
         <div className="space-y-2">
           {selectedTemplate?.stages?.map((stage, idx) => {
+            const isGroup = stage.type === 'group';
             const isFinals = stage.type === 'finals_day' || !!stage.isFinalsDay;
+            const currentType: 'deadline' | 'date' = isGroup
+              ? 'deadline'
+              : (stageDeadlineTypes[stage.id] || (isFinals ? 'date' : 'deadline'));
+
             return (
               <div
                 key={stage.id}
-                className={`p-3 border rounded-xl flex items-center justify-between gap-3 text-xs ${
-                  isFinals
+                className={`p-3 border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                  currentType === 'date'
                     ? 'bg-amber-50/60 border-amber-200'
                     : 'bg-slate-50 border-slate-200'
                 }`}
               >
                 <div className="flex items-center gap-2">
                   <span
-                    className={`w-5 h-5 rounded-full text-white font-bold text-[10px] flex items-center justify-center ${
-                      isFinals ? 'bg-amber-700' : 'bg-slate-700'
+                    className={`w-5 h-5 rounded-full text-white font-bold text-[10px] flex items-center justify-center shrink-0 ${
+                      currentType === 'date' ? 'bg-amber-700' : 'bg-slate-700'
                     }`}
                   >
                     {idx + 1}
@@ -452,18 +477,49 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {isFinals ? (
-                    <span className="flex items-center gap-1 text-[11px] text-amber-900 font-bold">
-                      <Flag className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Datum:</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-[11px] text-slate-600 font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-blue-600" />
+
+                <div className="flex items-center flex-wrap gap-2.5">
+                  {/* For Group: fixed to "Zu spielen bis". For KO and Finals: selectable segmented control */}
+                  {isGroup ? (
+                    <span className="flex items-center gap-1.5 text-[11px] text-slate-600 font-medium">
+                      <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                       <span>Zu spielen bis:</span>
                     </span>
+                  ) : (
+                    <div className="inline-flex p-0.5 bg-slate-200/90 rounded-lg border border-slate-300/60 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStageDeadlineTypes((prev) => ({ ...prev, [stage.id]: 'deadline' }))
+                        }
+                        className={`px-2.5 py-1 rounded-md text-[11px] flex items-center gap-1.5 transition-all cursor-pointer ${
+                          currentType === 'deadline'
+                            ? 'bg-white text-slate-900 font-bold shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900 font-medium'
+                        }`}
+                        title="Frist für freien Spielzeitraum"
+                      >
+                        <Calendar className="w-3 h-3 text-blue-600 shrink-0" />
+                        <span>Zu spielen bis</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStageDeadlineTypes((prev) => ({ ...prev, [stage.id]: 'date' }))
+                        }
+                        className={`px-2.5 py-1 rounded-md text-[11px] flex items-center gap-1.5 transition-all cursor-pointer ${
+                          currentType === 'date'
+                            ? 'bg-white text-amber-950 font-bold shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900 font-medium'
+                        }`}
+                        title="Fester Termin / Spieltag"
+                      >
+                        <Flag className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span>Datum</span>
+                      </button>
+                    </div>
                   )}
+
                   <input
                     type="date"
                     value={stageDeadlines[stage.id] || ''}

@@ -69,9 +69,13 @@ export const ChampionshipBracketView: React.FC<ChampionshipBracketViewProps> = (
 
     const stage = tournament.stages.find((s) => s.id === match.stageId);
     const isFinalsDay = stage?.type === 'finals_day' || stage?.isFinalsDay;
+    const deadlineMode = (stage && tournament.stageDeadlineTypes?.[stage.id]) ||
+      stage?.deadlineType ||
+      (isFinalsDay ? 'date' : 'deadline');
+    const isFixedDate = deadlineMode === 'date';
     const stageDeadline = stage ? tournament.stageDeadlines?.[stage.id] : undefined;
-    const eventDate = match.scheduledDate || (isFinalsDay ? stageDeadline : undefined);
-    const deadline = match.deadlineDate || (!isFinalsDay ? stageDeadline : undefined);
+    const eventDate = match.scheduledDate || (isFixedDate ? stageDeadline : undefined);
+    const deadline = match.deadlineDate || (!isFixedDate ? stageDeadline : undefined);
 
     return (
       <div
@@ -217,14 +221,22 @@ export const ChampionshipBracketView: React.FC<ChampionshipBracketViewProps> = (
                     {stage.name}
                   </h4>
                 </div>
-                {(stage.type === 'finals_day' || stage.isFinalsDay) ? (
-                  deadline ? (
-                    <span className="text-[10px] text-amber-800 font-bold block mt-1">
-                      Event-Tag: {formatEventDate(deadline)}
-                    </span>
-                  ) : null
-                ) : deadline ? (
-                  (() => {
+                {(() => {
+                  const isFinals = stage.type === 'finals_day' || stage.isFinalsDay;
+                  const mode = tournament.stageDeadlineTypes?.[stage.id] ||
+                    stage.deadlineType ||
+                    (isFinals ? 'date' : 'deadline');
+                  const isDateMode = mode === 'date';
+
+                  if (isDateMode) {
+                    return deadline ? (
+                      <span className="text-[10px] text-amber-800 font-bold block mt-1">
+                        {isFinals ? 'Finaltag' : 'Spieltag'}: {formatEventDate(deadline)}
+                      </span>
+                    ) : null;
+                  }
+
+                  return deadline ? (() => {
                     const cd = getDeadlineCountdownInfo(deadline);
                     return (
                       <span
@@ -239,8 +251,8 @@ export const ChampionshipBracketView: React.FC<ChampionshipBracketViewProps> = (
                         Bis {cd.formattedDate} ({cd.daysRemainingText})
                       </span>
                     );
-                  })()
-                ) : null}
+                  })() : null;
+                })()}
               </div>
 
               {/* Matches column with vertical centering */}
