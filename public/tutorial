@@ -1,0 +1,380 @@
+```
+# Spieler- & Mitgliederhandbuch: DJK Fürth (hilfe_mitglieder.md)
+
+> **System-Hinweis für den KI-Assistenten („Ace“):**
+> Dieses Dokument bildet die autoritative Wissensbasis (Single Source of Truth) für alle Funktionen der Benutzeroberfläche aus Sicht regulärer Vereinsmitglieder, Spieler und Gäste. Alle Handlungsanweisungen, Schwellenwerte, Button-Beschriftungen und Berechnungslogiken basieren direkt auf dem Quellcode der Web-Applikation. Beantworte Spieleranfragen präzise anhand der hier definierten Regeln und Pfade.
+
+---
+
+## Inhaltsverzeichnis
+1. [Modul 1: Plätze (Platzreservierung & Belegungsplan)](#1-modul-1-plätze-platzreservierung--belegungsplan)
+2. [Modul 2: Veranstaltungen (Events & Turniere)](#2-modul-2-veranstaltungen-events--turniere)
+3. [Modul 3: Rangliste (Forderungspyramide)](#3-modul-3-rangliste-forderungspyramide)
+4. [Modul 4: Meisterschaft (Clubturniere & Meisterschafts-Hub)](#4-modul-4-meisterschaft-clubturniere--meisterschafts-hub)
+5. [Modul 5: Liga (Hobbyliga & Partnerbörse)](#5-modul-5-liga-hobbyliga--partnerbörse)
+6. [Modul 6: Gastspiele (Buchung & Abrechnung von Gästen)](#6-modul-6-gastspiele-buchung--abrechnung-von-gästen)
+7. [Modul 7: Arbeitseinsätze (Helferstunden & Schichten)](#7-modul-7-arbeitseinsätze-helferstunden--schichten)
+8. [Mein Profil, Sicherheit & Club-Assistent „Ace“](#8-mein-profil-sicherheit--club-assistent-ace)
+9. [Support-Matrix für „Ace“ (Schnellreferenz)](#9-support-matrix-für-ace-schnellreferenz)
+
+---
+
+## 1. Modul 1: Plätze (Platzreservierung & Belegungsplan)
+
+Das Modul **Plätze** (Symbol: Kalender `Calendar`) bildet das Fundament für den täglichen Spielbetrieb auf der Tennisanlage. Es ermöglicht das Buchen, Verwalten und Stornieren von Spielzeiten auf den Sandplätzen des Vereins.
+
+### 1.1 Ansichten: Tagesplan vs. Wochenplan
+Das System passt sich automatisch an das genutzte Endgerät an:
+* **Mobilgeräte & Smartphones (Bildschirmbreite < 1024 px):** Standardmäßig öffnet sich der **Tagesplan**. Alle Plätze werden nebeneinander in Spalten dargestellt; vertikal scrollt man durch die Zeitschienen von **08:00 Uhr bis 22:00 Uhr**.
+* **Desktop-Computer & Tablets (≥ 1024 px):** Standardmäßig öffnet sich der **Wochenplan**, der alle 7 Wochentage im Gesamtüberblick anzeigt.
+* **Manuelle Umschaltung:** Über die Navigationsleiste kann jederzeit frei zwischen **„Tag“** und **„Woche“** gewechselt werden. Über den Datumswähler (Pfeiltasten oder Klick auf das Datum) lässt sich jeder beliebige Tag ansteuern.
+
+---
+
+### 1.2 Platzreservierung Schritt für Schritt
+
+#### Einzelbuchung (60 Minuten)
+1. Öffne den Reiter **Plätze**.
+2. Klicke im Belegungsplan auf das gewünschte freie (weiße) Zeitfenster des Zielplatzes.
+3. Es öffnet sich der Buchungs-Drawer am rechten Bildschirmrand.
+4. Überprüfe die voreingestellte Spielzeit:
+   * **Ab:** z. B. `14:00 Uhr`
+   * **Bis:** z. B. `15:00 Uhr` (Standard: 60 Minuten)
+5. **Spieler 1** ist automatisch mit deinem Namen vorbelegt.
+6. Klicke in das Suchfeld **„Mitspieler suchen & hinzufügen...“** und tippe die ersten Buchstaben des Nachnamens oder Vornamens deines Partners ein.
+7. Wähle den gewünschten Partner aus der Dropdown-Vorschlagsliste aus.
+8. Klicke unten auf den grünen Button **„Jetzt buchen“**. Der Slot färbt sich im Belegungsplan sofort farbig und ist verbindlich reserviert.
+
+#### Doppelbuchung (bis zu 120 Minuten)
+1. Klicke auf ein freies Zeitfenster.
+2. Passe im Dropdown-Menü **„Bis“** die Endzeit an (z. B. 2 Stunden Spieldauer: `14:00 Uhr` bis `16:00 Uhr`).
+3. Füge über das Suchfeld nacheinander **Spieler 2**, **Spieler 3** und **Spieler 4** hinzu.
+4. Klicke auf **„Jetzt buchen“**.
+
+> **Regel – Mindestbelegung:**
+> Das System blockiert Reservierungen ohne Partner mit dem Hinweis: *„Buchungsregel: Du musst mindestens einen Mitspieler (Partner), einen Gast oder die Ballmaschine auswählen.“* Reines Alleintraining ohne Ballmaschine kann nicht reserviert werden.
+
+---
+
+### 1.3 Ballmaschine zubuchen
+Verfügt der Verein über eine elektronische Ballwurfmaschine und ist diese auf dem gewählten Platz freigegeben:
+1. Öffne den Buchungs-Drawer auf einem freien Slot.
+2. Setze ein Häkchen bei der Checkbox **„Ballmaschine zubuchen“**.
+3. Es muss in diesem Fall kein menschlicher Mitspieler eingetragen werden; die Ballmaschine gilt als vollwertiger Spielpartner.
+4. Klicke auf **„Jetzt buchen“**.
+
+---
+
+### 1.4 Buchungskollisionen & Fairplay-Sperren
+Das integrierte Kollisionssystem (`collisionService`) prüft jede Buchung in Echtzeit:
+* **Persönliche Doppelbuchung:** Du kannst zur selben Uhrzeit nicht auf zwei verschiedenen Plätzen eingebucht sein.
+* **Mitspieler-Kollision:** Ist ein ausgewählter Partner zum gewählten Zeitpunkt bereits auf einem anderen Platz (oder in einem anderen Verbundverein) eingetragen, erscheint eine Warnmeldung mit Nennung des Konflikts.
+* **Vorlaufzeit & Kontingent:** Je nach Vereinseinstellungen kann maximal *X Tage* im Voraus gebucht werden. Zudem darf jedes Mitglied nur eine begrenzte Zahl aktiver Vorab-Reservierungen parallel halten.
+
+---
+
+### 1.5 Buchung stornieren / freigeben
+Kann eine Partie nicht stattfinden, muss der Platz umgehend freigegeben werden:
+1. Klicke im Belegungsplan direkt auf deine **bestehende Buchung**.
+2. Im Buchungs-Drawer erscheint die Detailansicht mit dem roten Button **„Buchung stornieren / Freigeben“**.
+3. Bestätige die Sicherheitsabfrage.
+4. Der Slot wird unverzüglich weiß und steht allen Mitgliedern wieder zur Verfügung.
+
+> **Hinweis zu Stornofristen:**
+> Stornierungen sind bis kurz vor Spielbeginn möglich. Sobald eine Spielstunde in der Vergangenheit liegt, wird der Stornierungs-Button deaktiviert.
+
+---
+
+### 1.6 Witterung, Regen & Platzpflege
+* **Nasse / Weiche Plätze:** Stehen nach Regen Pfützen auf den Sandplätzen, ist das Betreten untersagt. Pfützen dürfen keinesfalls mit Schleppnetzen oder Besen verteilt werden, da dies die Ziegelmehlschicht zerstört.
+* **Nach dem Match:**
+  1. Den Platz mit dem Schleppnetz **kreisförmig von außen nach innen** bis an die Zäune abziehen.
+  2. Alle Linien mit dem Linienbesen säubern.
+  3. Bei Trockenheit die Beregnungsanlage einschalten, um Staubbildung und Risse zu vermeiden.
+
+---
+
+## 2. Modul 2: Veranstaltungen (Events & Turniere)
+
+Das Modul **Veranstaltungen** (Symbol: Party-Popper `PartyPopper`) bündelt Schleifchenturniere, Saisoneröffnungen, Medenspieltage, Sommerfeste und vereinsinterne Sonderturniere.
+
+```
+
++-----------------------------------------------------------------------+ | VERANSTALTUNGEN | | \[Aktive & Zukünftige Events\] \[Archivierte Events\] | +-----------------------------------------------------------------------+ | +-----------------------------------------------------------------+ | | | Pfingst-Schleifchenturnier Status: Offen | | | | Datum: 24.05.2026 | Zeit: 10:00 - 16:00 Uhr | | | | Max. Teilnehmer: 32 | Bereits angemeldet: 18 | | | | Kommentarfeld: Aktiviert (z. B. Kuchenspende / Spielstärke) | | | | | | | | \[Mein Kommentar: Bringt Nudelsalat mit\] | | | | \[ Button: "Anmelden" / "Abmelden" \] | | | +-----------------------------------------------------------------+ | +-----------------------------------------------------------------------+
+
+```
+
+### 2.1 An- und Abmeldung zu einem Event
+1. Klicke in der Menüleiste auf **Veranstaltungen**.
+2. Wähle die gewünschte Veranstaltung aus der Liste aus.
+3. Klicke auf den Button **„Anmelden“**:
+   * Ist für das Event ein Kommentarfeld freigeschaltet, öffnet sich ein Eingabedialog. Trage hier optionale Anmerkungen ein (z. B. Spielstärke, Partnerwunsch bei Mixed, Salatspende).
+   * Bestätige die Eingabe. Dein Name erscheint sofort in der Teilnehmerliste.
+4. **Wieder abmelden:** Klicke bei einem Event, bei dem du bereits eingetragen bist, auf **„Abmelden“**. Dein Platz wird sofort für nachrückende Mitglieder freigegeben.
+
+### 2.2 Teilnahmebeschränkungen & Fristen
+* **Teilnehmergrenze erreicht:** Ist die maximale Teilnehmerzahl (`maxParticipants`) ausgeschöpft, wird die Anmeldung gesperrt.
+* **Anmeldeschluss:** Hat die Turnierleitung die Registrierung manuell geschlossen (`isRegistrationBlocked`), wechselt der Button auf den Status *„Anmeldung gesperrt“*.
+* **Archivierte Events:** Bereits abgelaufene Veranstaltungen werden automatisch in den Bereich *„Vergangene Events“* verschoben, sofern die Option `hideExpired` aktiv ist.
+
+---
+
+## 3. Modul 3: Rangliste (Forderungspyramide)
+
+Das Modul **Rangliste** (Symbol: Medaille `Medal`) organisiert die vereinsinterne Forderungs-Pyramide für den kontinuierlichen sportlichen Wettbewerb während der Freiluftsaison.
+
+```
+
+```
+       [ 1. Platz ]
+      /            \
+ [ 2. Platz ]   [ 3. Platz ]
+ /          \   /          \
+```
+
+\[ 4. Platz \] \[ 5. Platz \] \[ 6. Platz \]
+
+```
+
+### 3.1 Die Pyramiden-Mechanik
+* **Aufbau:** Die Rangliste ist hierarchisch in Reihen gegliedert (Reihe 1 = Platz 1; Reihe 2 = Plätze 2–3; Reihe 3 = Plätze 4–6 usw.).
+* **Forderungsrecht:** Du darfst Spieler fordern, die in der Pyramide über dir platziert sind (in der Regel in derselben Reihe links von dir oder in der darüberliegenden Reihe).
+* **Platztausch-Prinzip:**
+  * **Sieg des Forderers:** Gewinnt der Herausforderer das Match, rückt er auf den Platz des Verlierers vor. Der Verlierer und alle dazwischen platzierten Spieler rutschen jeweils genau einen Rangplatz nach unten.
+  * **Sieg des Geforderten:** Verteidigt der Geforderte seinen Platz, bleibt die Pyramidenrangliste unverändert.
+
+### 3.2 Ablauf einer Forderung
+1. Öffne das Modul **Rangliste**.
+2. Klicke auf das Profil des Spielers, den du fordern möchtest.
+3. Es öffnet sich das Fenster **Spieler-Kontakt** (`PlayerContactModal`).
+4. Entnimm Telefonnummer oder E-Mail-Adresse (sofern vom Spieler freigegeben) und vereinbare einen Spieltermin.
+5. Reserviert im Belegungsplan (**Plätze**) einen freien Platz für euer Match.
+6. Nach Spielende wird das Ergebnis der Turnierleitung / dem Sportwart gemeldet oder direkt in der Ranglistenansicht bestätigt.
+
+---
+
+## 4. Modul 4: Meisterschaft (Clubturniere & Meisterschafts-Hub)
+
+Das Modul **Meisterschaft** (Symbol: Pokal `Trophy`) steuert die offizielle Vereinsmeisterschaft. Es bildet den kompletten Turnierverlauf ab – von der Gruppenphase über die K.-o.-Endrunde bis zum Finaltag.
+
+### 4.1 Das persönliche Meisterschafts-Cockpit
+Sobald du für eine Meisterschaft ausgelost bist, visualisiert der Bento-Header im Meisterschafts-Hub deine individuelle Spielsituation:
+* **Nächster Gegner:** Anzeige von Name, Profilbild und Setzposition des Gegners.
+* **Frist / Deadline:** Bis zu welchem Datum (`deadlineDate`, z. B. *„Zu spielen bis: 15.07.2026“*) die Partie zwingend absolviert sein muss.
+* **Direktbuchung:** Ein Klick auf **„Freies Spiel reservieren“** leitet dich direkt in das Buchungs-Dashboard weiter, um den Platz für das Match zu reservieren.
+
+---
+
+### 4.2 Zählweisen & Match-Formate
+Für offizielle Meisterschaftsspiele gelten im System feste mathematische Validierungsregeln:
+
+| Satz | Modus | Kriterium für Satzgewinn | Besonderheit |
+| :--- | :--- | :--- | :--- |
+| **1. Satz** | Regulärer Satz | 6 Spiele (z. B. 6:4, 6:3) oder 7:5 | Bei 6:6: Satz-Tiebreak bis 7 (mit min. 2 Punkten Vorsprung, z. B. 7:6 [7:4]) |
+| **2. Satz** | Regulärer Satz | 6 Spiele oder 7:5 | Bei 6:6: Satz-Tiebreak bis 7 (mit min. 2 Punkten Vorsprung) |
+| **3. Satz** | **Match-Tiebreak** (Champions-Tiebreak) | Erster auf **10 Punkte** (mit min. 2 Punkten Vorsprung, z. B. 10:7, 12:10) | Wird bei Satzgleichstand von 1:1 verpflichtend anstelle eines vollen 3. Satzes gespielt |
+
+> **Achtung – Unentschieden unzulässig:**
+> Das System verweigert das Speichern von Ergebnissen mit Gleichstand (z. B. 6:6 oder 10:10). Jeder Satz muss einen regulären Gewinner aufweisen.
+
+---
+
+### 4.3 Schritt-für-Schritt: Ergebnis nach dem Match eintragen
+Jeder beteiligte Spieler kann das Ergebnis unmittelbar nach Spielende erfassen:
+
+```
+
++-------------------------------------------------------------------+ | ERGEBNIS EINTRAGEN \[X\] | +-------------------------------------------------------------------+ | Match: Max Müller vs. Anna Schmidt | | | | 1. Satz: \[ 6 \] : \[ 4 \] --> Satz an Max Müller | | 2. Satz: \[ 3 \] : \[ 6 \] --> Satz an Anna Schmidt | | | | \* 1:1 Satzgleichstand erkannt: Match-Tiebreak erforderlich! | | 3. Satz (Match-Tiebreak bis 10): \[ 10 \] : \[ 7 \] | | | | \[ \] w/o (Aufgabe / Walkover) – 6:0, 6:0 | | | | \[ Button: "Abbrechen" \] \[ Button: "Ergebnis speichern" \] | +-------------------------------------------------------------------+
+
+```
+
+1. Öffne das Modul **Meisterschaft**.
+2. Suche deine Begegnung in der Gruppenübersicht oder im Turnierbaum.
+3. Klicke auf der Match-Karte auf den Button **„Ergebnis eintragen“**.
+4. Trage die erspielten Games für **Satz 1** und **Satz 2** in die Eingabefelder ein.
+5. Bei einem Satzstand von 1:1 schaltet das Modal automatisch das Feld **„3. Satz (Match-Tiebreak bis 10)“** frei. Trage hier die erspielten Punkte ein (z. B. 10 und 8).
+6. Klicke auf **„Ergebnis speichern“**.
+7. Die Gruppentabelle bzw. der K.-o.-Baum errechnet alle Kennzahlen in Echtzeit neu.
+
+#### Sonderfall: Walkover / Verletzung / Aufgabe (w/o)
+Kann ein Spieler verletzungsbedingt nicht antreten oder muss während des Spiels aufgeben:
+1. Aktiviere im Ergebnisfenster die Option **„w/o (Aufgabe) – 6:0, 6:0“**.
+2. Wähle im Dropdown-Menü den tatsächlichen Gewinner aus.
+3. Gib im Textfeld den Grund an (z. B. *„Verletzung im 2. Satz“* oder *„Krankheitsbedingte Absage“*).
+4. Klicke auf **„Ergebnis speichern“**. Das Match wird mit 6:0, 6:0 für den verbleibenden Spieler gewertet.
+
+---
+
+### 4.4 Tabellen-Reihenfolge bei Punktgleichheit in Gruppen
+Stehen nach Beendigung aller Gruppenspiele zwei oder mehr Teilnehmer punktgleich da, ermittelt der Algorithmus (`calculateGroupStandings`) das Weiterkommen strikt nach folgender Kaskade:
+
+1. **Anzahl der Siege (Matches Won / Punkte)**
+2. **Direkter Vergleich (Head-to-Head):** Greift vorrangig, wenn exakt **zwei** Spieler punktgleich sind. Der Sieger des direkten Duells steht vorne.
+3. **Satzdifferenz:** Gewonnene Sätze minus verlorene Sätze (`setDiff`).
+4. **Game-Differenz:** Gewonnene Spiele minus verlorene Spiele (`gameDiff`).
+5. **Erzielte Spiele gesamt (`gamesWon`):** Wer absolut mehr Games erzielt hat, wird höher gewertet.
+6. **Alphabetische Sortierung:** Letzter technischer Tie-Breaker.
+
+---
+
+## 5. Modul 5: Liga (Hobbyliga & Partnerbörse)
+
+Das Modul **Liga** (Symbol: Schild `Shield`) organisiert den ganzjährigen Breitensport. Hier können Spielpartner gesucht, Ligamatches verabredet und Ranglistenpunkte gesammelt werden.
+
+```
+
++-----------------------------------------------------------------------+ | HOBBYLIGA DASHBOARD | | \[Aktuelle Rangliste\] \[Match-Feed\] \[Spielpartner-Börse\] | +-----------------------------------------------------------------------+ | Meine Ligastatistik: | | Rang: #4 | Punkte: 128 Pkt. | Letztes Match: vor 5 Tagen | | | | \[ Button: "Match vereinbaren" \] \[ Button: "Anzeige aufgeben" \] | +-----------------------------------------------------------------------+
+
+```
+
+### 5.1 Teilnahme & Punkte-Mechanik
+Die Teilnahme an der Hobbyliga ist freiwillig und erfordert das Setzen der Option **Hobbyliga-Teilnahme** im persönlichen Profil.
+* **Basis-Punkte:** Jedes ausgetragene Ligaspiel belohnt beide Teilnehmer mit Teilnahme- und Basispunkten (`base_points_win` / `base_points_loss`, Standard: 5 Punkte).
+* **Bonus-Punkte (Leistungs-Faktor):** Über eine logistische Punkteformel (`logisticSteepnessK`) erhalten Spieler bei einem Sieg über höher eingestufte Gegner signifikante Bonuspunkte (bis zu einem Deckel von `maxBonusPoints`, z. B. 45 Punkte).
+* **Inaktivitäts-Dämpfung:** Wer länger als 7 Tage kein Ligaspiel absolviert, verliert pro inaktiver Woche automatisiert Wertungspunkte (`decayPointsPerWeek`, Standard: 5 Punkte Abzug). Regelmäßiges Spielen sichert den Tabellenplatz.
+* **24-Stunden-Bestätigungsfenster:** Neu eingetragene Ergebnisse gelten zunächst als *provisorisch* (`isProvisional`). Beide Kontrahenten haben 24 Stunden Zeit, das Resultat im Feed einzusehen, bevor es endgültig in die Berechnung einfließt.
+
+---
+
+### 5.2 Hobbyliga-Match buchen
+Für Ligaspiele existiert ein spezialisierter Buchungs-Drawer (`HobbyligaBookingDrawer`):
+1. Klicke im Dashboard oder im Liga-Reiter auf **„Match vereinbaren“** oder wähle auf der Reservierungsseite ein freies Zeitfenster.
+2. Wechsle im Buchungsfenster auf den Reiter **„Hobbyliga-Spiel“**.
+3. Wähle deinen Mitspieler aus der Liste aller teilnehmenden Hobbyliga-Mitglieder aus.
+4. Klicke auf **„Reservieren“**. Das Spiel wird im Kalender markiert und automatisch im Ligaplan eingetragen.
+
+---
+
+### 5.3 Die Spielpartner-Börse
+Wer spontan Spielpartner sucht, nutzt die integrierte Kontaktbörse:
+1. Öffne das Modul **Liga** und klicke auf das Untermenü **Spielpartner-Börse**.
+2. Klicke auf den Button **„Anzeige aufgeben“** (`CreateAdModal`).
+3. Formuliere deinen Gesuchstext (z. B. *„Suche Partner für lockeres Grundlinienduell am Dienstag ab 17:00 Uhr, LK 20–25“*).
+4. Bestimme die Gültigkeit der Anzeige (`expiresAt`, z. B. 7 oder 14 Tage).
+5. Aktiviere bei Bedarf **„Kontaktdaten freigeben“**, damit interessierte Spieler dich direkt anrufen oder anschreiben können.
+6. Klicke auf **„Inserat veröffentlichen“**.
+
+---
+
+## 6. Modul 6: Gastspiele (Buchung & Abrechnung von Gästen)
+
+Das Modul **Gastspiele** (Symbol: Benutzer mit Plus `UserPlus`) regelt das Mitbringen clubfremder Personen auf die Vereinsanlage.
+
+```
+
++-----------------------------------------------------------------------+ | MEINE GASTSPIELE & GEBÜHREN | +-----------------------------------------------------------------------+ | Übersicht der von mir gebuchten Gaststunden: | | \* 12.05.2026 | Platz 1 | Gast: Max Mustermann | Gebühr: 10,00 € | | \* 02.06.2026 | Platz 2 | Gast: Julia Sommer | Gebühr: 10,00 € | | | | Offener Gesamtsaldo zur Abrechnung: 20,00 € | | Status: Erfasst (Abrechnung erfolgt per SEPA-Einzug am Saisonende) | +-----------------------------------------------------------------------+
+
+```
+
+### 6.1 Einen Gastspieler einbuchen
+1. Öffne den Reiter **Plätze** und klicke auf einen freien Zeitslot.
+2. Klicke im Buchungs-Slider bei der Spielerauswahl auf die Option **„Gast“**.
+3. Trage den vollständigen **Vor- und Nachnamen** des Gastspielers ein.
+4. Das System berechnet über den Gebühren-Rechner (`guestFeeCalculator`) sofort die fällige Gebühr und weist sie transparent im Drawer aus:
+   * **Pauschal pro Platzstunde (`PER_COURT_HOUR`):** Fester Stundensatz (z. B. 10,00 € pro gebuchter Stunde, unabhängig davon, wie viele Gäste mitspielen).
+   * **Pro Gast (`PER_GUEST`):** Fester Betrag pro Gastperson (z. B. 5,00 € pro Gast).
+   * **Pro Gast und Stunde (`PER_GUEST_HOUR`):** Multiplikation aus Gastanzahl und Spielstunden.
+5. Klicke auf **„Jetzt buchen“**.
+
+### 6.2 Zahlungs- & Abrechnungsmodalitäten
+* **Haftung des Mitglieds:** Der buchende Vereinsangehörige ist Vertragspartner des Vereins für die anfallende Gastspielgebühr.
+* **Keine Barzahlung am Platz:** Gastgebühren müssen nicht bar bezahlt werden. Das System saldiert alle Gastspiele auf dem Mitgliedskonto. Die Abrechnung erfolgt satzungsgemäß am Quartals- oder Saisonende per SEPA-Lastschrift über die Vereinsverwaltung.
+* **Transparenz:** Im Modul **Gastspiele** kann jedes Mitglied seine gesamte Gastspiel-Historie mit Datum, Platz, Name des Gastes und Zahlungsstatus (`Offen` / `Bezahlt`) lückenlos einsehen.
+
+---
+
+## 7. Modul 7: Arbeitseinsätze (Helferstunden & Schichten)
+
+Das Modul **Arbeitseinsätze** (Symbol: Aktentasche `Briefcase`) verwaltet die satzungsgemäßen Gemeinschaftsstunden zur Instandhaltung der Tennisanlage.
+
+```
+
++-----------------------------------------------------------------------+ | MEINE ARBEITSSTUNDEN | | Fortschritt: \[=====================> \] 7.5 von 10.0 Std. | | Status: 2.5 Stunden offen (Frist: 31. Oktober) | | | | \[ Button: "Einsatz einreichen" \] \[ Button: "Offene Schichten" \]| +-----------------------------------------------------------------------+ | Eingereichte Einsätze: | | \* 15.04.2026 | 5.0 Std. | Frühjahrsinstandsetzung | Status: Bestätigt| | \* 10.05.2026 | 2.5 Std. | Grünpflege Platz 1/2 | Status: Bestätigt| | \* 20.06.2026 | 2.0 Std. | Thekendienst Turnier | Status: Ausstehend| +-----------------------------------------------------------------------+
+
+```
+
+### 7.1 Soll-Stunden & Saisonvorgaben
+Jedes aktive Mitglied ab 18 Jahren muss pro Kalenderjahr ein festes Stundenkontingent (in der Regel **10 Stunden**) ableisten. Für nicht erbrachte Stunden wird zum Saisonabschluss eine satzungsmäßige Ersatzgebühr pro Fehlstunde berechnet.
+
+---
+
+### 7.2 Funktion A: Für geplante Schichten eintragen
+Der Verein schreibt organisierte Helfereinsätze direkt in der Web-App aus (z. B. Frühjahrsinstandsetzung, Turnierdienste, Heckenrückschnitt):
+1. Öffne das Modul **Arbeitseinsätze**.
+2. Klicke auf den Reiter **„Offene Schichten“** (`PlannedWorkShift`).
+3. Wähle eine Schicht mit freien Helferplätzen aus (z. B. *„Platzvorbereitung Samstag 09:00 – 13:00 Uhr, 3 von 6 Helfern eingetragen“*).
+4. Klicke auf **„Für Schicht eintragen“**. Dein Name ist damit verbindlich reserviert.
+5. Kannst du doch nicht teilnehmen, klicke rechtzeitig auf **„Austragen“**.
+
+---
+
+### 7.3 Funktion B: Selbstständig geleisteten Einsatz erfassen
+Hast du eigenverantwortlich Arbeiten auf der Anlage verrichtet (z. B. Reparaturen, Platzinstandsetzung, Gartenpflege):
+1. Klicke auf den Button **„Einsatz einreichen“**.
+2. Fülle das Erfassungsformular aus:
+   * **Datum des Einsatzes:** Tag der Arbeitsleistung.
+   * **Geleistete Stunden:** Angabe in Dezimalstunden (z. B. `2.5` für 2 Stunden 30 Minuten).
+   * **Kategorie:** Auswahl z. B. *Platzpflege*, *Clubheim*, *Grünanlagen* oder *Veranstaltungshilfe*.
+   * **Tätigkeitsbeschreibung:** Präzise Angabe der verrichteten Arbeit (z. B. *„Linien auf Platz 2 nachgewalzt und Laub am Zaun entfernt“*).
+3. Klicke auf **„Speichern & Einreichen“**.
+4. **Genehmigungs-Status:**
+   * `Ausstehend (Pending):` Der Einsatz wurde übermittelt und liegt dem Platzwart / Vorstand zur Prüfung vor.
+   * `Genehmigt (Approved):` Der Einsatz wurde bestätigt; die Stunden werden sofort auf deinem Fortschrittsbalken gutgeschrieben.
+   * `Abgelehnt (Rejected):` Der Einsatz wurde nicht anerkannt (inklusive Begründung des Administrators).
+
+---
+
+## 8. Mein Profil, Sicherheit & Club-Assistent „Ace“
+
+Über das Profil-Menü oben rechts (Klick auf den eigenen Avatar) verwaltest du deine persönlichen Kontoeinstellungen, die Datensicherheit und den KI-Assistenten.
+
+```
+
++-------------------------------------------------------------------+ | MEIN PROFIL \[X\] | +-------------------------------------------------------------------+ | \[ Avatar-Bild / Kamera-Icon \] | | Max Müller (Mitglied) | | | | Vorname: \[ Max \] Nachname: \[ Müller \] | | E-Mail: \[ max.mueller@example.com \] | | Telefon: \[ 0170 / 1234567 \] | | Geburtstag: \[ 1988-04-12 \] Geschlecht: \[ Männlich \] | | | | PRIVATSPHÄRE & APP-ANZEIGE: | | \[X\] Kontaktdaten für Mitglieder freigeben | | \[X\] Teilnahme an der Hobbyliga (Opt-In) | | \[X\] Club-Assistent ('Ace') aktivieren | | | | PASSWORT ÄNDERN: | | Neues Passwort: \[ \*\*\*\*\*\*\*\* \] (mind. 8 Zeichen) | | | | \[ Button: "Abbrechen" \] \[ Button: "Änderungen speichern" \]| +-------------------------------------------------------------------+
+
+```
+
+### 8.1 Stammdaten & Avatar anpassen
+* **Persönliche Daten:** Halte Vorname, Nachname, E-Mail-Adresse und Mobilfunknummer stets aktuell.
+* **Profilbild hochladen (`AvatarUploader`):** Klicke auf das Kamera-Symbol deines Avatars. Wähle ein Foto von deinem Smartphone oder PC aus. Im integrierten Zuschneide-Werkzeug (`AvatarCropModal`) kannst du den Bildausschnitt perfekt zentrieren. Das System komprimiert das Bild automatisch in ein schlankes WebP-Format (< 25 KB), damit die App auch bei geringer Bandbreite schnell lädt.
+
+---
+
+### 8.2 Privatsphäre- & Sichtbarkeitseinstellungen
+Im Abschnitt **Privatsphäre & App-Anzeige** steuerst du deine Sichtbarkeit im Club:
+* **Kontaktdaten freigeben (`showContactInfo`):**
+  * *Aktiviert:* Andere Clubmitglieder können in der Rangliste, Meisterschaft und Spielpartnerbörse deine Handynummer oder E-Mail einsehen, um Spieltermine zu vereinbaren.
+  * *Deaktiviert:* Deine Kontaktdaten bleiben komplett verborgen.
+* **Hobbyliga-Teilnahme (`hobbyLeagueOptIn`):** Schaltet dein Profil für die Hobbyliga und die Partnerbörse frei bzw. pausiert deine Teilnahme.
+* **Passwort ändern:** Im Profilbereich kannst du jederzeit ein neues Passwort vergeben (Sicherheitsanforderung: **mindestens 8 Zeichen**).
+
+---
+
+### 8.3 Der Club-Assistent „Ace“
+Unten rechts auf dem Bildschirm findest du den intelligenten Club-Assistenten **Ace** (Tennisball-Icon mit Stirnband).
+* **Funktion:** Ace beantwortet Fragen zu Spiel- und Tiebreak-Regeln, Platzbuchungen, Meisterschaftsfristen und Arbeitseinsätzen.
+* **Begrüßungsblase:** Nach dem ersten erfolgreichen Saison-Onboarding begrüßt dich Ace automatisch mit einer Sprechblase (*„Hi, ich bin ACE! 👋“*). Diese schließt sich nach 8 Sekunden selbstständig oder kann per Klick auf das Kreuz geschlossen werden.
+* **Deaktivierung:** Falls du das Assistenten-Widget nicht nutzen möchtest, deaktiviere im Profil einfach den Schalter **„Club-Assistent ('Ace') aktivieren“** (`showAiAssistant: false`). Das Widget wird daraufhin vollständig ausgeblendet.
+
+---
+
+### 8.4 Saisonales Mitglieder-Onboarding (`MemberOnboardingModal`)
+Zu Saisonbeginn oder bei unvollständigen Stammdaten zeigt das System nach dem Login das Willkommensfenster:
+* **Pflichtangaben prüfen:** Gleiche Handynummer, Geburtsdatum und Geschlecht kurz ab.
+* **Button „Bestätigen“:** Speichert deine Daten und schließt das Onboarding dauerhaft ab.
+* **Button „Später anzeigen“:** Schließt das Fenster temporär für die aktuelle Sitzung; es wird beim nächsten Login erneut vorgelegt.
+
+---
+
+## 9. Support-Matrix für „Ace“ (Schnellreferenz)
+
+| Benutzeranfrage | Autoritativer Systementscheid / Handlungsanweisung |
+| :--- | :--- |
+| **„Kann ich alleine einen Platz reservieren?“** | Nein. Es muss mindestens 1 Partner, 1 Gast oder die Ballmaschine ausgewählt werden. Reines Einzeltraining ohne Ballmaschine blockiert das System. |
+| **„Wie lange darf ich im Einzel spielen?“** | Die reguläre Einzel-Dauer beträgt 60 Minuten. Für ein Doppel können bis zu 120 Minuten gebucht werden. |
+| **„Was passiert bei 1:1 Sätzen in der Meisterschaft?“** | Es wird kein 3. Satz ausgespielt. Das System erzwingt stattdessen die Eingabe eines Match-Tiebreaks bis 10 Punkte (mit min. 2 Punkten Vorsprung). |
+| **„Wie wird bei Punktgleichheit in der Gruppe entschieden?“** | 1. Siege, 2. Direkter Vergleich (bei 2 Spielern), 3. Satzdifferenz, 4. Game-Differenz, 5. Erzielte Games gesamt. |
+| **„Wo sehe ich meine Arbeitsstunden?“** | Im Modul **Arbeitseinsätze** über den Fortschrittsbalken (z. B. 7.5 von 10 Stunden geleistet). |
+| **„Muss ich meinen Gastspieler bar bezahlen?“** | Nein. Die Gebühr wird auf deinem Mitgliedskonto erfasst und satzungsgemäß am Saisonende per SEPA-Lastschrift eingezogen. |
+| **„Wie deaktiviere ich den Assistenten Ace?“** | Im Menü **Mein Profil** unter *Privatsphäre & App-Anzeige* den Schalter *„Club-Assistent ('Ace') aktivieren“* ausschalten. |
+```
