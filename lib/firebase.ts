@@ -353,6 +353,7 @@ export async function loginWithUsername(username: string, passwordRaw: string, v
       isSuspended: !!userData.isSuspended,
       hauptAdmin: !!userData.hauptAdmin,
       show_onboarding_hints: userData.show_onboarding_hints !== false,
+      showAiAssistant: userData.showAiAssistant !== false,
       showContactInfo: userData.showContactInfo !== undefined ? !!userData.showContactInfo : (userData.kontaktfreigabe !== undefined ? !!userData.kontaktfreigabe : true),
       onboarding_pending: userData.onboarding_pending !== undefined ? !!userData.onboarding_pending : false,
       avatarUrl: userData.avatarUrl || null,

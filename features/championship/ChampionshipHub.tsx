@@ -24,6 +24,7 @@ import {
 import { propagateWinnersInTournament } from '../../utils/championshipCalculator';
 import { formatParticipantById } from '../../utils/championshipNameResolver';
 import { determineActiveChampionshipTab } from '../../utils/championshipScheduling';
+import { canUserEditChampionshipMatch, isChampionshipAdmin } from '../../utils/championshipPermissions';
 import { ChampionshipGroupView } from './ChampionshipGroupView';
 import { ChampionshipBracketView } from './ChampionshipBracketView';
 import { ChampionshipMatchList } from './ChampionshipMatchList';
@@ -63,10 +64,7 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   const [modalMatch, setModalMatch] = useState<Match | null>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState<boolean>(false);
 
-  const isAdmin =
-    currentUser?.role === Role.ADMIN ||
-    currentUser?.role === ('superadmin' as any) ||
-    currentUser?.role === ('super-admin' as any);
+  const isAdmin = isChampionshipAdmin(currentUser);
 
   // Listen to Firestore
   useEffect(() => {
@@ -127,6 +125,9 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
     if (!currentTournament) return;
 
     const existingMatch = currentTournament.matches.find((m) => m.id === matchId);
+    if (!existingMatch || !canUserEditChampionshipMatch(existingMatch, currentTournament, currentUser)) {
+      return;
+    }
 
     // Format scores for readable transaction history
     const formatScoreSummary = (res?: MatchResult | null) => {
@@ -232,6 +233,10 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   };
 
   const handleOpenResultModal = (match: Match) => {
+    if (!currentTournament) return;
+    if (!canUserEditChampionshipMatch(match, currentTournament, currentUser)) {
+      return;
+    }
     setModalMatch(match);
     setIsResultModalOpen(true);
   };
@@ -303,6 +308,9 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
               onEnterResult={handleOpenResultModal}
               currentUser={currentUser}
               users={users}
+              onViewAllMatches={() => {
+                setActiveTab('matches');
+              }}
             />
           )}
 

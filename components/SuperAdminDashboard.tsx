@@ -23,6 +23,9 @@ import {
   listenToGlobalBackups,
   listenToSystemUpdates,
   saveSystemUpdates,
+  listenToGlobalSystemSettings,
+  saveGlobalSystemSettings,
+  GlobalSystemSettings,
   setGlobalLeagueEnabled,
   performClubMigration,
   listenToMemberships,
@@ -114,18 +117,60 @@ export default function SuperAdminDashboard({
 
   // --- Tab States ---
   const [activeTab, setActiveTabState] = useState<
-    "allgemein" | "backup" | "recycle-bin" | "changelog" | "duplicates" | "hobbyliga" | "accounts"
+    "allgemein" | "backup" | "recycle-bin" | "changelog" | "duplicates" | "hobbyliga" | "accounts" | "einstellungen"
   >(() => {
     const saved = localStorage.getItem("superadmin_active_tab");
-    if (saved && ["allgemein", "backup", "recycle-bin", "changelog", "duplicates", "hobbyliga", "accounts"].includes(saved)) {
+    if (saved && ["allgemein", "backup", "recycle-bin", "changelog", "duplicates", "hobbyliga", "accounts", "einstellungen"].includes(saved)) {
       return saved as any;
     }
     return "allgemein";
   });
 
-  const setActiveTab = (tab: "allgemein" | "backup" | "recycle-bin" | "changelog" | "duplicates" | "hobbyliga" | "accounts") => {
+  const setActiveTab = (tab: "allgemein" | "backup" | "recycle-bin" | "changelog" | "duplicates" | "hobbyliga" | "accounts" | "einstellungen") => {
     setActiveTabState(tab);
     localStorage.setItem("superadmin_active_tab", tab);
+  };
+
+  // --- Global System Settings (Chatbot & SuperAdmin Flags) ---
+  const [globalSettings, setGlobalSettings] = useState<GlobalSystemSettings>(() => {
+    try {
+      const cached = localStorage.getItem("system_chatbot_enabled");
+      return { chatbotEnabled: cached !== "false" };
+    } catch {
+      return { chatbotEnabled: true };
+    }
+  });
+  const [savingGlobalSettings, setSavingGlobalSettings] = useState(false);
+  const [globalSettingsSuccess, setGlobalSettingsSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = listenToGlobalSystemSettings((s) => {
+      setGlobalSettings(s);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleToggleGlobalChatbot = async (enabled: boolean) => {
+    setSavingGlobalSettings(true);
+    setGlobalSettingsSuccess(null);
+    try {
+      await saveGlobalSystemSettings(
+        { chatbotEnabled: enabled },
+        currentUser.name || currentUser.username || "SuperAdmin"
+      );
+      setGlobalSettingsSuccess(
+        enabled
+          ? "Der Chatbot 'Ace' wurde global für alle Tenants aktiviert."
+          : "Der Chatbot 'Ace' wurde global für alle Tenants deaktiviert."
+      );
+      setTimeout(() => {
+        setGlobalSettingsSuccess(null);
+      }, 4000);
+    } catch (err: any) {
+      console.error("Fehler beim Speichern der Systemeinstellungen:", err);
+    } finally {
+      setSavingGlobalSettings(false);
+    }
   };
 
   // --- Dynamic Leagues CRUD States ---
@@ -1441,6 +1486,17 @@ export default function SuperAdminDashboard({
           >
             <i className="fa-solid fa-clock-rotate-left text-[11px]"></i>
             Backup
+          </button>
+          <button
+            onClick={() => setActiveTab("einstellungen")}
+            className={`flex-1 shrink-0 px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === "einstellungen"
+                ? "bg-[#1b4332] text-white shadow-sm border border-[#1b4332]"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-200"
+            }`}
+          >
+            <i className="fa-solid fa-sliders text-[11px]"></i>
+            Einstellungen
           </button>
         </div>
 
@@ -3200,6 +3256,108 @@ export default function SuperAdminDashboard({
                 globalBackups={globalBackups}
                 onLoginAs={onLoginAs}
               />
+            ) : activeTab === "einstellungen" ? (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+                  {/* Header */}
+                  <div className="border-b border-slate-100 pb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-800 flex items-center gap-2.5">
+                        <i className="fa-solid fa-sliders text-[#1b4332]"></i>
+                        System-Einstellungen
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Zentrale Konfigurationen und globale Feature-Flags für alle Vereine und Mandanten.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        Mandanten:
+                      </span>
+                      <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black rounded-lg">
+                        Global ({clubs.length} Vereine)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Feedback Notification */}
+                  {globalSettingsSuccess && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
+                      <i className="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
+                      <span>{globalSettingsSuccess}</span>
+                    </div>
+                  )}
+
+                  {/* Section: Chatbot & Assistant */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                        <i className="fa-solid fa-robot text-[#1b4332]"></i>
+                        KI-Chatbot & Assistent ("Ace")
+                      </h3>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                          globalSettings.chatbotEnabled !== false
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-rose-50 text-rose-700 border-rose-200"
+                        }`}
+                      >
+                        {globalSettings.chatbotEnabled !== false ? "Aktiviert" : "Deaktiviert"}
+                      </span>
+                    </div>
+
+                    {/* Setting Card */}
+                    <div className="p-5 sm:p-6 bg-slate-50 rounded-2xl border border-slate-200/90 space-y-4">
+                      <label className="flex items-start gap-4 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={globalSettings.chatbotEnabled !== false}
+                          onChange={(e) => handleToggleGlobalChatbot(e.target.checked)}
+                          disabled={savingGlobalSettings}
+                          className="mt-1 w-5 h-5 rounded-md border-slate-300 text-[#1b4332] focus:ring-[#1b4332] cursor-pointer disabled:opacity-50"
+                        />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-800">
+                              Chatbot global für alle Tenants aktivieren
+                            </span>
+                            {savingGlobalSettings && (
+                              <span className="text-[11px] text-slate-400 italic">
+                                Speichere...
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 leading-relaxed">
+                            Aktiviert oder deaktiviert den KI-Assistenten "Ace" systemweit über alle Vereine und Mandanten hinweg.
+                          </p>
+                          <div className="pt-2 text-[11px] text-slate-600 bg-white/80 p-3 rounded-xl border border-slate-200/60 space-y-1">
+                            <div className="flex items-center gap-1.5 font-bold text-slate-700">
+                              <i className="fa-solid fa-circle-info text-[#1b4332]"></i>
+                              Auswirkung bei Deaktivierung:
+                            </div>
+                            <ul className="list-disc pl-4 space-y-0.5 text-slate-500">
+                              <li>Der schwebende Chatbot-Button ("Ace") wird auf der gesamten Plattform für alle Benutzer ausgeblendet.</li>
+                              <li>Die Einstellungsoption <em>„Assistent &quot;Ace&quot; aktivieren“</em> wird aus den Benutzermenüs aller User (Profil) automatisch entfernt.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </label>
+
+                      {globalSettings.lastUpdated && (
+                        <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400">
+                          <span>
+                            Zuletzt geändert: {new Date(globalSettings.lastUpdated).toLocaleString("de-DE")}
+                          </span>
+                          {globalSettings.updatedBy && (
+                            <span>Durch: {globalSettings.updatedBy}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : null}
           </motion.div>
         </AnimatePresence>
@@ -3803,7 +3961,7 @@ export default function SuperAdminDashboard({
       {/* Single Duplicate Pair Merge Confirmation Modal */}
       {mergeConfirmData && (
         <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
-          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden -200 space-y-0">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-lg sm:max-w-xl shadow-2xl overflow-hidden -200 space-y-0">
             {/* Modal Header */}
             <div className="bg-[#1b4332] text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -3905,11 +4063,11 @@ export default function SuperAdminDashboard({
                     )}
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3 pt-2">
+                    <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
                       <button
                         type="button"
                         onClick={() => setMergeConfirmData(null)}
-                        className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer text-center"
+                        className="py-3 px-6 sm:px-8 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer text-center shrink-0"
                       >
                         Abbrechen
                       </button>
@@ -3922,17 +4080,17 @@ export default function SuperAdminDashboard({
                           setMergeConfirmData(null);
                           await handleExecuteMerge(p, tId);
                         }}
-                        className="flex-1 bg-[#1b4332] hover:bg-[#153326] disabled:opacity-50 text-white rounded-xl uppercase tracking-wider shadow-lg transition-all active:scale-95 border border-[#1b4332] py-3 text-xs font-black flex items-center justify-center gap-2 cursor-pointer text-center"
+                        className="flex-1 min-w-0 bg-[#1b4332] hover:bg-[#153326] disabled:opacity-50 text-white rounded-xl uppercase tracking-wider shadow-lg transition-all active:scale-95 border border-[#1b4332] py-3 px-4 text-xs font-black flex items-center justify-center cursor-pointer text-center"
                       >
                         {mergeLoadingId === pair.id ? (
-                          <span className="flex items-center justify-center gap-2">
+                          <span className="inline-flex items-center justify-center gap-2">
                             <i className="fa-solid fa-circle-notch fa-spin"></i>
-                            Führe zusammen...
+                            <span>Führe zusammen...</span>
                           </span>
                         ) : (
-                          <span className="flex items-center justify-center gap-2">
-                            <i className="fa-solid fa-check text-sm"></i>
-                            Zusammenführung bestätigen
+                          <span className="inline-flex items-center justify-center gap-2 whitespace-nowrap">
+                            <i className="fa-solid fa-check text-sm shrink-0"></i>
+                            <span>Zusammenführung bestätigen</span>
                           </span>
                         )}
                       </button>
@@ -3948,7 +4106,7 @@ export default function SuperAdminDashboard({
       {/* Batch Duplicate Pairs Merge Confirmation Modal */}
       {batchConfirmData && (
         <div className="fixed inset-0 bg-[#1b4332]/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans animate-in fade-in duration-200">
-          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden -200 space-y-0">
+          <div className="border-none outline-none bg-white rounded-2xl w-full max-w-lg sm:max-w-xl shadow-2xl overflow-hidden -200 space-y-0">
             <div className="bg-[#1b4332] text-white p-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-emerald-300 text-lg shrink-0">
@@ -3997,11 +4155,11 @@ export default function SuperAdminDashboard({
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setBatchConfirmData(null)}
-                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer text-center"
+                  className="py-3 px-6 sm:px-8 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-200 cursor-pointer text-center shrink-0"
                 >
                   Abbrechen
                 </button>
@@ -4012,10 +4170,12 @@ export default function SuperAdminDashboard({
                     setBatchConfirmData(null);
                     await executeBatchMerge(pairs);
                   }}
-                  className="flex-1 bg-[#1b4332] hover:bg-[#153326] text-white rounded-xl uppercase tracking-wider shadow-lg transition-all active:scale-95 border border-[#1b4332] py-3 text-xs font-black flex items-center justify-center gap-2 cursor-pointer text-center"
+                  className="flex-1 min-w-0 bg-[#1b4332] hover:bg-[#153326] text-white rounded-xl uppercase tracking-wider shadow-lg transition-all active:scale-95 border border-[#1b4332] py-3 px-4 text-xs font-black flex items-center justify-center cursor-pointer text-center"
                 >
-                  <i className="fa-solid fa-check text-sm"></i>
-                  Alle {batchConfirmData.pairs.length} Paarungen zusammenführen
+                  <span className="inline-flex items-center justify-center gap-2 whitespace-nowrap">
+                    <i className="fa-solid fa-check text-sm shrink-0"></i>
+                    <span>Alle {batchConfirmData.pairs.length} Paarungen zusammenführen</span>
+                  </span>
                 </button>
               </div>
             </div>

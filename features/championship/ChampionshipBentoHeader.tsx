@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Trophy,
   Settings,
-  ListOrdered,
   CheckCircle2,
   ChevronRight,
 } from 'lucide-react';
@@ -148,10 +147,78 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
     };
   });
 
+  const selectedStageItem = stageProgressList.find((item) => item.isStageSelected);
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 space-y-4">
-      {/* 1. Header-Zeile der Bento-Karte */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3 sm:p-6 space-y-3 sm:space-y-4">
+      {/* ======================================================== */}
+      {/* MOBILE COMPACT HEADER (< sm:) - EXACTLY 2 COMPACT LINES   */}
+      {/* ======================================================== */}
+      <div className="sm:hidden space-y-2">
+        {/* Zeile 1: Titel links, Admin-Zahnrad rechts */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-base font-bold text-slate-900 tracking-tight truncate">
+              {mainTitle}
+            </h2>
+            {activeTournaments.length > 1 && (
+              <select
+                value={selectedTournamentId}
+                onChange={(e) => onSelectTournamentId(e.target.value)}
+                className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 text-slate-700 focus:ring-1 focus:ring-[var(--color-primary)] cursor-pointer shrink-0"
+              >
+                {activeTournaments.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                if (onNavigateToAdmin) {
+                  onNavigateToAdmin();
+                } else {
+                  onSelectTab('admin');
+                }
+              }}
+              className={`p-1.5 rounded-lg border transition-all cursor-pointer shrink-0 ${
+                activeTab === 'admin'
+                  ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                  : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs'
+              }`}
+              title="Turnier-Einstellungen & Verwaltung"
+              aria-label="Turnier-Einstellungen"
+            >
+              <Settings className="w-4 h-4 text-slate-600" />
+            </button>
+          )}
+        </div>
+
+        {/* Zeile 2: "3 / 15 gespielt" mit schlankem Fortschrittsbalken direkt daneben */}
+        {totalTournamentMatches > 0 && (
+          <div className="flex items-center gap-2.5 text-xs text-slate-600">
+            <span className="shrink-0 font-medium text-slate-700">
+              <strong className="text-slate-900 font-extrabold">{totalCompletedMatches}</strong> / {totalTournamentMatches} gespielt
+            </span>
+            <div className="flex-1 max-w-[130px] bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/80">
+              <div
+                className="bg-emerald-600 h-full rounded-full transition-all duration-500"
+                style={{ width: `${completionPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* DESKTOP HEADER (>= sm:) - 100% UNCHANGED                  */}
+      {/* ======================================================== */}
+      <div className="hidden sm:flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Links: Trophäen-Icon, Haupttitel "Clubmeisterschaft 2026" und Subline */}
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-3 bg-emerald-50 rounded-2xl text-[var(--color-primary)] shrink-0">
@@ -225,10 +292,55 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
         </div>
       </div>
 
-      {/* 2. Untere Zeile der Bento-Karte: Flacher 3-stufiger Stepper + Alle Begegnungen */}
+      {/* ======================================================== */}
+      {/* PHASENMODELL: MOBIL (Pills) vs. DESKTOP (Stepper)        */}
+      {/* ======================================================== */}
       {stages.length > 0 && (
-        <div className="border-t border-slate-100 pt-3.5">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+        <div className="border-t border-slate-100 pt-2.5 sm:pt-3.5">
+          {/* 1. Mobile Pill-Tabs (< sm:) */}
+          <div className="sm:hidden space-y-1.5">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+              {stageProgressList.map((item, idx) => {
+                const isSelected = item.isStageSelected;
+                const isCompleted = item.status === 'completed';
+
+                return (
+                  <button
+                    key={item.stage.id}
+                    type="button"
+                    onClick={() => onSelectStage(item.stage.id, item.stage.type)}
+                    className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-emerald-700 text-white font-bold shadow-xs'
+                        : isCompleted
+                        ? 'bg-emerald-50 text-emerald-900 border border-emerald-200/80 font-semibold'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/80 font-medium'
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <span className="opacity-75">{idx + 1}.</span>
+                    )}
+                    <span>
+                      {item.stage.name}
+                      {item.totalMatches > 0 ? ` (${item.completedMatches}/${item.totalMatches})` : ''}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Mobile Deadline Subline (Frist kompakt unter den Pills) */}
+            {selectedStageItem?.deadlineText && (
+              <p className="text-[11px] text-slate-500 font-medium px-0.5">
+                {selectedStageItem.stage.name}: {selectedStageItem.deadlineText}
+              </p>
+            )}
+          </div>
+
+          {/* 2. Desktop Stepper (>= sm:) - 100% UNCHANGED */}
+          <div className="hidden sm:flex items-center overflow-x-auto snap-x snap-mandatory gap-2 no-scrollbar sm:overflow-visible py-0.5">
             {stageProgressList.map((item, idx) => {
               const isSelected = item.isStageSelected;
               const isCompleted = item.status === 'completed';
@@ -245,7 +357,7 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
                     onClick={() => {
                       onSelectStage(item.stage.id, item.stage.type);
                     }}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer shrink-0 flex-1 min-w-[170px] sm:min-w-[190px] ${
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-all cursor-pointer shrink-0 flex-1 min-w-[170px] sm:min-w-0 snap-start ${
                       isSelected
                         ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-200/80 shadow-xs'
                         : isCompleted
@@ -286,17 +398,15 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
                         </span>
                       </div>
 
-                      <div className="text-[10px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                      <div className={`text-xs font-medium truncate flex items-center gap-1.5 mt-0.5 ${
+                        isSelected ? 'text-emerald-800' : 'text-slate-600'
+                      }`}>
                         {item.totalMatches > 0 && (
-                          <span
-                            className={
-                              isSelected ? 'font-bold text-emerald-800' : 'text-slate-600'
-                            }
-                          >
+                          <span className={isSelected ? 'font-semibold text-emerald-900' : 'text-slate-700'}>
                             {item.completedMatches}/{item.totalMatches} gespielt
                           </span>
                         )}
-                        {item.totalMatches > 0 && item.deadlineText && <span>·</span>}
+                        {item.totalMatches > 0 && item.deadlineText && <span className="text-slate-400">·</span>}
                         {item.deadlineText && <span>{item.deadlineText}</span>}
                       </div>
                     </div>
@@ -309,25 +419,6 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
                 </React.Fragment>
               );
             })}
-
-            {/* Separator before "Alle Begegnungen" */}
-            <div className="h-6 w-px bg-slate-200 shrink-0 hidden sm:block mx-1" />
-
-            {/* Subtle Tab/Link for "Alle Begegnungen" */}
-            <button
-              type="button"
-              onClick={() => {
-                onSelectTab('matches');
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                activeTab === 'matches'
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                  : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300'
-              }`}
-            >
-              <ListOrdered className="w-3.5 h-3.5" />
-              <span>Alle Begegnungen</span>
-            </button>
           </div>
         </div>
       )}

@@ -321,7 +321,7 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
           <div>
             <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2.5 text-[var(--color-primary)]">
               <Trophy className="w-5 h-5 shrink-0" />
-              <span>Meisterschafts-Verwaltung</span>
+              <span>Meisterschaftsverwaltung</span>
             </h3>
             <p className="text-xs text-slate-500 font-medium mt-1">
               Konfiguriere Vorlagen und steuere laufende, archivierte sowie geplante Clubmeisterschaften.

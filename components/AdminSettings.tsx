@@ -281,7 +281,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const welcomeTextRef = useRef<HTMLTextAreaElement | null>(null);
   const impressumTextRef = useRef<HTMLTextAreaElement | null>(null);
-  const helpTextRef = useRef<HTMLTextAreaElement | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [userPage, setUserPage] = useState(1);
 
@@ -923,7 +922,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const [isFeeSettingsValid, setIsFeeSettingsValid] = useState(true);
   const [localNews, setLocalNews] = useState(settings.news || "");
   const [impressum, setImpressum] = useState(settings.impressum || "");
-  const [helpText, setHelpText] = useState(settings.helpText || "");
 
   // --- Sperren / Lock Form States ---
   const [lockContext, setLockContext] = useState<"lock" | "event">("lock");
@@ -1262,7 +1260,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     setFeeSettings(settings.feeSettings || getDefaultFeeSettings(settings.reservationRules));
     setLocalNews(settings.news || "");
     setImpressum(settings.impressum || "");
-    setHelpText(settings.helpText || "");
   }, [settings]);
 
   // Evaluates if a given tab is dirty
@@ -1393,8 +1390,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           impressum !== (settings.impressum || "") ||
           welcomeMessage !==
             (settings.welcomeMessage ||
-              `Herzlich willkommen im modernisierten Reservierungssystem des ${settings.clubName || "Vereins"}! Organisiere deine Matches jetzt noch einfacher und behalte alle Events und Ranglisten stets im Blick.`) ||
-          helpText !== (settings.helpText || "")
+              `Herzlich willkommen im modernisierten Reservierungssystem des ${settings.clubName || "Vereins"}! Organisiere deine Matches jetzt noch einfacher und behalte alle Events und Ranglisten stets im Blick.`)
         );
       }
       return false;
@@ -1408,7 +1404,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       facilityPhotoUrl,
       settings,
       welcomeMessage,
-      helpText,
       modules,
       reservationRules,
       courtsList,
@@ -1566,7 +1561,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         news: localNews,
         impressum,
         welcomeMessage,
-        helpText,
       });
       setMessage({
         text: "Design-, Impressums- & News-Einstellungen erfolgreich gespeichert.",
@@ -1676,7 +1670,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         settings.welcomeMessage ||
           `Herzlich willkommen im modernisierten Reservierungssystem des ${settings.clubName || "Vereins"}! Organisiere deine Matches jetzt noch einfacher und behalte alle Events und Ranglisten stets im Blick.`,
       );
-      setHelpText(settings.helpText || "");
     }
   };
 
@@ -3050,7 +3043,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             </div>
             <div>
               <h3 className="text-xl font-bold text-slate-900 uppercase tracking-wider">
-                System-Einstellungen
+                Systemeinstellungen
               </h3>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
                 Module, Regeln, Layout &amp; Datenpflege
@@ -6038,48 +6031,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </p>
                           <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 max-h-[150px] overflow-y-auto">
                             <RichTextRenderer text={welcomeMessage} />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Hilfe-Seite (Inhalt) */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-circle-question"></i>{" "}
-                        Hilfe-Seite (Inhalt)
-                      </h3>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Inhalt der Hilfeseite
-                          </label>
-                          <RichTextEditorToolbar
-                            textareaRef={helpTextRef}
-                            value={helpText}
-                            onChange={setHelpText}
-                          />
-                          <textarea
-                            ref={helpTextRef}
-                            value={helpText}
-                            onChange={(e) => setHelpText(e.target.value)}
-                            placeholder="Hilfe & Funktionen..."
-                            className="w-full h-8 px-3 py-1 rounded-b-xl bg-white border border-slate-200 border-t-0 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[200px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
-                          />
-                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
-                            Dieser Text wird auf der Hilfe-Seite angezeigt.
-                            Formatiere den Text mit der Leiste oder verwende
-                            Markdown (z.B. **fett**, *kursiv*, ### Überschrift,
-                            - Liste).
-                          </p>
-                        </div>
-
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                            Live-Vorschau
-                          </p>
-                          <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 max-h-[220px] overflow-y-auto">
-                            <RichTextRenderer text={helpText} />
                           </div>
                         </div>
                       </div>

@@ -265,7 +265,7 @@ export const MemberOnboardingModal: React.FC<MemberOnboardingModalProps> = ({
             </div>
 
             {/* Footer with "Später anzeigen" textlink and green CTA button */}
-            <div className="pt-3 mt-2 sm:mt-auto border-t border-slate-100 flex items-center justify-end gap-3 sm:gap-4 bg-white shrink-0">
+            <div className="pt-3 mt-2 sm:mt-auto flex items-center justify-end gap-3 sm:gap-4 bg-white shrink-0">
               <button
                 type="button"
                 id="onboarding-remind-later-button"

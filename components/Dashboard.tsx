@@ -4019,7 +4019,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                             className="flex-1 text-white rounded-xl shadow transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 h-10 text-sm font-medium hover:brightness-95"
                             style={{ backgroundColor: settings?.primaryColor || "var(--color-primary)" }}
                           >
-                            <i className="fa-solid fa-trophy"></i> Ligaspiel eintragen
+                            Ligaspiel eintragen
                           </button>
                         )}
                         <button
@@ -5367,7 +5367,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                           className="w-full text-white rounded-xl shadow-md transition-transform active:scale-95 uppercase tracking-widest flex items-center justify-center gap-2 h-10 text-sm font-medium hover:brightness-95"
                           style={{ backgroundColor: settings?.primaryColor || "var(--color-primary)" }}
                         >
-                          <i className="fa-solid fa-trophy text-[12px]"></i> Ligaspiel eintragen
+                          Ligaspiel eintragen
                         </button>
                       </div>
                     ) : (

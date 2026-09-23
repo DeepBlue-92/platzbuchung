@@ -188,7 +188,7 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
       </div>
 
       {/* 1. & 2. Schlanker, kompakter horizontaler Stepper */}
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto snap-x snap-mandatory no-scrollbar sm:overflow-visible py-0.5">
         {stageProgressList.map((item, idx) => {
           const isSelected =
             selectedStageId === item.stage.id ||
@@ -213,7 +213,7 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
                     onSelectStage(item.stage.id, item.stage.type);
                   }
                 }}
-                className={`flex items-center gap-2.5 px-3 py-1.5 sm:py-2 rounded-xl border text-left transition-all cursor-pointer shrink-0 flex-1 min-w-[170px] sm:min-w-[200px] ${
+                className={`flex items-center gap-2.5 px-3 py-1.5 sm:py-2 rounded-xl border text-left transition-all cursor-pointer shrink-0 flex-1 min-w-[170px] sm:min-w-0 snap-start ${
                   isSelected
                     ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-200/80 shadow-xs'
                     : isCompleted

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { updateEmail, updatePassword } from "firebase/auth";
 import { auth } from "../lib/firebase";
-import { saveUser, isUsernameTakenGlobally, ClubSettings, DEFAULT_ONBOARDING_SETTINGS } from "../services/db";
+import { saveUser, isUsernameTakenGlobally, updateUserAiAssistant, ClubSettings, DEFAULT_ONBOARDING_SETTINGS } from "../services/db";
 import { User, Gender } from "../types";
 import { parseDateToYYYYMMDD } from "../utils/playerHelper";
 import { AvatarUploader } from "./AvatarUploader";
@@ -16,6 +16,7 @@ interface ProfileModalProps {
   onSuccess: (updatedUser: User) => void;
   primaryColor?: string;
   settings?: ClubSettings;
+  isGlobalChatbotEnabled?: boolean;
 }
 
 const ProfileModal: React.FC<ProfileModalProps> = ({
@@ -27,10 +28,19 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   onSuccess,
   primaryColor = "var(--color-primary)",
   settings,
+  isGlobalChatbotEnabled = true,
 }) => {
   const [username, setUsername] = useState(currentUser.name);
-  const [firstName, setFirstName] = useState(currentUser.firstName || "");
-  const [lastName, setLastName] = useState(currentUser.lastName || "");
+  const [firstName, setFirstName] = useState(() => {
+    if (currentUser.firstName) return currentUser.firstName;
+    const parts = (currentUser.name || "").trim().split(/\s+/);
+    return parts[0] || "";
+  });
+  const [lastName, setLastName] = useState(() => {
+    if (currentUser.lastName) return currentUser.lastName;
+    const parts = (currentUser.name || "").trim().split(/\s+/);
+    return parts.slice(1).join(" ") || "";
+  });
   const [email, setEmail] = useState(() => {
     const e = currentUser.email || "";
     if (e.endsWith(".system.local")) return "";
@@ -44,6 +54,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   );
   const [showOnboardingHints, setShowOnboardingHints] = useState(
     currentUser.show_onboarding_hints !== false
+  );
+  const [showAiAssistant, setShowAiAssistant] = useState(
+    currentUser.showAiAssistant !== false
   );
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser.avatarUrl || null);
   const [avatarIcon, setAvatarIcon] = useState<string | null>(currentUser.avatarIcon || "initials");
@@ -107,21 +120,38 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   };
 
   
+  const handleToggleAiAssistant = async (newValue: boolean) => {
+    setShowAiAssistant(newValue);
+    try {
+      await updateUserAiAssistant(currentUser.id, newValue);
+      onSuccess({
+        ...currentUser,
+        showAiAssistant: newValue,
+      });
+    } catch (err) {
+      console.error("Fehler beim Aktualisieren des KI-Assistenten:", err);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) {
-      setError("Kein aktiver Benutzer gefunden.");
-      return;
-    }
 
-    if (!firstName.trim() || !lastName.trim()) {
-      setError("Vorname und Nachname sind Pflichtfelder.");
-      return;
-    }
-
-    if (!username.trim()) {
+    const normalizedNewUsername = username.trim();
+    if (!normalizedNewUsername) {
       setError("Der Benutzername darf nicht leer sein.");
       return;
+    }
+
+    // Determine clean first and last names
+    let effectiveFirstName = firstName.trim();
+    let effectiveLastName = lastName.trim();
+
+    if (!effectiveFirstName) {
+      const parts = normalizedNewUsername.split(/\s+/);
+      effectiveFirstName = parts[0] || normalizedNewUsername;
+      if (!effectiveLastName && parts.length > 1) {
+        effectiveLastName = parts.slice(1).join(" ");
+      }
     }
 
     if (newPassword) {
@@ -135,22 +165,29 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
       }
     }
 
-    const normalizedNewUsername = username.trim();
+    const usernameChanged =
+      normalizedNewUsername.toLowerCase() !== currentUser.name.toLowerCase();
 
-    const isTakenLocally = Object.values(allUsers).some(
-      (u: User) =>
-        u.id !== currentUser.id &&
-        u.name.toLowerCase() === normalizedNewUsername.toLowerCase()
-    );
-    if (isTakenLocally) {
-      setError("Dieser Benutzername ist in diesem Verein bereits vergeben.");
-      return;
-    }
+    if (usernameChanged) {
+      const isTakenLocally = Object.values(allUsers).some(
+        (u: User) =>
+          u.id !== currentUser.id &&
+          u.name.toLowerCase() === normalizedNewUsername.toLowerCase()
+      );
+      if (isTakenLocally) {
+        setError("Dieser Benutzername ist in diesem Verein bereits vergeben.");
+        return;
+      }
 
-    const isTakenGlobally = await isUsernameTakenGlobally(normalizedNewUsername, currentUser.id);
-    if (isTakenGlobally) {
-      setError("Dieser Benutzername ist systemweit bereits vergeben.");
-      return;
+      try {
+        const isTakenGlobally = await isUsernameTakenGlobally(normalizedNewUsername, currentUser.id);
+        if (isTakenGlobally) {
+          setError("Dieser Benutzername ist systemweit bereits vergeben.");
+          return;
+        }
+      } catch (checkErr) {
+        console.warn("Could not check global username:", checkErr);
+      }
     }
 
     setIsSaving(true);
@@ -158,7 +195,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
     setSuccessMessage("");
 
     try {
-      if (newPassword) {
+      if (newPassword && auth.currentUser) {
         const authPwd =
           newPassword.length < 6 ? `${newPassword}-tennis` : newPassword;
         await updatePassword(auth.currentUser, authPwd);
@@ -169,9 +206,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
       const isSystemAdmin =
         currentUser.role === "admin" &&
         currentUser.name.toLowerCase() === "system admin";
-
-      const usernameChanged =
-        normalizedNewUsername.toLowerCase() !== currentUser.name.toLowerCase();
 
       const effectiveVereinsId = (settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen")
         .toLowerCase()
@@ -184,7 +218,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
         finalEmail = `${emailSlug}@${effectiveVereinsId}.system.local`;
       }
 
-      if (finalEmail && finalEmail.toLowerCase() !== oldEmail.toLowerCase()) {
+      if (finalEmail && finalEmail.toLowerCase() !== oldEmail.toLowerCase() && auth.currentUser) {
         try {
           await updateEmail(auth.currentUser, finalEmail);
         } catch (emailErr: any) {
@@ -198,14 +232,15 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
       const updatedUser: User = {
         ...currentUser,
         name: normalizedNewUsername,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        firstName: effectiveFirstName,
+        lastName: effectiveLastName,
         email: finalEmail,
         phone: phone.trim(),
         gender,
         birthDate: birthDate ? birthDate.trim() : null,
         showContactInfo,
         show_onboarding_hints: showOnboardingHints,
+        showAiAssistant,
         avatarUrl: avatarUrl || null,
         avatarIcon: avatarIcon || "initials",
         ...(newPassword ? { password: newPassword } : {}),
@@ -213,7 +248,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
 
       await saveUser(effectiveVereinsId, updatedUser);
       onSuccess(updatedUser);
-      setSuccessMessage("Daten / Icon erfolgreich gespeichert.");
+      setSuccessMessage("Erfolgreich gespeichert!");
+      setTimeout(() => {
+        handleClose();
+      }, 500);
     } catch (err: any) {
       console.error("Profile update error:", err);
       setSuccessMessage("");
@@ -328,7 +366,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
                             placeholder="Max"
-                            required
                             disabled={isNameDisabled}
                             className={`w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium ${
                               isNameDisabled
@@ -346,7 +383,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
                             placeholder="Mustermann"
-                            required
                             disabled={isNameDisabled}
                             className={`w-full h-8 px-3 py-1 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm placeholder:font-normal placeholder:text-slate-400 font-sans font-medium ${
                               isNameDisabled
@@ -501,6 +537,19 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                   <i className="fa-solid fa-sliders text-[11px]"></i>
                   Privatsphäre & App-Anzeige
                 </h4>
+                {isGlobalChatbotEnabled !== false && (
+                  <label className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={showAiAssistant}
+                      onChange={(e) => handleToggleAiAssistant(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">Assistent "Ace" aktivieren</span>
+                    </div>
+                  </label>
+                )}
                 <label className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
                   <input
                     type="checkbox"
@@ -509,8 +558,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                     className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-800 block">Kontaktdaten freigeben</span>
-                    <span className="text-[10px] text-slate-500 font-medium">Meine E-Mail und Telefonnummer in Börse/Rangliste anzeigen</span>
+                    <span className="text-xs font-bold text-slate-800 block">E-Mail und Telefonnummer für andere Spieler anzeigen</span>
                   </div>
                 </label>
                 <label className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
@@ -529,16 +577,33 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
           </div>
 
           <div className="p-4 lg:p-6 bg-white border-t border-slate-100 shrink-0 sticky bottom-0 z-10">
+            {error && (
+              <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-bold leading-relaxed flex gap-2 items-start">
+                <i className="fa-solid fa-circle-exclamation mt-0.5 text-red-600 shrink-0"></i>
+                <p>{error}</p>
+              </div>
+            )}
+            {successMessage && (
+              <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-bold leading-relaxed flex gap-2 items-center">
+                <i className="fa-solid fa-circle-check text-emerald-600 shrink-0"></i>
+                <span>{successMessage}</span>
+              </div>
+            )}
             <button
               type="submit"
               disabled={isSaving}
-              className="w-full text-white rounded-2xl uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-50 inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-medium whitespace-nowrap"
-              style={{ backgroundColor: primaryColor }}
+              className="w-full text-white rounded-2xl uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-50 inline-flex items-center justify-center gap-2 h-11 px-4 text-sm font-bold whitespace-nowrap cursor-pointer"
+              style={{ backgroundColor: successMessage ? '#16a34a' : primaryColor }}
             >
               {isSaving ? (
                 <>
                   <i className="fa-solid fa-circle-notch animate-spin text-sm"></i>
                   <span>Wird gespeichert...</span>
+                </>
+              ) : successMessage ? (
+                <>
+                  <i className="fa-solid fa-check text-sm"></i>
+                  <span>Erfolgreich gespeichert</span>
                 </>
               ) : (
                 <>

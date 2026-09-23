@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trophy, CheckCircle2, Clock, Calendar, Edit3, Filter, AlertCircle, Flag, MapPin } from 'lucide-react';
 import { Match, Participant, TournamentInstance } from '../../types/championship';
 import { formatParticipantById } from '../../utils/championshipNameResolver';
+import { isChampionshipAdmin } from '../../utils/championshipPermissions';
 import { ChampionshipMatchCard } from './ChampionshipMatchCard';
 import { User } from '../../types';
 
@@ -149,7 +150,7 @@ export const ChampionshipMatchList: React.FC<ChampionshipMatchListProps> = ({
                 tournament={tournament}
                 users={users}
                 currentUser={currentUser}
-                isAdmin={currentUser?.role === 'admin' || currentUser?.role === 'superadmin'}
+                isAdmin={isChampionshipAdmin(currentUser)}
                 onEnterResult={onEnterResult}
                 roundLabelOverride={roundLabel}
               />

@@ -1182,9 +1182,7 @@ export const HobbyligaBookingDrawer: React.FC<HobbyligaBookingDrawerProps> = ({
                       Wird gebucht...
                     </>
                   ) : (
-                    <>
-                      <i className="fa-solid fa-trophy text-[12px]"></i> Ligaspiel eintragen
-                    </>
+                    "Ligaspiel eintragen"
                   )}
                 </button>
               </div>
@@ -1583,9 +1581,7 @@ export const HobbyligaBookingDrawer: React.FC<HobbyligaBookingDrawerProps> = ({
                       Wird gebucht...
                     </>
                   ) : (
-                    <>
-                      <i className="fa-solid fa-trophy text-[12px]"></i> Ligaspiel eintragen
-                    </>
+                    "Ligaspiel eintragen"
                   )}
                 </button>
               </div>

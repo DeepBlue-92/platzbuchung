@@ -263,7 +263,7 @@ export const ChampionshipAdmin: React.FC<ChampionshipAdminProps> = ({
           </div>
           <div>
             <h3 className="font-bold text-slate-900 text-sm">
-              Meisterschafts-Verwaltung & Einstellungen
+              Meisterschaftsverwaltung & Einstellungen
             </h3>
             <p className="text-[11px] text-slate-500 font-medium">
               Pipeline konfigurieren, Auslosung generieren, Teilnehmer verwalten und Papierkorb einsehen.

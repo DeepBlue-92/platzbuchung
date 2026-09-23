@@ -1,5 +1,7 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
+import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "./lib/firebase";
@@ -131,6 +133,95 @@ async function startServer() {
   // API Health check route
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Assistant Chat endpoint grounded on public/tutorial
+  app.post("/api/assistant/chat", async (req, res) => {
+    try {
+      const { message, history } = req.body || {};
+      if (!message || typeof message !== "string") {
+        return res.status(400).json({ error: "Missing message parameter" });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({
+          error: "AI_NOT_CONFIGURED",
+          message: "No Gemini API key configured on server. Falling back to local knowledge base."
+        });
+      }
+
+      let cachedTutorial = "";
+      try {
+        const tutorialPath = path.join(process.cwd(), "public", "tutorial");
+        if (fs.existsSync(tutorialPath)) {
+          cachedTutorial = fs.readFileSync(tutorialPath, "utf-8");
+        }
+      } catch (readErr) {
+        console.warn("Could not read public/tutorial:", readErr);
+      }
+
+      let personalityInstruction = (req.body && req.body.systemInstruction) || "";
+      if (!personalityInstruction) {
+        try {
+          const personalityPath = path.join(process.cwd(), "public", "personality");
+          if (fs.existsSync(personalityPath)) {
+            const rawPersona = fs.readFileSync(personalityPath, "utf-8");
+            const cleanVorname = (req.body?.vorname || "").trim();
+            if (cleanVorname) {
+              personalityInstruction = rawPersona.replace(/\{\{VORNAME\}\}/g, cleanVorname);
+            } else {
+              personalityInstruction = rawPersona
+                .replace(/Servus\s*\{\{VORNAME\}\}!/g, "Servus!")
+                .replace(/\{\{VORNAME\}\}/g, "");
+            }
+          }
+        } catch (personaErr) {
+          console.warn("Could not read public/personality:", personaErr);
+        }
+      }
+
+      const combinedSystemInstruction = `${personalityInstruction || 'Du bist "Ace", der persönliche, intelligente Vereins- und Tennis-Assistent der DJK Fürth.'}
+
+---
+AUTORITATIVE WISSENSBASIS AUS DEM VEREINSHANDBUCH (public/tutorial):
+${cachedTutorial}
+`;
+
+      const ai = new GoogleGenAI();
+      const contents: any[] = [];
+      if (Array.isArray(history)) {
+        for (const h of history) {
+          if (h && h.text && h.sender) {
+            contents.push({
+              role: h.sender === "user" ? "user" : "model",
+              parts: [{ text: h.text }]
+            });
+          }
+        }
+      }
+      contents.push({ role: "user", parts: [{ text: message }] });
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents,
+        config: {
+          systemInstruction: {
+            parts: [{ text: combinedSystemInstruction }]
+          },
+          temperature: 0.3,
+        }
+      });
+
+      const reply = response.text || "";
+      return res.json({ reply });
+    } catch (error: any) {
+      console.error("Error in /api/assistant/chat:", error);
+      return res.status(500).json({
+        error: "AI_GENERATION_FAILED",
+        message: error.message || "Failed to generate AI response"
+      });
+    }
   });
 
   // Vite middleware for development

@@ -658,6 +658,7 @@ export function listenToUsers(vereinsId: string, callback: (u: Record<string, Us
         hauptAdmin: !!docData.hauptAdmin,
         createdAt: docData.createdAt || new Date().toISOString(),
         show_onboarding_hints: docData.show_onboarding_hints !== false,
+        showAiAssistant: docData.showAiAssistant !== false,
         onboarding_pending: !!docData.onboarding_pending,
         birthDate: docData.birthDate || null,
         is_placeholder_email: docData.is_placeholder_email !== undefined 
@@ -895,6 +896,13 @@ export async function saveUser(vereinsId: string, user: User) {
   if (user.isSuspended !== undefined) finalDoc.isSuspended = !!user.isSuspended;
   if (user.hauptAdmin !== undefined) finalDoc.hauptAdmin = !!user.hauptAdmin;
   if (user.show_onboarding_hints !== undefined) finalDoc.show_onboarding_hints = !!user.show_onboarding_hints;
+  if (user.showAiAssistant !== undefined) {
+    finalDoc.showAiAssistant = !!user.showAiAssistant;
+  } else if (existingData.showAiAssistant !== undefined) {
+    finalDoc.showAiAssistant = !!existingData.showAiAssistant;
+  } else {
+    finalDoc.showAiAssistant = true;
+  }
   if (user.onboarding_pending !== undefined) finalDoc.onboarding_pending = !!user.onboarding_pending;
   if (user.avatarUrl !== undefined) {
     finalDoc.avatarUrl = user.avatarUrl || null;
@@ -981,6 +989,38 @@ export async function saveUser(vereinsId: string, user: User) {
           console.warn(`Could not sync duplicate user doc ${dup.id}:`, e);
         }
       }
+    }
+  }
+}
+
+export async function updateUserAiAssistant(userId: string, showAiAssistant: boolean): Promise<void> {
+  if (!userId) return;
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { showAiAssistant: !!showAiAssistant });
+  } catch (err) {
+    // If updateDoc fails (e.g. document does not exist yet under this exact id), attempt merge setDoc
+    try {
+      const userRef = doc(db, 'users', userId);
+      await setDoc(userRef, { showAiAssistant: !!showAiAssistant }, { merge: true });
+    } catch (fallbackErr) {
+      console.error('Failed to update showAiAssistant in Firestore:', fallbackErr);
+      throw fallbackErr;
+    }
+  }
+}
+
+export async function updateUserAceWelcomeSeen(userId: string): Promise<void> {
+  if (!userId) return;
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { has_seen_ace_welcome: true });
+  } catch (err) {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await setDoc(userRef, { has_seen_ace_welcome: true }, { merge: true });
+    } catch (fallbackErr) {
+      console.warn('Failed to update has_seen_ace_welcome in Firestore:', fallbackErr);
     }
   }
 }
@@ -1180,6 +1220,71 @@ export async function saveSystemUpdates(text: string, updatedBy: string) {
     updatedBy
   };
   await setDoc(doc(db, 'system', 'updates'), dataToSave, { merge: true });
+}
+
+// --- Global System Settings (Chatbot & SuperAdmin Flags) ---
+
+export interface GlobalSystemSettings {
+  chatbotEnabled?: boolean;
+  lastUpdated?: string;
+  updatedBy?: string;
+}
+
+export function listenToGlobalSystemSettings(callback: (settings: GlobalSystemSettings) => void): () => void {
+  const path = 'system/settings';
+  return onSnapshot(
+    doc(db, 'system', 'settings'),
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const settings: GlobalSystemSettings = {
+          chatbotEnabled: data.chatbotEnabled !== false,
+          lastUpdated: data.lastUpdated,
+          updatedBy: data.updatedBy,
+        };
+        try {
+          localStorage.setItem('system_chatbot_enabled', String(settings.chatbotEnabled));
+        } catch {}
+        callback(settings);
+      } else {
+        try {
+          const cached = localStorage.getItem('system_chatbot_enabled');
+          if (cached !== null) {
+            callback({ chatbotEnabled: cached !== 'false' });
+            return;
+          }
+        } catch {}
+        callback({ chatbotEnabled: true });
+      }
+    },
+    (error) => {
+      console.warn('Could not listen to system/settings:', error);
+      try {
+        const cached = localStorage.getItem('system_chatbot_enabled');
+        if (cached !== null) {
+          callback({ chatbotEnabled: cached !== 'false' });
+          return;
+        }
+      } catch {}
+      callback({ chatbotEnabled: true });
+    }
+  );
+}
+
+export async function saveGlobalSystemSettings(settings: Partial<GlobalSystemSettings>, updatedBy?: string): Promise<void> {
+  const dataToSave: any = {
+    ...settings,
+    lastUpdated: new Date().toISOString(),
+  };
+  if (updatedBy) {
+    dataToSave.updatedBy = updatedBy;
+  }
+  await setDoc(doc(db, 'system', 'settings'), dataToSave, { merge: true });
+  if (settings.chatbotEnabled !== undefined) {
+    try {
+      localStorage.setItem('system_chatbot_enabled', String(settings.chatbotEnabled));
+    } catch {}
+  }
 }
 
 // --- Global Super-Admin Database APIs ---

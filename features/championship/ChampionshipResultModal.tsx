@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Trophy, Check, AlertTriangle } from 'lucide-react';
 import { Match, MatchResult, MatchSetScore, TournamentInstance } from '../../types/championship';
 import { formatParticipantById } from '../../utils/championshipNameResolver';
+import { canUserEditChampionshipMatch } from '../../utils/championshipPermissions';
 import { User } from '../../types';
 
 interface ChampionshipResultModalProps {
@@ -153,6 +154,11 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
     e.preventDefault();
     if (!match.participant1Id || !match.participant2Id) {
       setErrorMessage('Partie kann noch nicht gewertet werden, da noch Teilnehmer fehlen.');
+      return;
+    }
+
+    if (!canUserEditChampionshipMatch(match, tournament, currentUser)) {
+      setErrorMessage('Keine Berechtigung zum Bearbeiten dieser Partie.');
       return;
     }
 

@@ -603,20 +603,9 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                       Abbruch: {currentCompleted.abandonmentReason || currentCompleted.result?.abandonmentReason || 'Spielabbruch'}
                     </span>
                   ) : isUserCompleted ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="bg-emerald-100 text-emerald-800 font-black text-[9px] px-1.5 py-0.5 rounded-full border border-emerald-300/80 uppercase">
-                        Dein Ergebnis
-                      </span>
-                      {didUserWin ? (
-                        <span className="bg-emerald-500 text-white font-black text-[9px] px-1.5 py-0.5 rounded-full shadow-xs uppercase flex items-center gap-0.5">
-                          <i className="fa-solid fa-trophy text-[8px]" /> {isRetired ? 'Sieg (w.o.)' : 'Sieg'}
-                        </span>
-                      ) : (
-                        <span className="bg-slate-200 text-slate-700 font-bold text-[9px] px-1.5 py-0.5 rounded-full uppercase">
-                          {retiredPlayerId === currentUser.id ? 'Aufgabe (w.o.)' : 'Niederlage'}
-                        </span>
-                      )}
-                    </div>
+                    <span className="bg-emerald-100 text-emerald-800 font-black text-[9px] px-1.5 py-0.5 rounded-full border border-emerald-300/80 uppercase shrink-0">
+                      Dein Ergebnis
+                    </span>
                   ) : isRetired ? (
                     <span className="bg-amber-100 text-amber-800 font-bold text-[9px] px-2 py-0.5 rounded-full border border-amber-200 uppercase">
                       Aufgabe (w.o.)

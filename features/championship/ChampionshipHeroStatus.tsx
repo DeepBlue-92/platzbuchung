@@ -3,6 +3,7 @@ import { Trophy, Calendar, CheckCircle2, AlertCircle, ArrowRight, Clock, Award }
 import { TournamentInstance, Match, Participant } from '../../types/championship';
 import { User } from '../../types';
 import { formatParticipantById, resolveParticipantDisplayName } from '../../utils/championshipNameResolver';
+import { canUserEditChampionshipMatch } from '../../utils/championshipPermissions';
 
 interface ChampionshipHeroStatusProps {
   currentUser: User | null;
@@ -83,7 +84,7 @@ export const ChampionshipHeroStatus: React.FC<ChampionshipHeroStatusProps> = ({
   const opponentName = formatParticipant(opponentId);
 
   return (
-    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl border border-slate-700/60 p-4 sm:p-6 text-white shadow-lg relative overflow-hidden mb-6">
+    <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl border border-slate-700/60 p-3 sm:p-6 text-white shadow-lg relative overflow-hidden mb-6">
       {/* Decorative background tennis element */}
       <div className="absolute -right-10 -bottom-10 w-44 h-44 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
       <div className="absolute right-6 top-6 text-white/5 pointer-events-none">
@@ -149,14 +150,16 @@ export const ChampionshipHeroStatus: React.FC<ChampionshipHeroStatusProps> = ({
         {/* Quick actions for participant */}
         {myParticipant && nextMatch && (
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0 pt-2 md:pt-0">
-            <button
-              type="button"
-              onClick={() => onEnterResult(nextMatch)}
-              className="h-9 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4 text-slate-950" />
-              <span>Ergebnis eintragen</span>
-            </button>
+            {canUserEditChampionshipMatch(nextMatch, currentTournament, currentUser) && (
+              <button
+                type="button"
+                onClick={() => onEnterResult(nextMatch)}
+                className="h-9 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                <span>Ergebnis eintragen</span>
+              </button>
+            )}
 
             <button
               type="button"

@@ -31,6 +31,7 @@ import Help from "./components/Help";
 import Impressum from "./components/Impressum";
 import Arbeitseinsaetze from "./components/Arbeitseinsaetze";
 import ProfileModal from "./components/ProfileModal";
+import TennisAssistantWidget from "./components/TennisAssistantWidget";
 import MemberOnboardingModal from "./components/MemberOnboardingModal";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import { UserAvatar } from "./components/UserAvatar";
@@ -54,6 +55,8 @@ import {
   listenToUsers,
   listenToSystemUpdates,
   listenToClubs,
+  listenToGlobalSystemSettings,
+  GlobalSystemSettings,
   ClubSettings,
   DEFAULT_SETTINGS,
   saveBooking,
@@ -464,6 +467,24 @@ const App: React.FC = () => {
   const [showPublicHelp, setShowPublicHelp] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [onboardingDismissedForSession, setOnboardingDismissedForSession] = useState(false);
+  const [triggerAceWelcome, setTriggerAceWelcome] = useState(false);
+
+  // Global System Settings (Chatbot & SuperAdmin Flags)
+  const [globalSystemSettings, setGlobalSystemSettings] = useState<GlobalSystemSettings>(() => {
+    try {
+      const cached = localStorage.getItem("system_chatbot_enabled");
+      return { chatbotEnabled: cached !== "false" };
+    } catch {
+      return { chatbotEnabled: true };
+    }
+  });
+
+  useEffect(() => {
+    const unsub = listenToGlobalSystemSettings((settings) => {
+      setGlobalSystemSettings(settings);
+    });
+    return () => unsub();
+  }, []);
 
   // Reset session-based onboarding dismissal whenever a user signs in, switches, or signs out
   useEffect(() => {
@@ -801,6 +822,7 @@ const App: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1350,7 +1372,7 @@ const App: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsLoggingIn(true);
 
     try {
       const u = await loginWithUsername(
@@ -1402,7 +1424,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       setError(err.message || "Benutzername oder Passwort falsch.");
     } finally {
-      setIsLoading(false);
+      setIsLoggingIn(false);
     }
   };
 
@@ -2312,7 +2334,6 @@ const App: React.FC = () => {
               <Help
                 onBack={() => setShowPublicHelp(false)}
                 isLoggedIn={false}
-                helpText={settings.helpText}
               />
             </div>
           </div>
@@ -2335,9 +2356,7 @@ const App: React.FC = () => {
           <div
             className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat blur-[6px] scale-105"
             style={{
-              backgroundImage: isLoading
-                ? "none"
-                : `url(${isSuperadminRoute ? "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?q=80&w=2070&auto=format&fit=crop" : settings.loginBannerUrl || settings.bannerUrl})`,
+              backgroundImage: `url(${isSuperadminRoute ? "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?q=80&w=2070&auto=format&fit=crop" : settings.loginBannerUrl || settings.bannerUrl})`,
             }}
           ></div>
           <div
@@ -2353,14 +2372,14 @@ const App: React.FC = () => {
                 <div className="w-[50px] h-[50px] sm:w-20 sm:h-20 lg:w-[64px] lg:h-[64px] mx-auto flex items-center justify-center mb-3 sm:mb-5 lg:mb-4">
                   {isSuperadminRoute ? (
                     <i className="fa-solid fa-server text-2xl sm:text-4xl lg:text-3xl text-[#1b4332]"></i>
-                  ) : !isSettingsLoaded ? (
-                    <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-600 rounded-full animate-spin"></div>
                   ) : (settings.logoUrl || settings.headerLogoUrl) ? (
                     <img
                       src={settings.logoUrl || settings.headerLogoUrl}
                       alt="Club Logo"
                       className="w-full h-full object-contain drop-shadow-sm"
                     />
+                  ) : !isSettingsLoaded ? (
+                    <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-600 rounded-full animate-spin"></div>
                   ) : (
                     <i className="fa-solid fa-baseball text-3xl sm:text-4xl text-emerald-800"></i>
                   )}
@@ -2378,9 +2397,7 @@ const App: React.FC = () => {
                 >
                   {isSuperadminRoute
                     ? "Platzbuchung Administrator Login"
-                    : isLoading
-                      ? "Lädt..."
-                      : settings.clubName}
+                    : settings.clubName}
                 </h1>
                 <p className="text-slate-400 text-[8px] sm:text-[9px] lg:text-[8.5px] font-black uppercase tracking-widest mt-1 sm:mt-1.5 lg:mt-1.5 text-center mb-4 sm:mb-7 lg:mb-5">
                   {isSuperadminRoute
@@ -2457,16 +2474,16 @@ const App: React.FC = () => {
                   <div className="flex flex-col sm:grid sm:grid-cols-3 gap-2.5 mt-3 sm:mt-4 lg:mt-3">
                     <button
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isLoggingIn}
                       className="sm:col-span-2 w-full text-white rounded-xl shadow-md transition-all uppercase tracking-widest hover:text-white active:scale-95 flex items-center justify-center gap-2 cursor-pointer py-2.5 sm:py-2.5 lg:py-2 text-[11px] sm:text-xs font-black"
                       style={{
                         backgroundColor: isSuperadminRoute
                           ? "#1b4332"
                           : settings.primaryColor,
-                        opacity: isLoading ? 0.7 : 1,
+                        opacity: isLoggingIn ? 0.7 : 1,
                       }}
                     >
-                      {isLoading ? (
+                      {isLoggingIn ? (
                         <i className="fa-solid fa-spinner fa-spin"></i>
                       ) : (
                         <>
@@ -2566,9 +2583,7 @@ const App: React.FC = () => {
             <div
               className="hidden lg:flex lg:w-1/2 relative flex-col justify-center p-6 sm:p-10 md:p-12 lg:p-8 overflow-hidden bg-cover bg-center select-text"
               style={{
-                backgroundImage: isLoading
-                  ? "none"
-                  : `url(${isSuperadminRoute ? "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?q=80&w=2070&auto=format&fit=crop" : settings.loginBannerUrl || settings.bannerUrl})`,
+                backgroundImage: `url(${isSuperadminRoute ? "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?q=80&w=2070&auto=format&fit=crop" : settings.loginBannerUrl || settings.bannerUrl})`,
               }}
             >
               <div className="absolute inset-x-0 bottom-0 top-1/4 bg-gradient-to-t from-slate-950 via-slate-900/80 to-transparent z-0"></div>
@@ -3083,10 +3098,10 @@ const App: React.FC = () => {
 
           
           {window.innerWidth < 1024 && view !== "reservation" && !isMoreMenuOpen && mobileHeaderTitle && (
-            <div className="lg:hidden bg-[var(--color-primary)] px-4 h-12 flex items-center justify-between text-white shadow-md relative shrink-0 select-none mb-1 rounded-xl font-sans z-50">
-              <h3 className="text-white font-black tracking-widest uppercase text-xs flex items-center gap-2">
+            <div className="lg:hidden bg-[var(--color-primary)] px-3 sm:px-4 h-10 sm:h-12 flex items-center justify-between text-white shadow-md relative shrink-0 select-none mb-1 rounded-xl font-sans z-50">
+              <h3 className="text-white font-black tracking-widest uppercase text-[11px] sm:text-xs flex items-center gap-2">
                 {MobileHeaderIconComp && (
-                  <MobileHeaderIconComp className="w-4 h-4 shrink-0 text-white" strokeWidth={1.8} />
+                  <MobileHeaderIconComp className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-white" strokeWidth={1.8} />
                 )}
                 {mobileHeaderTitle}
               </h3>
@@ -3096,9 +3111,9 @@ const App: React.FC = () => {
                   setView("reservation");
                   setIsMoreMenuOpen(true);
                 }}
-                className="h-8 px-3 rounded-lg bg-white/10 hover:bg-white/20 active:scale-90 transition-all flex items-center gap-1.5 font-black uppercase text-[9px] tracking-wider cursor-pointer outline-none border border-white/15"
+                className="h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg bg-white/10 hover:bg-white/20 active:scale-90 transition-all flex items-center gap-1.5 font-black uppercase text-[8.5px] sm:text-[9px] tracking-wider cursor-pointer outline-none border border-white/15"
               >
-                <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2} />{" "}
+                <ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={2} />{" "}
                 Zurück
               </button>
             </div>
@@ -3630,7 +3645,6 @@ const App: React.FC = () => {
                       handleSetView("reservation");
                     }
                   }}
-                  helpText={settings.helpText}
                 />
               ) : view === "impressum" ? (
                 <Impressum
@@ -4063,6 +4077,7 @@ const App: React.FC = () => {
             loggedInUser={currentUser}
             allUsers={users}
             settings={settings}
+            isGlobalChatbotEnabled={globalSystemSettings.chatbotEnabled !== false}
             onCloseStart={() => {
               if (window.innerWidth < 1024) {
                 setIsMoreMenuOpen(true);
@@ -4099,11 +4114,28 @@ const App: React.FC = () => {
                 setCurrentUser(updatedUser);
                 const key = (updatedUser.id || updatedUser.name).toLowerCase().replace(/\s/g, '');
                 setUsers((prev) => ({ ...prev, [key]: updatedUser }));
+                // Trigger Ace welcome callout bubble right after onboarding completion
+                setTriggerAceWelcome(true);
               }}
               onClose={() => {
                 setOnboardingDismissedForSession(true);
               }}
             />
+        )}
+
+        {/* Floating Ace Tennis Assistant Mascot (Contextual AI Assistant) */}
+        {globalSystemSettings.chatbotEnabled !== false && (
+          <TennisAssistantWidget
+            currentUser={currentUser}
+            onUpdateUser={(updatedUser) => {
+              setCurrentUser(updatedUser);
+              const key = (updatedUser.id || updatedUser.name).toLowerCase().replace(/\s/g, '');
+              setUsers((prev) => ({ ...prev, [key]: updatedUser }));
+            }}
+            primaryColor={settings.primaryColor}
+            triggerWelcomeBubble={triggerAceWelcome}
+            isGlobalChatbotEnabled={globalSystemSettings.chatbotEnabled !== false}
+          />
         )}
 
         {/* Mobile Bottom Navigation Bar (YouTube style) */}

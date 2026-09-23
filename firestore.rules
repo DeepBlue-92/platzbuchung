@@ -98,7 +98,8 @@ service cloud.firestore {
              (!('vereinsId' in data) || (data.vereinsId is string && data.vereinsId.size() <= 128)) &&
              (!('password' in data) || data.password is string) &&
              (!('passwort' in data) || data.passwort is string) &&
-             (!('is_placeholder_email' in data) || data.is_placeholder_email is bool);
+             (!('is_placeholder_email' in data) || data.is_placeholder_email is bool) &&
+             (!('showAiAssistant' in data) || data.showAiAssistant is bool);
     }
 
     function isValidBooking(data) {

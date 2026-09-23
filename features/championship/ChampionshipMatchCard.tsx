@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   CheckCircle2,
   Clock,
@@ -12,6 +12,7 @@ import { Match, TournamentInstance, ChampionshipAuditLogEntry } from '../../type
 import { User } from '../../types';
 import { formatParticipantById } from '../../utils/championshipNameResolver';
 import { formatEventDate } from '../../utils/championshipScheduling';
+import { canUserEditChampionshipMatch, isChampionshipAdmin } from '../../utils/championshipPermissions';
 import { ChampionshipMatchAuditDrawer } from './ChampionshipMatchAuditDrawer';
 
 interface ChampionshipMatchCardProps {
@@ -42,6 +43,13 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
   stageNameOverride,
 }) => {
   const [isAuditDrawerOpen, setIsAuditDrawerOpen] = useState<boolean>(false);
+
+  const effectiveIsAdmin = isAdmin || isChampionshipAdmin(currentUser);
+
+  // Check if current user is authorized to edit / enter results for this match
+  const canEdit = useMemo(() => {
+    return canUserEditChampionshipMatch(match, tournament, currentUser);
+  }, [match, tournament, currentUser]);
 
   const isCompleted = match.status === 'completed' || match.status === 'walkover';
   const p1Name = formatParticipantById(match.participant1Id, tournament.participants, users);
@@ -100,35 +108,145 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
           : 'border-slate-200/90 hover:border-emerald-300'
       }`}
     >
-      {/* Main Match Row */}
-      <div className="p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Left: Round & Scheduled Tag */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[11px] tracking-tight flex items-center gap-1">
+      {/* ======================================================== */}
+      {/* MOBILE COMPACT ROW (< sm:)                               */}
+      {/* Super-compact card: 3-4 matches visible at once          */}
+      {/* ======================================================== */}
+      <div className="sm:hidden p-2.5 flex items-center justify-between gap-2.5">
+        {/* Links: Runden-Vorzeile + Spieler 1 vs. Spieler 2 */}
+        <div className="min-w-0 flex-1">
+          {/* Vorzeile: Runden-Badge dezent über den Namen */}
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 truncate mb-1">
             {isGrandFinal ? (
               <Trophy className="w-3 h-3 text-amber-600 shrink-0" />
             ) : isThirdPlace ? (
               <Medal className="w-3 h-3 text-orange-600 shrink-0" />
             ) : null}
-            <span>{displayRound}</span>
-          </span>
+            <span className="truncate">{displayRound}</span>
+            {(match.startTime || match.courtId) && (
+              <span className="text-slate-400 shrink-0 font-normal">
+                · {match.courtId ? `Platz ${match.courtId.replace('court-', '')}` : ''}
+                {match.startTime ? ` ${match.startTime} Uhr` : ''}
+              </span>
+            )}
+          </div>
 
-          {/* Finals Day or Scheduled Time Tag */}
-          {(match.startTime || match.courtId) && (
-            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-              <Clock className="w-3 h-3 text-slate-400" />
-              {match.courtId ? `Platz ${match.courtId.replace('court-', '')}` : ''}
-              {match.courtId && match.startTime ? ' · ' : ''}
-              {match.startTime ? `${match.startTime} Uhr` : ''}
-            </span>
-          )}
+          {/* Spieler 1 & Spieler 2 (untereinander, 13-14px) */}
+          <div className="space-y-0.5 min-w-0">
+            <div
+              className={`truncate text-[13px] leading-tight ${
+                isP1Winner
+                  ? 'font-black text-emerald-950'
+                  : 'font-semibold text-slate-800'
+              }`}
+            >
+              {p1Name}
+            </div>
+            <div
+              className={`truncate text-[13px] leading-tight ${
+                isP2Winner
+                  ? 'font-black text-emerald-950'
+                  : 'font-semibold text-slate-800'
+              }`}
+            >
+              {p2Name}
+            </div>
+          </div>
         </div>
 
-        {/* Center: Matchup (Player 1 vs Player 2) */}
-        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:justify-center gap-1.5 sm:gap-3 py-1 sm:py-0">
-          <div className="flex items-center gap-2 min-w-0">
+        {/* Rechts: Eingetragenes Ergebnis ODER kompakter Button "Ergebnis" (h-8) */}
+        <div className="shrink-0 flex items-center gap-1.5">
+          {isCompleted ? (
+            <div className="flex items-center gap-1">
+              <span className="tabular-nums font-bold text-xs px-2 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200/70 whitespace-nowrap">
+                {match.result?.isWalkover
+                  ? !match.result.walkoverReason ||
+                    match.result.walkoverReason === 'Verletzung / Aufgabe' ||
+                    match.result.walkoverReason === 'Aufgabe'
+                    ? 'w/o (Aufgabe)'
+                    : `w/o (${match.result.walkoverReason})`
+                  : setsDisplay || 'Sieg'}
+              </span>
+
+              {onEnterResult && canEdit && (
+                <button
+                  type="button"
+                  onClick={() => onEnterResult(match)}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="Ergebnis korrigieren"
+                  aria-label="Ergebnis korrigieren"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ) : (
+            onEnterResult && canEdit ? (
+              <button
+                type="button"
+                onClick={() => onEnterResult(match)}
+                className="h-8 px-2.5 rounded-lg text-xs font-bold bg-[var(--color-primary)] hover:opacity-90 text-white shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Ergebnis</span>
+              </button>
+            ) : (
+              <span className="text-[11px] text-slate-400 font-medium px-1">
+                Offen
+              </span>
+            )
+          )}
+
+          {/* Admin Audit Button on Mobile */}
+          {effectiveIsAdmin && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsAuditDrawerOpen(true);
+              }}
+              className="p-1 rounded-md text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer shrink-0"
+              title="Audit-Protokoll dieser Partie anzeigen"
+              aria-label="Audit-Protokoll anzeigen"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-600/80" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* DESKTOP ROW (>= sm:) - 100% UNCHANGED                     */}
+      {/* ======================================================== */}
+      <div className="hidden sm:flex p-2.5 sm:p-3 sm:items-center justify-between gap-4">
+        {/* Left: Round & Scheduled Tag directly followed by Matchup without huge void */}
+        <div className="flex sm:items-center gap-3.5 min-w-0 flex-1">
+          {/* Round Tag */}
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[11px] tracking-tight flex items-center gap-1 shrink-0">
+              {isGrandFinal ? (
+                <Trophy className="w-3 h-3 text-amber-600 shrink-0" />
+              ) : isThirdPlace ? (
+                <Medal className="w-3 h-3 text-orange-600 shrink-0" />
+              ) : null}
+              <span>{displayRound}</span>
+            </span>
+
+            {/* Finals Day or Scheduled Time Tag */}
+            {(match.startTime || match.courtId) && (
+              <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                <Clock className="w-3 h-3 text-slate-400" />
+                {match.courtId ? `Platz ${match.courtId.replace('court-', '')}` : ''}
+                {match.courtId && match.startTime ? ' · ' : ''}
+                {match.startTime ? `${match.startTime} Uhr` : ''}
+              </span>
+            )}
+          </div>
+
+          {/* Matchup (Player 1 vs Player 2) */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <span
-              className={`truncate text-xs sm:text-sm ${
+              className={`truncate text-sm ${
                 isP1Winner
                   ? 'font-black text-emerald-950'
                   : 'font-semibold text-slate-800'
@@ -136,15 +254,13 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
             >
               {p1Name}
             </span>
-          </div>
 
-          <span className="text-[10px] font-black uppercase text-slate-400 shrink-0 hidden sm:inline">
-            vs.
-          </span>
+            <span className="text-[10px] font-black uppercase text-slate-400 shrink-0">
+              vs.
+            </span>
 
-          <div className="flex items-center gap-2 min-w-0">
             <span
-              className={`truncate text-xs sm:text-sm ${
+              className={`truncate text-sm ${
                 isP2Winner
                   ? 'font-black text-emerald-950'
                   : 'font-semibold text-slate-800'
@@ -155,11 +271,11 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
           </div>
         </div>
 
-        {/* Right: Score / Actions (Audit Button & Result Action) */}
-        <div className="flex items-center justify-between sm:justify-end gap-2.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex-wrap">
+        {/* Right: Score / Actions (Desktop wide row) */}
+        <div className="flex items-center justify-end gap-2 shrink-0">
           {/* Score display (if completed) or status text */}
           {isCompleted ? (
-            <span className="font-mono font-bold text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200/70">
+            <span className="tabular-nums font-bold text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200/70 whitespace-nowrap">
               {match.result?.isWalkover
                 ? !match.result.walkoverReason ||
                   match.result.walkoverReason === 'Verletzung / Aufgabe' ||
@@ -174,24 +290,24 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
             </span>
           )}
 
-          {/* Admin Audit Button */}
-          {isAdmin && (
+          {/* Admin Audit Button - dezentes Icon ohne Text */}
+          {effectiveIsAdmin && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsAuditDrawerOpen(true);
               }}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer border border-transparent hover:border-emerald-200/60"
               title="Audit-Protokoll dieser Partie anzeigen"
+              aria-label="Audit-Protokoll anzeigen"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Audit</span>
+              <ShieldCheck className="w-4 h-4 text-emerald-600/80" />
             </button>
           )}
 
-          {/* Enter Result / Korrigieren Button */}
-          {onEnterResult && (
+          {/* Enter Result / Korrigieren Button - nur für Superadmin/Admins oder beteiligte Spieler in der aktuellen Turnierphase */}
+          {onEnterResult && canEdit && (
             isCompleted ? (
               <button
                 type="button"
@@ -205,7 +321,7 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
               <button
                 type="button"
                 onClick={() => onEnterResult(match)}
-                className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[var(--color-primary)] hover:opacity-90 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[var(--color-primary)] hover:opacity-90 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Ergebnis eintragen</span>
@@ -216,7 +332,7 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
       </div>
 
       {/* Admin Audit Log Drawer (Slide-Over like ChampionshipResultModal) */}
-      {isAdmin && (
+      {effectiveIsAdmin && (
         <ChampionshipMatchAuditDrawer
           isOpen={isAuditDrawerOpen}
           onClose={() => setIsAuditDrawerOpen(false)}

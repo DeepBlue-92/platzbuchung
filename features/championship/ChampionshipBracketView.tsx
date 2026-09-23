@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Match, Participant, TournamentInstance, TournamentStageConfig } from '../../types/championship';
 import { getDeadlineCountdownInfo, formatEventDate } from '../../utils/championshipScheduling';
+import { isChampionshipAdmin } from '../../utils/championshipPermissions';
 import { ChampionshipMatchCard } from './ChampionshipMatchCard';
 import { User as AppUser } from '../../types';
 
@@ -82,7 +83,7 @@ export const ChampionshipBracketView: React.FC<ChampionshipBracketViewProps> = (
         tournament={tournament}
         users={users}
         currentUser={currentUser}
-        isAdmin={isAdmin ?? (currentUser?.role === 'admin' || currentUser?.role === 'superadmin')}
+        isAdmin={isAdmin ?? isChampionshipAdmin(currentUser)}
         onEnterResult={onMatchClick}
       />
     );

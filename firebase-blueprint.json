@@ -181,6 +181,10 @@
       "schema": { "title": "SystemUpdates", "type": "object", "properties": { "text": { "type": "string" }, "lastUpdated": { "type": "string" }, "updatedBy": { "type": "string" } } },
       "description": "Global master dataset for system-wide updates and changelogs."
     },
+    "system/settings": {
+      "schema": { "title": "GlobalSystemSettings", "type": "object", "properties": { "chatbotEnabled": { "type": "boolean" }, "lastUpdated": { "type": "string" }, "updatedBy": { "type": "string" } } },
+      "description": "Global system configurations including master feature flags like chatbotEnabled for all tenants."
+    },
     "system_settings/{settingId}": {
       "schema": { "title": "SystemSettings", "type": "object", "properties": { "ignoredPairs": { "type": "array" } } },
       "description": "System-level administrative settings including duplicate detection exclusions."

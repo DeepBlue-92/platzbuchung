@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, HelpCircle, Calendar, CheckCircle2, Clock, X, Edit3, ArrowRight, UserCheck } from 'lucide-react';
+import { Trophy, HelpCircle, Calendar, CheckCircle2, Clock, X, Edit3, ArrowRight, UserCheck, ListOrdered } from 'lucide-react';
 import { Group, Match, Participant, TournamentInstance } from '../../types/championship';
 import { calculateGroupStandings } from '../../utils/championshipCalculator';
 import { resolveParticipantDisplayName } from '../../utils/championshipNameResolver';
 import { ChampionshipMatchCard } from './ChampionshipMatchCard';
+import { isChampionshipAdmin } from '../../utils/championshipPermissions';
 import { User } from '../../types';
 
 interface ChampionshipGroupViewProps {
@@ -13,6 +14,7 @@ interface ChampionshipGroupViewProps {
   onEnterResult?: (match: Match) => void;
   currentUser?: User | null;
   users: Record<string, User>;
+  onViewAllMatches?: () => void;
 }
 
 export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
@@ -22,6 +24,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
   onEnterResult,
   currentUser,
   users,
+  onViewAllMatches,
 }) => {
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(
     selectedParticipantId || null
@@ -99,7 +102,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
               className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden"
             >
               {/* Group Header */}
-              <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="px-3.5 py-3 sm:px-5 sm:py-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-primary)]" />
                   <h4 className="font-bold text-slate-900 text-sm tracking-tight">{group.name}</h4>
@@ -110,20 +113,29 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto sm:overflow-visible">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
-                    <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400 bg-slate-50/50">
-                      <th className="py-2.5 px-3 w-10 text-center">#</th>
-                      <th className="py-2.5 px-3 min-w-[140px]">Spieler / Team</th>
-                      <th className="py-2.5 px-1.5 w-11 text-center" title="Gespielte Matches">Sp</th>
-                      <th className="py-2.5 px-1.5 w-10 text-center text-emerald-700" title="Siege">S</th>
-                      <th className="py-2.5 px-1.5 w-10 text-center text-rose-600" title="Niederlagen">N</th>
-                      <th className="py-2.5 px-1.5 w-16 text-center hidden sm:table-cell" title="Satzverhältnis">Sätze</th>
-                      <th className="py-2.5 px-1.5 w-14 text-center font-bold" title="Satzdifferenz">SDiff</th>
-                      <th className="py-2.5 px-1.5 w-20 text-center hidden md:table-cell" title="Spieleverhältnis">Spiele</th>
-                      <th className="py-2.5 px-1.5 w-14 text-center font-bold" title="Gamedifferenz">GDiff</th>
-                      <th className="py-2.5 px-2 w-12 text-center font-black text-slate-900" title="Punkte">Pkt</th>
+                    <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-600 bg-slate-50/80">
+                      <th className="py-2.5 px-2 sm:px-3 w-8 sm:w-10 text-center font-semibold text-slate-600">#</th>
+                      <th className="py-2.5 px-2 sm:px-3 min-w-[120px] sm:min-w-[140px] font-semibold text-slate-600">Spieler / Team</th>
+                      
+                      {/* Mobile-only Bilanz (S:N) */}
+                      <th className="py-2.5 px-1.5 w-16 text-center font-semibold text-slate-700 table-cell sm:hidden" title="Bilanz (Siege : Niederlagen)">
+                        Bilanz
+                      </th>
+
+                      {/* Desktop-only full stat columns */}
+                      <th className="py-2.5 px-1.5 w-11 text-center font-semibold text-slate-600 hidden sm:table-cell" title="Gespielte Matches">Sp</th>
+                      <th className="py-2.5 px-1.5 w-10 text-center font-semibold text-emerald-700 hidden sm:table-cell" title="Siege">S</th>
+                      <th className="py-2.5 px-1.5 w-10 text-center font-semibold text-rose-600 hidden sm:table-cell" title="Niederlagen">N</th>
+                      <th className="py-2.5 px-1.5 w-16 text-center font-semibold text-slate-600 hidden sm:table-cell" title="Satzverhältnis">Sätze</th>
+                      <th className="py-2.5 px-1.5 w-14 text-center font-semibold text-slate-700 hidden sm:table-cell" title="Satzdifferenz">SDiff</th>
+                      <th className="py-2.5 px-1.5 w-20 text-center font-semibold text-slate-600 hidden md:table-cell" title="Spieleverhältnis">Spiele</th>
+                      <th className="py-2.5 px-1.5 w-14 text-center font-semibold text-slate-700 hidden sm:table-cell" title="Gamedifferenz">GDiff</th>
+                      
+                      {/* Points (visible on mobile and desktop) */}
+                      <th className="py-2.5 px-2 w-12 text-center font-bold text-slate-900" title="Punkte">Pkt</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
@@ -144,7 +156,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                           }`}
                           title="Klicken, um nur die Spiele dieses Spielers anzuzeigen"
                         >
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center">
                             <span
                               className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-black ${
                                 isSelected
@@ -158,9 +170,9 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                             </span>
                           </td>
 
-                          <td className="py-3 px-3">
+                          <td className="py-2.5 sm:py-3 px-2 sm:px-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="truncate max-w-[150px] sm:max-w-[200px] text-slate-800 font-bold">
+                              <span className="truncate max-w-[130px] sm:max-w-[200px] text-slate-800 font-bold">
                                 {displayName}
                               </span>
                               {row.participant.withdrawn && (
@@ -176,28 +188,38 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                             </div>
                           </td>
 
-                          <td className="py-3 px-1.5 w-11 text-center font-mono tabular-nums text-slate-500">
+                          {/* Mobile-only Bilanz (S:N) */}
+                          <td className="py-2.5 sm:py-3 px-1.5 w-16 text-center tabular-nums font-bold text-slate-700 table-cell sm:hidden whitespace-nowrap">
+                            <span className="text-emerald-700">{row.wins}</span>
+                            <span className="text-slate-400 font-normal mx-0.5">:</span>
+                            <span className="text-rose-600">{row.losses}</span>
+                          </td>
+
+                          {/* Desktop columns */}
+                          <td className="py-3 px-1.5 w-11 text-center tabular-nums text-slate-500 hidden sm:table-cell">
                             {row.matchesPlayed}
                           </td>
-                          <td className="py-3 px-1.5 w-10 text-center font-mono tabular-nums font-bold text-emerald-600">
+                          <td className="py-3 px-1.5 w-10 text-center tabular-nums font-bold text-emerald-600 hidden sm:table-cell">
                             {row.wins}
                           </td>
-                          <td className="py-3 px-1.5 w-10 text-center font-mono tabular-nums text-slate-400">
+                          <td className="py-3 px-1.5 w-10 text-center tabular-nums text-slate-400 hidden sm:table-cell">
                             {row.losses}
                           </td>
-                          <td className="py-3 px-1.5 w-16 text-center font-mono tabular-nums text-slate-600 hidden sm:table-cell">
-                            {row.setsWon}:{row.setsLost}
+                          <td className="py-3 px-1.5 w-16 text-center tabular-nums text-slate-600 hidden sm:table-cell whitespace-nowrap">
+                            {row.setsWon} : {row.setsLost}
                           </td>
-                          <td className="py-3 px-1.5 w-14 text-center font-mono tabular-nums font-bold text-slate-700">
+                          <td className="py-3 px-1.5 w-14 text-center tabular-nums font-bold text-slate-700 hidden sm:table-cell">
                             {row.setDiff > 0 ? `+${row.setDiff}` : row.setDiff}
                           </td>
-                          <td className="py-3 px-1.5 w-20 text-center font-mono tabular-nums text-slate-600 hidden md:table-cell">
-                            {row.gamesWon}:{row.gamesLost}
+                          <td className="py-3 px-1.5 w-20 text-center tabular-nums text-slate-600 hidden md:table-cell whitespace-nowrap">
+                            {row.gamesWon} : {row.gamesLost}
                           </td>
-                          <td className="py-3 px-1.5 w-14 text-center font-mono tabular-nums font-bold text-slate-700">
+                          <td className="py-3 px-1.5 w-14 text-center tabular-nums font-bold text-slate-700 hidden sm:table-cell">
                             {row.gameDiff > 0 ? `+${row.gameDiff}` : row.gameDiff}
                           </td>
-                          <td className="py-3 px-2 w-12 text-center font-mono tabular-nums font-black text-slate-900 text-sm">
+
+                          {/* Points */}
+                          <td className="py-2.5 sm:py-3 px-2 w-12 text-center tabular-nums font-black text-slate-900 text-sm">
                             {row.points}
                           </td>
                         </tr>
@@ -235,12 +257,12 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
       </div>
 
       {/* Embedded Match List below groups */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-        {/* Header with Title and Reset Filter Button */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3 sm:p-5 space-y-3 sm:space-y-4">
+        {/* Header with Title, Filter Reset, and Alle Begegnungen Link */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 pb-2.5 sm:pb-3 border-b border-slate-100">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base">
+              <h3 className="text-base sm:text-lg font-semibold text-slate-900 tracking-tight">
                 {internalSelectedId
                   ? `Spiele von: ${selectedParticipantName}`
                   : 'Ausstehende & nächste Begegnungen'}
@@ -258,16 +280,31 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
             </p>
           </div>
 
-          {internalSelectedId && (
-            <button
-              type="button"
-              onClick={handleResetFilter}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold rounded-xl transition-colors cursor-pointer self-start sm:self-auto"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Filter zurücksetzen (Alle anzeigen)</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            {internalSelectedId && (
+              <button
+                type="button"
+                onClick={handleResetFilter}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Filter zurücksetzen</span>
+              </button>
+            )}
+
+            {onViewAllMatches && (
+              <button
+                type="button"
+                onClick={onViewAllMatches}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100/90 hover:bg-slate-200/90 rounded-xl transition-all cursor-pointer border border-slate-200/70 shadow-2xs"
+                title="Alle Begegnungen über alle Phasen hinweg ansehen"
+              >
+                <ListOrdered className="w-3.5 h-3.5 text-slate-500" />
+                <span>Alle Begegnungen</span>
+                <ArrowRight className="w-3 h-3 text-slate-400" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Single-Column Match List */}
@@ -276,7 +313,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
             Keine Begegnungen für diesen Filter gefunden.
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2 sm:gap-2.5">
             {displayedMatches.map((match) => (
               <ChampionshipMatchCard
                 key={match.id}
@@ -284,7 +321,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                 tournament={tournament}
                 users={users}
                 currentUser={currentUser}
-                isAdmin={currentUser?.role === 'admin' || currentUser?.role === 'superadmin'}
+                isAdmin={isChampionshipAdmin(currentUser)}
                 onEnterResult={onEnterResult}
               />
             ))}

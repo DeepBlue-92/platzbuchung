@@ -57,6 +57,8 @@ export interface Person {
   avatarUrl?: string | null; // WebP komprimiertes Profilbild (< 25 KB, permanent gecached)
   avatarIcon?: string | null; // Zero-Bandwidth Vektor-Icon ID (z.B. "tennis-ball", "racket", "trophy")
   onboarding_pending?: boolean; // Indicates if member onboarding is required
+  showAiAssistant?: boolean; // Club-Assistent ('Ace') aktivieren (Default: true)
+  has_seen_ace_welcome?: boolean; // Whether the user has seen the Ace welcome callout bubble
 }
 
 export type OnboardingFieldPermission = "HIDDEN" | "READ_ONLY" | "EDITABLE";
@@ -373,4 +375,10 @@ export interface BookingFeeCalculationResult {
   ratePerUnitEuro: number;
   unitLabel: string;
   description: string;
+}
+
+export interface GlobalSystemSettings {
+  chatbotEnabled?: boolean;
+  lastUpdated?: string;
+  updatedBy?: string;
 }
