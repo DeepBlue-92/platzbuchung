@@ -159,9 +159,10 @@ Administratoren können Plätze jederzeit für die allgemeine Buchung sperren:
         id: 'veranstaltungen-turniere',
         title: 'Veranstaltungen & Events anlegen',
         summary: 'Club-Turniere, Schleifchenturniere und Sommerfeste mit Anmeldefristen und Audit-Log.',
-        keywords: ['veranstaltung', 'event', 'turnier', 'anmeldung', 'audit', 'teilnehmer'],
+        keywords: ['veranstaltung', 'event', 'turnier', 'anmeldung', 'audit', 'teilnehmer', 'header'],
         content: `### Event-Management direkt auf der Veranstaltungs-Seite
 
+- **Einheitlicher Bento-Header:** Die Veranstaltungsansicht verfügt über eine einheitliche Kopfzeile mit Icon (Party-Popper) und Untertitel analog zur Rangliste. Administratoren finden direkt im Header den Schnellzugriff **„Neues Event“**.
 - **Neues Event anlegen:** Klicke auf der Veranstaltungs-Seite auf **„Neues Event“**. Es öffnet sich der Slider zur Eingabe von Titel, Datum, Beschreibung, maximaler Teilnehmerzahl und Anmeldeschluss.
 - **Kommentarfeld bei Anmeldung:** Ermöglicht es Spielern, Essenswünsche, T-Shirt-Größen oder Leistungsklassen anzugeben.
 - **Audit-Log (Revisionssicher):** Über den Button **„Audit“** können Administratoren lückenlos nachvollziehen, wann sich welches Mitglied an- oder abgemeldet hat.
@@ -176,10 +177,11 @@ Administratoren können Plätze jederzeit für die allgemeine Buchung sperren:
 
 Im Bereich **Einstellungen ➔ Meisterschaft**:
 - **Turnier-Vorlagen (In-Page-Editor):** Erstelle wiederverwendbare Turnierformate (z. B. *Einzel Herren*, *Doppel Damen*).
-- **Phasen-Pipeline:** Konfiguriere chronologisch von oben nach unten:
-  1. *Gruppenphase:* Anzahl Gruppen und Spieler pro Gruppe.
-  2. *K.-o.-Stufen:* Achtelfinale, Viertelfinale, Halbfinale mit jeweils eigener Frist (*„Zu spielen bis“*).
-  3. *Finaltag:* Modulare Ausspielung aller Plätze (Platz 1 bis 8) mit konkretem Event-Datum.
+- **Phasen-Pipeline & UX:** Konfiguriere chronologisch von oben nach unten:
+  1. *Gruppenphase:* Anzahl Gruppen und Spieler pro Gruppe. Die Tabelle führt Sätze und Spiele inklusive Differenz kompakt zusammen (\`4:2 (+2)\`, \`36:24 (+12)\`).
+  2. *K.-o.-Stufen:* Halbfinale mit eigener Frist (*„Zu spielen bis“*). In der Teilnehmeransicht werden Partien fokussiert je Phase unter der Überschrift *„Begegnungen [Phasenname]“* (z. B. *Begegnungen Halbfinale*) dargestellt.
+  3. *Finaltag:* Modulare Ausspielung aller Plätze (Großes Finale um Platz 1 & 2, Kleines Finale um Platz 3) mit konkretem Event-Datum (*„Begegnungen Endrunde / Finaltag“*).
+  4. *Performante Animationen:* Der Wechsel zwischen den Phasen sowie zwischen Ranglisten-Kategorien erfolgt über eine hardwarebeschleunigte 150-ms-Fade-Animation (AnimatePresence), die harte Übergänge vermeidet und gleichzeitig sofort reagiert.
 - **Vorlagenschutz:** Vorlagen, die in laufenden Meisterschaften aktiv sind, werden schreibgeschützt gesperrt, um Ergebnisverfälschungen zu verhindern.`
       },
       {
@@ -274,14 +276,15 @@ Vereine passen Pflichtstunden oder Stundensätze gelegentlich an (z. B. Erhöhun
       },
       {
         id: 'club-branding-design',
-        title: 'Club-Branding, Farbwelten & Vereinslogo',
-        summary: 'Anpassung von Primär- und Akzentfarben, Logos, Favicon und Begrüßungsbannern.',
-        keywords: ['branding', 'design', 'farben', 'logo', 'banner', 'anpassung', 'verein'],
-        content: `### Visuelle Identität des Vereins
+        title: 'Club-Branding, Farbwelten & Desktop Bento-Layout',
+        summary: 'Anpassung von Primär- und Akzentfarben, Logos, Favicon, Begrüßungsbannern und Bento-Grid Spacing.',
+        keywords: ['branding', 'design', 'farben', 'logo', 'banner', 'anpassung', 'verein', 'bento', 'spacing', 'raster'],
+        content: `### Visuelle Identität & Desktop Bento-Layout
 
 Unter **Einstellungen ➔ Design & Layout**:
 - **Farben:** Frei wählbare Primär- und Akzentfarben (inklusive automatischer Kontrastüberprüfung für Buttons und Menüleisten).
 - **Logos & Banner:** Upload für Vereinswappen (Header), Favicon (Browser-Tab) sowie stimmungsvolle Hintergrundbilder für die Anmeldeseite.
+- **Bento-Grid & Spacing-Harmonisierung (Desktop):** Alle Hauptansichten und Administrationsbereiche folgen einheitlichen Design-Tokens (horizontale und vertikale Abstände einheitlich 16–20px, Sektionsabstände 16–24px), sodass Dashboards und Sidebars ohne überbreite Lücken kompakt und übersichtlich wirken.
 - **Multi-Tenant URL:** Automatische Erkennung des Vereinsnamens anhand der Subdomain oder des URL-Pfads.`
       }
     ]

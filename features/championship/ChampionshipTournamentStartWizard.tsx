@@ -84,6 +84,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
   });
   const [stageDeadlines, setStageDeadlines] = useState<Record<string, string>>({});
   const [stageDeadlineTypes, setStageDeadlineTypes] = useState<Record<string, 'deadline' | 'date'>>({});
+  const [useRankings, setUseRankings] = useState<boolean>(false);
 
   // Step 3: Participants & Groups
   const [searchMemberQuery, setSearchMemberQuery] = useState<string>('');
@@ -99,6 +100,9 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
       setTournamentTitle(
         `Clubmeisterschaft ${year} - ${selectedTemplate.discipline === 'doubles' ? 'Doppel' : 'Einzel'}`
       );
+      if (selectedTemplate.useRankings !== undefined) {
+        setUseRankings(selectedTemplate.useRankings);
+      }
 
       // Default deadlines & types for each stage in this tournament instance (dynamically calculated for this season)
       const deadlines: Record<string, string> = {};
@@ -346,6 +350,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
         matches: instanceMatches,
         stageDeadlines,
         stageDeadlineTypes,
+        useRankings,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         status: 'active',
@@ -427,6 +432,25 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
         <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
         <span>Die Meisterschaft wird Benutzern vom Start- bis zum Enddatum angezeigt.</span>
       </p>
+
+      {/* Rangliste berücksichtigen Option */}
+      <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+        <div>
+          <span className="text-xs font-bold text-slate-900 block">Rangliste berücksichtigen</span>
+          <span className="text-[11px] text-slate-500 block mt-0.5">
+            Blendet in den Gruppen- und K.-o.-Tabellen neben den Spielern ihre aktuelle Vereinsposition (#1, #2, ...) ein.
+          </span>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={useRankings}
+            onChange={(e) => setUseRankings(e.target.checked)}
+            className="sr-only peer"
+          />
+          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
+        </label>
+      </div>
 
       <hr className="border-slate-100" />
 
@@ -751,7 +775,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
               </div>
 
               {/* Two column layout: Left = Search Members, Right = Groups & Assigned */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5">
                 {/* Left: Member Directory */}
                 <div className="lg:col-span-5 p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col min-h-[440px]">
                   <div className="flex items-center justify-between mb-3">

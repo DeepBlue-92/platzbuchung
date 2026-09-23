@@ -38,12 +38,13 @@ export const USER_HELP_CATEGORIES: HelpCategory[] = [
         id: 'tages-vs-wochenplan',
         title: 'Tagesplan vs. Wochenplan (Mobil vs. Computer)',
         summary: 'Optimale Übersicht auf Smartphone und Desktop-Bildschirm.',
-        keywords: ['ansicht', 'smartphone', 'mobil', 'wochenplan', 'tagesplan', 'wechseln'],
-        content: `### Flexible Kalenderansichten
+        keywords: ['ansicht', 'smartphone', 'mobil', 'wochenplan', 'tagesplan', 'wechseln', 'bento'],
+        content: `### Flexible Kalenderansichten & Desktop Bento-Design
 
 - **Auf dem Smartphone / Mobilgerät:** Das System öffnet standardmäßig den übersichtlichen **Tagesplan**. Hier siehst du alle Plätze nebeneinander im direkten Stundenraster von morgens bis abends.
-- **Am Computer / Desktop:** Hier startet standardmäßig der **Wochenplan**, der dir die gesamten 7 Wochentage auf einen Blick darstellt.
-- **Ansicht manuell wechseln:** Du kannst jederzeit über die Menüleiste zwischen **Tagesansicht** und **Wochenansicht** umschalten oder über den Datumswähler beliebige Tage in der Zukunft ansteuern.`
+- **Am Computer / Desktop:** Hier startet standardmäßig der **Wochenplan**, der dir die gesamten 7 Wochentage auf einen Blick darstellt. Alle Hauptseiten (Hobbyliga, Platzbuchung, Veranstaltungen, Rangliste) sind in einem bündigen Bento-Grid-Layout mit einheitlichen, gleichmäßigen Abständen (16–20px) aufgebaut.
+- **Ansicht manuell wechseln:** Du kannst jederzeit über die Menüleiste zwischen **Tagesansicht** und **Wochenansicht** umschalten oder über den Datumswähler beliebige Tage in der Zukunft ansteuern.
+- **Wischgesten (Mobil):** Auf Smartphones und Tablets kannst du einfach nach links oder rechts wischen, um zuverlässig und flüssig zum nächsten bzw. vorherigen Tag oder zur nächsten bzw. vorherigen Woche zu navigieren. Auch im Monatskalender kannst du durch einfaches Wischen komfortabel zwischen den Monaten blättern.`
       },
       {
         id: 'stornierung',
@@ -143,6 +144,18 @@ Wenn du an der Hobbyliga teilnimmst:
 - Im Buchungs-Slider erscheint ein eigener Reiter **„Hobbyliga-Spiel“**.
 - Wähle deinen Hobbyliga-Gegner direkt aus der Ligaliste aus.
 - Nach dem Spiel tragt ihr das Ergebnis direkt im Hobbyliga-Bereich ein. Das System berechnet die Punkte nach offiziellem Schlüssel und aktualisiert die Tabelle.`
+      },
+      {
+        id: 'veranstaltungen-teilnahme',
+        title: 'Veranstaltungen & Club-Turniere ansehen & anmelden',
+        summary: 'Turniere, Schleifchenturniere und Club-Feste mit einem Klick beitreten.',
+        keywords: ['veranstaltung', 'event', 'turnier', 'anmelden', 'austragen', 'schleifchenturnier'],
+        content: `### Club-Veranstaltungen im Überblick
+
+- **Kopfzeile & Übersicht:** Der Bereich **Veranstaltungen** bietet eine einheitliche Kopfzeile mit Party-Icon und Untertitel („Anmeldung zu Turnieren und anderen Events“) analog zur Rangliste. Das Hilfebanner mit Bedienungshinweisen ist direkt über der Kopfzeile platziert.
+- **Teilnahme anmelden:** Klicke bei einem anstehenden Event auf den Button **„Anmelden“**, um deinen Namen auf die Teilnehmerliste zu setzen.
+- **Wieder austragen:** Falls du verhindert bist, klicke erneut auf **„Abmelden“**, um deinen Platz für andere Mitglieder freizugeben.
+- **Kommentare & Wünsche:** Bei vielen Events steht dir ein Notizfeld zur Verfügung (z. B. für Spielstärken oder Speisewünsche).`
       }
     ]
   },
@@ -239,8 +252,12 @@ Unten rechts findest du unseren interaktiven Club-Assistenten **ACE** (das Tenni
 
 Die Vereinsmeisterschaft wird direkt über die Web-App organisiert:
 - **Zugang:** Klicke in der Menüleiste auf das Pokal-Symbol **„Meisterschaft“** (auf dem Smartphone unter *„Weiteres“*).
-- **Phasen-Ablauf:** Meist startet das Turnier mit einer **Gruppenphase** (z. B. 4 Spieler pro Gruppe, jeder gegen jeden), gefolgt von der **K.-o.-Endrunde** (Halbfinale und Finale).
-- **Turnier-Timeline:** Ganz oben visualisiert ein Stepper den Gesamtfortschritt aller Phasen mit Fristen und Deadlines.`
+- **Phasen-Navigation:** Über die nummerierten Bento-Karten oben wechselst du gezielt zwischen den Phasen:
+  1. **Gruppenphase:** Tabellenstände und Gruppenpartien.
+  2. **Halbfinale:** Die qualifizierten Halbfinal-Partien im direkten Duell.
+  3. **Endrunde / Finaltag:** Großes Finale und Platzierungsspiele (z. B. Spiel um Platz 3).
+- **Fokussierte Ansicht:** Die Ansicht filtert streng nach dem ausgewählten Phasen-Tab, sodass immer nur die aktuell relevanten Matches ohne visuellen Ballast angezeigt werden. Der Wechsel zwischen den Phasen (sowie zwischen den Ranglisten-Kategorien) erfolgt über eine sanfte, extrem schnelle Verblassen-Animation (150 ms) für ein flüssiges Nutzungserlebnis ohne störende Wartezeiten.
+- **Phasenspezifische Begegnungen:** Unterhalb der Tabelle bzw. der Tabs findest du direkt die Partien unter der Überschrift **„Begegnungen [Name der Phase]“** (z. B. *Begegnungen Gruppenphase*, *Begegnungen Halbfinale*, *Begegnungen Endrunde / Finaltag*). Ein Klick auf eine Zeile in der Tabelle filtert die Begegnungen gezielt auf die Partien des ausgewählten Spielers.`
       },
       {
         id: 'mein-status-meisterschaften',
@@ -262,7 +279,7 @@ Sobald du für eine Meisterschaft eingeteilt bist, siehst du ganz oben deine per
         content: `### Spielergebnis erfassen
 
 Nachdem ihr euer Match beendet habt:
-1. Öffne die Meisterschaftsseite und klicke bei deiner Partie auf **„Ergebnis eintragen“**.
+1. Öffne die Meisterschaftsseite und klicke bei deiner Partie auf **„Ergebnis eintragen“** (oder klicke einfach direkt auf die Bento-Spielkarte). Der grüne Hover-Rahmen und der Klick-Cursor werden nur angezeigt, wenn du zur Ergebniseingabe für diese Partie berechtigt bist.
 2. Trage die Games für Satz 1 und Satz 2 ein (z. B. 6:4, 3:6).
 3. Bei Satzgleichstand (1:1 Sätze) wird der 3. Satz als **Match-Tiebreak bis 10 Punkte** ausgetragen und eingetragen (z. B. 10:7).
 4. Klicke auf **„Ergebnis speichern“**.
@@ -272,14 +289,23 @@ Nachdem ihr euer Match beendet habt:
         id: 'tabellenwertung-kriterien',
         title: 'Tabellenwertung & Tie-Break-Kriterien',
         summary: 'Wer kommt weiter bei Punktgleichheit in der Gruppe?',
-        keywords: ['tabelle', 'punktgleich', 'kriterien', 'direkter vergleich', 'satzdifferenz'],
-        content: `### Offizielle Reihenfolge bei Punktgleichheit
+        keywords: ['tabelle', 'punktgleich', 'kriterien', 'direkter vergleich', 'satzdifferenz', 'spalten'],
+        content: `### Tabellenspalten & Kriterien bei Punktgleichheit
+
+Die Gruppentabelle stellt alle Kennzahlen kompakt dar:
+- **#:** Tabellenplatz (Top-Plätze für K.-o.-Runde sind grün hervorgehoben).
+- **Spieler / Team:** Name des Teilnehmers.
+- **SP (Gespielte Partien):** Anzahl ausgetragener Matches.
+- **S (Siege) & N (Niederlagen):** Gewonnene und verlorene Partien.
+- **SÄTZE:** Satzverhältnis mit Satzdifferenz in Klammern, z. B. \`4:2 (+2)\`.
+- **SPIELE:** Spieleverhältnis mit Spieldifferenz in Klammern, z. B. \`36:24 (+12)\`.
+- **PKT (Punkte):** Gesamtzahl erreichter Punkte.
 
 Stehen nach Abschluss der Gruppenphase zwei oder mehr Spieler punktgleich, entscheidet automatisch die offizielle DTB-Kaskade:
 1. **Anzahl der Siege**
 2. **Direkter Vergleich** (bei zwei punktgleichen Spielern)
 3. **Satzdifferenz** (gewonnene minus verlorene Sätze)
-4. **Game- bzw. Spieledifferenz** (gewonnene minus verlorene Spiele)
+4. **Spieldifferenz** (gewonnene minus verlorene Spiele)
 5. **Erzielte Spiele gesamt**`
       }
     ]

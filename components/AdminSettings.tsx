@@ -28,7 +28,6 @@ import {
   saveClearBookings,
   listenToArbeitseinsaetze,
   saveArbeitseinsatz,
-  resetOnboardingHintsForAllUsers,
   isUsernameTakenGlobally,
 } from "../services/db";
 import { calculateAge } from "../utils/playerHelper";
@@ -953,7 +952,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     role: Role.USER,
     gender: "m",
     showContactInfo: true,
-    show_onboarding_hints: true,
   });
   const [showUserForm, setShowUserForm] = useState(false);
   const [inlineEditingUserId, setInlineEditingUserId] = useState<string | null>(
@@ -2325,7 +2323,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       is_placeholder_email: !!editingUser.is_placeholder_email,
       phone: editingUser.phone?.trim() || "",
       showContactInfo: editingUser.showContactInfo !== false,
-      show_onboarding_hints: editingUser.show_onboarding_hints !== false,
       onboarding_pending: editingUser.onboarding_pending !== undefined ? !!editingUser.onboarding_pending : (existingUser ? !!existingUser.onboarding_pending : (settings.club_onboarding_settings?.auto_enable_for_new_users !== false)),
       isSuspended: !!editingUser.isSuspended,
       hauptAdmin: (() => {
@@ -2364,7 +2361,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         phone: "",
         birthDate: "",
         showContactInfo: true,
-        show_onboarding_hints: true,
         isSuspended: false,
       });
       setShowUserForm(false);
@@ -2491,7 +2487,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
               phone,
               gender,
               birthDate,
-              show_onboarding_hints: true,
             });
           }
         }
@@ -3033,7 +3028,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   }, [sortedAndFilteredUsers, userPage]);
 
   return (
-    <div className="w-full space-y-8 lg:animate-in lg:fade-in lg:duration-500 pb-6 lg:pb-10">
+    <div className="w-full space-y-4 lg:space-y-6 lg:animate-in lg:fade-in lg:duration-500 pb-6 lg:pb-8">
       <div className="transition-all duration-300 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80">
         {/* Upper Dashboard header area */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-0 md:gap-4 mb-3 pb-3 md:mb-6 md:pb-6 border-b border-slate-100">
@@ -3124,8 +3119,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             >
               {/* TAB 1: ALLGEMEIN */}
               {currentTab === "allgemein" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
                     {/* Modules Segment */}
                     <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
                       <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
@@ -3388,8 +3383,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB: ARBEITSEINSÄTZE */}
               {currentTab === "arbeitseinsaetze" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
                     {/* Einstellungen */}
                     <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
                       <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
@@ -3746,8 +3741,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB 2: BUCHUNGS-REGELN */}
               {currentTab === "rules" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
                     {/* Rule Limits Segment */}
                     <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
                       <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
@@ -4201,7 +4196,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB: SPERREN */}
               {currentTab === "sperren" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-slate-200/80 gap-4 shadow-sm">
                     <div className="flex-1 flex flex-col justify-center">
                       <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2 text-[var(--color-primary)]">
@@ -4241,7 +4236,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-8 w-full">
+                  <div className="flex flex-col gap-4 lg:gap-5 w-full">
                     {/* LISTING COLUMN */}
                     <div className="space-y-6 w-full">
                       {/* Category 1: Sperren & Öffnungszeiten */}
@@ -5088,8 +5083,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB 3: LAYOUT & NEWS */}
               {currentTab === "layout" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
                     {/* Branding configuration fields */}
                     <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
                       <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
@@ -6097,7 +6092,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB 4: BENUTZER (Spielerverwaltung) */}
               {currentTab === "users" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
                   {/* Member List & Search */}
                   <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
@@ -6128,7 +6123,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             phone: "",
                             birthDate: "",
                             showContactInfo: true,
-                            show_onboarding_hints: true,
                             isSuspended: false,
                           });
                           setInlineEditingUserId(null);
@@ -6455,27 +6449,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <label className="flex items-center gap-3 cursor-pointer group select-none">
                               <input
                                 type="checkbox"
-                                checked={editingUser.show_onboarding_hints !== false}
-                                onChange={(e) =>
-                                  setEditingUser({
-                                    ...editingUser,
-                                    show_onboarding_hints: e.target.checked,
-                                  })
-                                }
-                                className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                              />
-                              <div>
-                                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
-                                  Tipps anzeigen
-                                </span>
-                                <span className="text-[10px] text-slate-400 block font-medium">
-                                  Hilfreiche Onboarding-Hinweise und Bedienungstipps in der App einblenden
-                                </span>
-                              </div>
-                            </label>
-                            <label className="flex items-center gap-3 cursor-pointer group select-none">
-                              <input
-                                type="checkbox"
                                 id="user-form-onboarding-pending"
                                 checked={!!editingUser.onboarding_pending}
                                 onChange={(e) =>
@@ -6569,7 +6542,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             phone: "",
                                             birthDate: "",
                                             showContactInfo: true,
-                                            show_onboarding_hints: true,
                                             isSuspended: false,
                                           });
                                           setShowUserForm(false);
@@ -7060,27 +7032,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     <label className="flex items-center gap-3 cursor-pointer group select-none">
                                       <input
                                         type="checkbox"
-                                        checked={editingUser.show_onboarding_hints !== false}
-                                        onChange={(e) =>
-                                          setEditingUser({
-                                            ...editingUser,
-                                            show_onboarding_hints: e.target.checked,
-                                          })
-                                        }
-                                        className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                      />
-                                      <div>
-                                        <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
-                                          Tipps anzeigen
-                                        </span>
-                                        <span className="text-[10px] text-slate-400 block font-medium">
-                                          Hilfreiche Onboarding-Hinweise und Bedienungstipps in der App einblenden
-                                        </span>
-                                      </div>
-                                    </label>
-                                    <label className="flex items-center gap-3 cursor-pointer group select-none">
-                                      <input
-                                        type="checkbox"
                                         id="inline-user-onboarding-pending"
                                         checked={!!editingUser.onboarding_pending}
                                         onChange={(e) =>
@@ -7305,7 +7256,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     setEditingUser({
                                       ...u,
                                       showContactInfo: u.showContactInfo !== false,
-                                      show_onboarding_hints: u.show_onboarding_hints !== false,
                                       onboarding_pending: !!u.onboarding_pending,
                                       gender: u.gender || "m",
                                     });
@@ -7398,30 +7348,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           >
                             Muster Herunterladen{" "}
                             <i className="fa-solid fa-download text-orange-500"></i>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (window.confirm("Möchtest du die Onboarding-Tipps für ALLE Benutzer wieder aktivieren?")) {
-                                try {
-                                  await resetOnboardingHintsForAllUsers(currentClubId);
-                                  const updatedUsers = { ...users };
-                                  Object.keys(updatedUsers).forEach((k) => {
-                                    updatedUsers[k] = { ...updatedUsers[k], show_onboarding_hints: true };
-                                  });
-                                  onUpdateUsers(updatedUsers);
-                                  alert("Onboarding-Tipps wurden für alle Benutzer erfolgreich zurückgesetzt!");
-                                } catch (e) {
-                                  console.error(e);
-                                  alert("Fehler beim Zurücksetzen der Onboarding-Tipps.");
-                                }
-                              }
-                            }}
-                            className="text-emerald-800 uppercase border-b-2 border-emerald-500 hover:bg-emerald-50 px-2.5 py-1.5 transition-colors flex items-center gap-1.5 rounded-lg text-sm font-medium cursor-pointer"
-                            title="Aktiviert die Tipps auf Platzbuchung, Events und Arbeitseinsätzen für alle Benutzer erneut"
-                          >
-                            Onboarding-Tipps zurücksetzen{" "}
-                            <i className="fa-solid fa-lightbulb text-emerald-600"></i>
                           </button>
                         </div>
                       </div>
@@ -7534,7 +7460,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB 5: DATENVERWALTUNG */}
               {currentTab === "database" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
                   {/* EINZELNE BUCHUNGEN VERWALTEN (APPOINTMENTS MANAGER) */}
                   <div className="w-full bg-slate-50 border border-slate-200 p-6 sm:p-8 rounded-[1.25rem] space-y-6 shadow-none">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -8563,7 +8489,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       Konfigurieren Sie öffentliche, live aktualisierte Schnittstellen für Ihre Platzbelegung von der letzten Woche bis unbegrenzt in die Zukunft. Sobald eine Buchung im Kalender eingetragen oder geändert wird, aktualisieren sich diese Feeds vollkommen automatisch in Echtzeit.
                     </p>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-left">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 text-left">
                       {/* OPTION 1: ANONYMISED FEED */}
                       <div className="bg-white p-6 rounded-2xl border border-slate-200/60 flex flex-col space-y-5 shadow-sm">
                         <div className="space-y-3">
@@ -8826,7 +8752,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB: VERANSTALTUNGEN */}
               {currentTab === "tournaments" && (
-                <div className="space-y-8 animate-in fade-in duration-300">
+                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-slate-200/80 gap-4 shadow-sm">
                     <div>
                       <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2 text-[var(--color-primary)]">
@@ -8841,7 +8767,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
                     {/* FORM COLUMN */}
                     <div className="lg:col-span-1 space-y-6">
                       <form

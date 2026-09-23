@@ -3,9 +3,10 @@ import { Trophy, HelpCircle, Calendar, CheckCircle2, Clock, X, Edit3, ArrowRight
 import { Group, Match, Participant, TournamentInstance } from '../../types/championship';
 import { calculateGroupStandings } from '../../utils/championshipCalculator';
 import { resolveParticipantDisplayName } from '../../utils/championshipNameResolver';
+import { getParticipantRanking } from '../../utils/championshipRankings';
 import { ChampionshipMatchCard } from './ChampionshipMatchCard';
 import { isChampionshipAdmin } from '../../utils/championshipPermissions';
-import { User } from '../../types';
+import { User, RankingState } from '../../types';
 
 interface ChampionshipGroupViewProps {
   tournament: TournamentInstance;
@@ -14,7 +15,9 @@ interface ChampionshipGroupViewProps {
   onEnterResult?: (match: Match) => void;
   currentUser?: User | null;
   users: Record<string, User>;
+  rankings?: RankingState | null;
   onViewAllMatches?: () => void;
+  selectedStageId?: string | null;
 }
 
 export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
@@ -24,7 +27,9 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
   onEnterResult,
   currentUser,
   users,
+  rankings,
   onViewAllMatches,
+  selectedStageId,
 }) => {
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(
     selectedParticipantId || null
@@ -36,7 +41,10 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
     }
   }, [selectedParticipantId]);
 
-  const groupStage = tournament.stages.find((s) => s.type === 'group');
+  const groupStage =
+    (selectedStageId ? tournament.stages?.find((s) => s.id === selectedStageId) : null) ||
+    tournament.stages?.find((s) => s.type === 'group');
+  const phaseName = groupStage?.name || 'Gruppenphase';
   const advancingSlots = groupStage?.advancingPerGroup ?? 2;
 
   const handleRowClick = (participantId: string) => {
@@ -84,9 +92,9 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-5">
       {/* Group Tables Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
         {tournament.groups.map((group) => {
           const standings = calculateGroupStandings(
             group,
@@ -104,7 +112,6 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
               {/* Group Header */}
               <div className="px-3.5 py-3 sm:px-5 sm:py-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-primary)]" />
                   <h4 className="font-bold text-slate-900 text-sm tracking-tight">{group.name}</h4>
                 </div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -114,34 +121,35 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
 
               {/* Table */}
               <div className="overflow-x-auto sm:overflow-visible">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-[13px]">
                   <thead>
-                    <tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-600 bg-slate-50/80">
-                      <th className="py-2.5 px-2 sm:px-3 w-8 sm:w-10 text-center font-semibold text-slate-600">#</th>
-                      <th className="py-2.5 px-2 sm:px-3 min-w-[120px] sm:min-w-[140px] font-semibold text-slate-600">Spieler / Team</th>
+                    <tr className="border-b border-slate-200 text-xs sm:text-[13px] font-normal uppercase tracking-wider text-slate-600 bg-slate-50/80">
+                      <th className="py-2.5 px-2 sm:px-3 w-8 sm:w-10 text-center font-normal text-slate-600">#</th>
+                      <th className="py-2.5 px-2 sm:px-3 min-w-[120px] sm:min-w-[140px] font-normal text-slate-600">Spieler / Team</th>
                       
                       {/* Mobile-only Bilanz (S:N) */}
-                      <th className="py-2.5 px-1.5 w-16 text-center font-semibold text-slate-700 table-cell sm:hidden" title="Bilanz (Siege : Niederlagen)">
+                      <th className="py-2.5 px-1.5 w-16 text-center font-normal text-slate-600 table-cell sm:hidden" title="Bilanz (Siege : Niederlagen)">
                         Bilanz
                       </th>
 
                       {/* Desktop-only full stat columns */}
-                      <th className="py-2.5 px-1.5 w-11 text-center font-semibold text-slate-600 hidden sm:table-cell" title="Gespielte Matches">Sp</th>
-                      <th className="py-2.5 px-1.5 w-10 text-center font-semibold text-emerald-700 hidden sm:table-cell" title="Siege">S</th>
-                      <th className="py-2.5 px-1.5 w-10 text-center font-semibold text-rose-600 hidden sm:table-cell" title="Niederlagen">N</th>
-                      <th className="py-2.5 px-1.5 w-16 text-center font-semibold text-slate-600 hidden sm:table-cell" title="Satzverhältnis">Sätze</th>
-                      <th className="py-2.5 px-1.5 w-14 text-center font-semibold text-slate-700 hidden sm:table-cell" title="Satzdifferenz">SDiff</th>
-                      <th className="py-2.5 px-1.5 w-20 text-center font-semibold text-slate-600 hidden md:table-cell" title="Spieleverhältnis">Spiele</th>
-                      <th className="py-2.5 px-1.5 w-14 text-center font-semibold text-slate-700 hidden sm:table-cell" title="Gamedifferenz">GDiff</th>
+                      <th className="py-2.5 px-1.5 w-11 text-center font-normal text-slate-600 hidden sm:table-cell" title="Gespielte Partien">SP</th>
+                      <th className="py-2.5 px-1.5 w-10 text-center font-normal text-slate-600 hidden sm:table-cell" title="Siege">S</th>
+                      <th className="py-2.5 px-1.5 w-10 text-center font-normal text-slate-600 hidden sm:table-cell" title="Niederlagen">N</th>
+                      <th className="py-2.5 px-2 min-w-[80px] text-center font-normal text-slate-600 hidden sm:table-cell" title="Gewonnene und verlorene Sätze">SÄTZE</th>
+                      <th className="py-2.5 px-2 min-w-[88px] text-center font-normal text-slate-600 hidden md:table-cell" title="Gewonnene und verlorene Spiele">SPIELE</th>
                       
                       {/* Points (visible on mobile and desktop) */}
-                      <th className="py-2.5 px-2 w-12 text-center font-bold text-slate-900" title="Punkte">Pkt</th>
+                      <th className="py-2.5 px-2 w-12 text-center font-normal text-slate-600" title="Punkte">PKT</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
+                  <tbody className="divide-y divide-slate-100 font-normal">
                     {standings.map((row) => {
                       const isSelected = internalSelectedId === row.participantId;
                       const displayName = resolveParticipantDisplayName(row.participant, users);
+                      const rankPos = tournament.useRankings
+                        ? getParticipantRanking(row.participantId, tournament, rankings, users)
+                        : null;
 
                       return (
                         <tr
@@ -149,39 +157,46 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                           onClick={() => handleRowClick(row.participantId)}
                           className={`transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-emerald-100/80 font-bold border-l-4 border-emerald-600 shadow-xs'
+                              ? 'bg-emerald-100/70 border-l-4 border-emerald-600 shadow-xs'
                               : row.isAdvancing
-                              ? 'bg-emerald-50/25 hover:bg-emerald-50/60'
+                              ? 'bg-emerald-50/40 hover:bg-emerald-50/70'
                               : 'hover:bg-slate-50'
                           }`}
                           title="Klicken, um nur die Spiele dieses Spielers anzuzeigen"
                         >
                           <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center">
-                            <span
-                              className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-black ${
-                                isSelected
-                                  ? 'bg-emerald-700 text-white shadow-xs'
-                                  : row.isAdvancing
-                                  ? 'bg-emerald-500 text-white shadow-xs'
-                                  : 'text-slate-400'
-                              }`}
-                            >
-                              {row.rank}
-                            </span>
+                            <div className="flex items-center justify-center">
+                              <span
+                                className={`inline-flex items-center justify-center w-6 h-6 min-w-[24px] min-h-[24px] rounded-full text-[13px] sm:text-sm font-normal transition-colors ${
+                                  row.isAdvancing
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : isSelected
+                                    ? 'text-slate-800'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {row.rank}
+                              </span>
+                            </div>
                           </td>
 
                           <td className="py-2.5 sm:py-3 px-2 sm:px-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="truncate max-w-[130px] sm:max-w-[200px] text-slate-800 font-bold">
+                              <span className="truncate max-w-[130px] sm:max-w-[200px] text-slate-800 font-normal text-[13.5px] sm:text-[14px]">
                                 {displayName}
                               </span>
+                              {tournament.useRankings && rankPos && (
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shrink-0">
+                                  #{rankPos}
+                                </span>
+                              )}
                               {row.participant.withdrawn && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-normal bg-amber-100 text-amber-800 border border-amber-300">
                                   Ausgeschieden
                                 </span>
                               )}
                               {row.participant.seed && (
-                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-normal bg-slate-100 text-slate-600 border border-slate-200">
                                   [{row.participant.seed}]
                                 </span>
                               )}
@@ -189,37 +204,37 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                           </td>
 
                           {/* Mobile-only Bilanz (S:N) */}
-                          <td className="py-2.5 sm:py-3 px-1.5 w-16 text-center tabular-nums font-bold text-slate-700 table-cell sm:hidden whitespace-nowrap">
+                          <td className="py-2.5 sm:py-3 px-1.5 w-16 text-center tabular-nums text-slate-700 table-cell sm:hidden whitespace-nowrap text-[13.5px]">
                             <span className="text-emerald-700">{row.wins}</span>
                             <span className="text-slate-400 font-normal mx-0.5">:</span>
                             <span className="text-rose-600">{row.losses}</span>
                           </td>
 
                           {/* Desktop columns */}
-                          <td className="py-3 px-1.5 w-11 text-center tabular-nums text-slate-500 hidden sm:table-cell">
+                          <td className="py-3 px-1.5 w-11 text-center tabular-nums text-slate-500 hidden sm:table-cell text-[13.5px]">
                             {row.matchesPlayed}
                           </td>
-                          <td className="py-3 px-1.5 w-10 text-center tabular-nums font-bold text-emerald-600 hidden sm:table-cell">
+                          <td className="py-3 px-1.5 w-10 text-center tabular-nums text-emerald-600 hidden sm:table-cell text-[13.5px]">
                             {row.wins}
                           </td>
-                          <td className="py-3 px-1.5 w-10 text-center tabular-nums text-slate-400 hidden sm:table-cell">
+                          <td className="py-3 px-1.5 w-10 text-center tabular-nums text-slate-400 hidden sm:table-cell text-[13.5px]">
                             {row.losses}
                           </td>
-                          <td className="py-3 px-1.5 w-16 text-center tabular-nums text-slate-600 hidden sm:table-cell whitespace-nowrap">
-                            {row.setsWon} : {row.setsLost}
+                          <td className="py-3 px-2 text-center tabular-nums text-slate-700 hidden sm:table-cell whitespace-nowrap text-[13.5px]">
+                            <span>{row.setsWon}:{row.setsLost}</span>
+                            <span className="text-xs text-slate-400 ml-1.5 font-normal">
+                              ({row.setDiff > 0 ? `+${row.setDiff}` : row.setDiff})
+                            </span>
                           </td>
-                          <td className="py-3 px-1.5 w-14 text-center tabular-nums font-bold text-slate-700 hidden sm:table-cell">
-                            {row.setDiff > 0 ? `+${row.setDiff}` : row.setDiff}
-                          </td>
-                          <td className="py-3 px-1.5 w-20 text-center tabular-nums text-slate-600 hidden md:table-cell whitespace-nowrap">
-                            {row.gamesWon} : {row.gamesLost}
-                          </td>
-                          <td className="py-3 px-1.5 w-14 text-center tabular-nums font-bold text-slate-700 hidden sm:table-cell">
-                            {row.gameDiff > 0 ? `+${row.gameDiff}` : row.gameDiff}
+                          <td className="py-3 px-2 text-center tabular-nums text-slate-700 hidden md:table-cell whitespace-nowrap text-[13.5px]">
+                            <span>{row.gamesWon}:{row.gamesLost}</span>
+                            <span className="text-xs text-slate-400 ml-1.5 font-normal">
+                              ({row.gameDiff > 0 ? `+${row.gameDiff}` : row.gameDiff})
+                            </span>
                           </td>
 
                           {/* Points */}
-                          <td className="py-2.5 sm:py-3 px-2 w-12 text-center tabular-nums font-black text-slate-900 text-sm">
+                          <td className="py-2.5 sm:py-3 px-2 w-12 text-center tabular-nums text-slate-800 font-normal text-[13.5px] sm:text-[14px]">
                             {row.points}
                           </td>
                         </tr>
@@ -234,14 +249,14 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
       </div>
 
       {/* Tie Break rule hint */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 font-medium">
-        <div className="flex items-center gap-2">
-          <HelpCircle className="w-4 h-4 text-slate-400 shrink-0" />
+      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[12.5px] sm:text-[13px] text-slate-600 font-medium leading-relaxed">
+        <div className="flex items-center gap-2.5">
+          <HelpCircle className="w-4.5 h-4.5 text-slate-400 shrink-0" />
           <span>
             <strong>Kriterium bei Punktgleichheit:</strong>{' '}
             {tournament.tieBreakRule === 'head_to_head'
-              ? 'Direkter Vergleich (bei 2 Spielern), danach Satzdifferenz und Gamedifferenz.'
-              : 'Satzdifferenz, danach Gamedifferenz.'}
+              ? 'Direkter Vergleich (bei 2 Spielern), danach Satzdifferenz und Spieldifferenz.'
+              : 'Satzdifferenz, danach Spieldifferenz.'}
             {' '}Klicke auf einen Spieler in der Tabelle, um seine Spiele zu filtern.
           </span>
         </div>
@@ -249,7 +264,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
           <button
             type="button"
             onClick={handleResetFilter}
-            className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 shrink-0 underline cursor-pointer"
+            className="text-xs sm:text-[12.5px] font-bold text-emerald-700 hover:text-emerald-900 shrink-0 underline cursor-pointer"
           >
             Filter zurücksetzen
           </button>
@@ -265,7 +280,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
               <h3 className="text-base sm:text-lg font-semibold text-slate-900 tracking-tight">
                 {internalSelectedId
                   ? `Spiele von: ${selectedParticipantName}`
-                  : 'Ausstehende & nächste Begegnungen'}
+                  : `Begegnungen ${phaseName}`}
               </h3>
               {internalSelectedId && (
                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full border border-emerald-200">
@@ -273,11 +288,11 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 font-medium">
-              {internalSelectedId
-                ? `Zeigt alle Gruppenphase-Partien mit Beteiligung von ${selectedParticipantName}`
-                : 'Gruppenspiele der aktiven Phase mit aktuellem Stand und Schnelleintrag'}
-            </p>
+            {internalSelectedId && (
+              <p className="text-xs text-slate-500 font-medium">
+                Zeigt alle Partien mit Beteiligung von {selectedParticipantName}
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
@@ -323,6 +338,7 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                 currentUser={currentUser}
                 isAdmin={isChampionshipAdmin(currentUser)}
                 onEnterResult={onEnterResult}
+                rankings={rankings}
               />
             ))}
           </div>

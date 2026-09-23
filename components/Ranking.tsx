@@ -284,7 +284,7 @@ const RankingView: React.FC<RankingProps> = ({
   };
 
   return (
-    <div className="space-y-5 lg:animate-in lg:fade-in lg:duration-500 w-full overflow-hidden">
+    <div className="space-y-4 lg:space-y-5 lg:animate-in lg:fade-in lg:duration-500 w-full overflow-hidden">
       
       {/* 1. TOP HEADER & CATEGORY TABS (LIGHT MODE) */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">
@@ -368,18 +368,14 @@ const RankingView: React.FC<RankingProps> = ({
       </div>
 
       {/* 2. MAIN CONTENT CARD (Pyramid or List - strictly Light Mode) */}
-      <motion.div
-        layout
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="bg-white pt-6 pb-6 sm:pt-8 sm:pb-8 px-4 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center w-full"
-      >
+      <div className="bg-white pt-6 pb-6 sm:pt-8 sm:pb-8 px-4 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col items-center w-full min-h-[300px]">
         <AnimatePresence mode="wait">
           <motion.div
             key={`${activeCategory}-${viewLayout}`}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15, ease: "easeInOut" }}
             className="relative z-10 w-full flex flex-col items-center gap-4"
           >
             {viewLayout === "pyramid" ? (
@@ -579,7 +575,7 @@ const RankingView: React.FC<RankingProps> = ({
               </div>
             ) : (
               /* MODERN TABLE / LIST LAYOUT (strictly Light Mode) */
-              <div className="w-full grid grid-cols-1 lg:grid-cols-5 gap-6 text-left">
+              <div className="w-full grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-5 text-left">
                 <div className="lg:col-span-3 space-y-2">
                   {filteredEntries.map((entry, index) => {
                     const isFirst = index === 0;
@@ -646,7 +642,7 @@ const RankingView: React.FC<RankingProps> = ({
                   )}
                 </div>
 
-                <div className="lg:col-span-2 lg:border-l lg:border-slate-100 lg:pl-6 px-2 mt-4 lg:mt-0">
+                <div className="lg:col-span-2 lg:border-l lg:border-slate-100 lg:pl-5 px-2 mt-4 lg:mt-0">
                   <h4 className="text-sm font-black text-[var(--color-primary)] flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
                     <i className="fa-solid fa-circle-info"></i> Regeln der Rangliste
                   </h4>
@@ -656,7 +652,7 @@ const RankingView: React.FC<RankingProps> = ({
             )}
           </motion.div>
         </AnimatePresence>
-      </motion.div>
+      </div>
 
       {/* 3. RULES CARD (for Pyramid view - strictly Light Mode) */}
       {viewLayout === "pyramid" && (

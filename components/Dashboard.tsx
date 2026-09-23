@@ -12,7 +12,6 @@ import { Booking, User, Role, DynamicLeague } from "../types";
 import { ClubSettings, listenToSettings, listenToBookings, listenToClubs, saveBooking } from "../services/db";
 import { getUserClubs, getCanonicalClubId, KNOWN_CLUBS_STAMMDATEN } from "../lib/userUtils";
 import { loginWithUsername } from "../lib/firebase";
-import OnboardingBanner from "./OnboardingBanner";
 import { UserAvatar } from "./UserAvatar";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -303,7 +302,6 @@ interface DashboardProps {
   onMobileSelectedDateChange?: (d: string) => void;
   isPublicWochenplan?: boolean;
   onPublicLoginSuccess?: (u: User) => void;
-  onDismissOnboardingHints?: () => void;
   userClubs?: any[];
   allClubs?: any[];
   onSwitchClub?: (clubId: string) => void;
@@ -327,7 +325,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   onMobileSelectedDateChange,
   isPublicWochenplan = false,
   onPublicLoginSuccess,
-  onDismissOnboardingHints,
   userClubs,
   allClubs: propAllClubs,
   onSwitchClub,
@@ -1292,54 +1289,54 @@ const Dashboard: React.FC<DashboardProps> = ({
     new Date(),
   );
   const calendarRef = useRef<HTMLDivElement>(null);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-
-  const [swipeStyle, setSwipeStyle] = useState<React.CSSProperties>({});
-  const prevDateRefForSwipe = useRef<string | null>(null);
+  const [swipeDirection, setSwipeDirection] = useState<1 | -1>(1);
+  const prevDateRefForSwipe = useRef<string>(selectedDate);
 
   useEffect(() => {
-    if (!isMobile) return;
-    if (!prevDateRefForSwipe.current) {
+    if (selectedDate !== prevDateRefForSwipe.current) {
+      const prevTime = new Date(prevDateRefForSwipe.current).getTime();
+      const currTime = new Date(selectedDate).getTime();
+      if (!isNaN(prevTime) && !isNaN(currTime)) {
+        setSwipeDirection(currTime >= prevTime ? 1 : -1);
+      }
       prevDateRefForSwipe.current = selectedDate;
-      return;
     }
+  }, [selectedDate]);
 
-    const prev = prevDateRefForSwipe.current;
-    prevDateRefForSwipe.current = selectedDate;
+  const [customCalSwipeDirection, setCustomCalSwipeDirection] = useState<1 | -1>(1);
+  const customCalTouchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
-    const prevTime = new Date(prev).getTime();
-    const currTime = new Date(selectedDate).getTime();
-    if (isNaN(prevTime) || isNaN(currTime) || prevTime === currTime) return;
+  const handleCustomCalNavigateMonth = (direction: 1 | -1) => {
+    setCustomCalSwipeDirection(direction);
+    const m = new Date(currentCalendarMonth);
+    m.setMonth(m.getMonth() + direction);
+    setCurrentCalendarMonth(m);
+  };
 
-    const isForward = currTime > prevTime;
-    const startX = isForward ? "40px" : "-40px";
+  const handleCustomCalTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    customCalTouchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  };
 
-    setSwipeStyle({
-      transform: `translateX(${startX})`,
-      willChange: "transform",
-      opacity: 0,
-      transition: "none",
-    });
+  const handleCustomCalTouchEnd = (e: React.TouchEvent) => {
+    if (!customCalTouchStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const diffX = touch.clientX - customCalTouchStartRef.current.x;
+    const diffY = touch.clientY - customCalTouchStartRef.current.y;
+    const elapsed = Date.now() - customCalTouchStartRef.current.time;
+    customCalTouchStartRef.current = null;
 
-    const transitionTimer = setTimeout(() => {
-      setSwipeStyle({
-        transform: "translateX(0)",
-        willChange: "transform",
-        opacity: 1,
-        transition:
-          "transform 200ms ease-out, opacity 200ms ease-out",
-      });
-    }, 16);
-
-    const clearTimer = setTimeout(() => {
-      setSwipeStyle({});
-    }, 200 + 16);
-
-    return () => {
-      clearTimeout(transitionTimer);
-      clearTimeout(clearTimer);
-    };
-  }, [selectedDate, isMobile]);
+    if (elapsed > 1000) return;
+    const threshold = 38;
+    if (Math.abs(diffX) > threshold && Math.abs(diffX) > Math.abs(diffY) * 1.2) {
+      if (diffX > 0) {
+        handleCustomCalNavigateMonth(-1);
+      } else {
+        handleCustomCalNavigateMonth(1);
+      }
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -2058,13 +2055,16 @@ const Dashboard: React.FC<DashboardProps> = ({
     const d = new Date(selectedDate);
     const step = viewType === "day" ? 1 : 7;
     d.setDate(d.getDate() + amount * step);
+    setSwipeDirection(amount > 0 ? 1 : -1);
     setSelectedDate(getLocalDateString(d));
   };
+
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
     const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -2072,12 +2072,16 @@ const Dashboard: React.FC<DashboardProps> = ({
     const touch = e.changedTouches[0];
     const diffX = touch.clientX - touchStartRef.current.x;
     const diffY = touch.clientY - touchStartRef.current.y;
+    const elapsed = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
 
-    const threshold = 65; // minimum swipe horizontal distance in pixels
-    // Math.abs(diffX) > Math.abs(diffY) * 1.5 prevents picking up diagonal scrolls as swipe
+    if (elapsed > 1000) return;
+
+    const threshold = 38; // optimized swipe horizontal distance in pixels
+    // Math.abs(diffX) > Math.abs(diffY) * 1.2 allows natural thumb arc while preventing vertical scrolls
     if (
       Math.abs(diffX) > threshold &&
-      Math.abs(diffX) > Math.abs(diffY) * 1.5
+      Math.abs(diffX) > Math.abs(diffY) * 1.2
     ) {
       e.stopPropagation();
       if (diffX > 0) {
@@ -2088,7 +2092,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         navigateDate(1);
       }
     }
-    touchStartRef.current = null;
   };
 
   const openCalendar = (e: React.MouseEvent) => {
@@ -2866,19 +2869,8 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="w-full flex-1 flex flex-col lg:animate-in lg:fade-in lg:duration-500 pb-0 lg:pb-3 md:pb-3 select-none space-y-0 lg:space-y-4 min-h-0 lg:min-h-[calc(100vh-160px)] h-full"
+        className="w-full flex-1 flex flex-col lg:animate-in lg:fade-in lg:duration-500 pb-0 lg:pb-3 md:pb-3 select-none space-y-0 lg:space-y-4 min-h-0 lg:min-h-[calc(100vh-160px)] h-full touch-pan-y"
       >
-        <OnboardingBanner
-          show={currentUser?.show_onboarding_hints !== false && !isPublicWochenplan}
-          desktopText="Wähle eine freie Uhrzeit in der Zukunft, um deinen Platz zu reservieren."
-          mobileText={
-            viewType === "week"
-              ? "Drücke auf einen Wochentag, um für den Tag zu buchen."
-              : 'Drücke auf "+" um einen Platz zu reservieren.'
-          }
-          onDismiss={() => onDismissOnboardingHints?.()}
-        />
-
         <AnimatePresence mode="wait">
           {viewType === "day" ? (
             <motion.div
@@ -2890,9 +2882,12 @@ const Dashboard: React.FC<DashboardProps> = ({
               className="w-full flex-grow flex flex-col min-h-0"
             >
             {/* Mobile 3-column table - Thinner borders, more compact */}
-            <div 
-              className="flex-1 flex flex-col rounded-2xl border-none bg-slate-50 shadow-md w-full mb-4 lg:mb-0 lg:min-h-0 lg:max-h-none overflow-hidden"
-              style={isMobile ? { ...swipeStyle, flexGrow: 1 } : undefined}
+            <motion.div 
+              key={selectedDate}
+              initial={isMobile ? { opacity: 0, x: swipeDirection * 45 } : false}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="flex-1 flex flex-col rounded-2xl border-none bg-slate-50 shadow-md w-full mb-4 lg:mb-0 lg:min-h-0 lg:max-h-none overflow-hidden flex-grow"
             >
               <table className="w-full h-full border-collapse table-fixed flex-1 bg-slate-50" style={{ height: "100%" }}>
                 <thead className="sticky top-0 bg-slate-50 z-40 shadow-sm">
@@ -3181,7 +3176,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   })()}
                 </tbody>
               </table>
-            </div>
+            </motion.div>
             </motion.div>
           ) : (
             /* Mobile Weekly View */
@@ -3193,9 +3188,12 @@ const Dashboard: React.FC<DashboardProps> = ({
               transition={{ duration: 0.25 }}
               className="w-full flex flex-col"
             >
-            <div 
+            <motion.div 
+              key={weekDates[0]}
+              initial={isMobile ? { opacity: 0, x: swipeDirection * 45 } : false}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
               className="space-y-2 overflow-y-auto max-h-[calc(100dvh-170px)] mb-0 hide-scrollbar w-full lg:min-h-0 lg:max-h-none"
-              style={isMobile ? swipeStyle : undefined}
             >
               {weekDates
                 .map((dateStr) => {
@@ -3364,7 +3362,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <span>Ausgebucht</span>
                 </div>
               </div>
-            </div>
+            </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -4043,16 +4041,6 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="space-y-3 lg:space-y-4 w-full flex-grow flex flex-col lg:animate-in lg:fade-in lg:duration-500 min-h-0">
-      <OnboardingBanner
-        show={currentUser?.show_onboarding_hints !== false && !isPublicWochenplan}
-        desktopText="Wähle eine freie Uhrzeit in der Zukunft, um deinen Platz zu reservieren."
-        mobileText={
-          viewType === "week"
-            ? "Drücke auf einen Wochentag, um für den Tag zu buchen."
-            : 'Drücke auf "+" um einen Platz zu reservieren.'
-        }
-        onDismiss={() => onDismissOnboardingHints?.()}
-      />
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-1 pr-2 lg:pr-2.5 rounded-2xl shadow-sm border border-slate-200/80 gap-1.5 lg:gap-2 w-full shrink-0">
         <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
           <div className="inline-flex items-center bg-white border border-slate-200 rounded-xl shadow-sm p-1 w-full sm:w-auto shrink-0 h-8 relative gap-1">
@@ -4105,16 +4093,18 @@ const Dashboard: React.FC<DashboardProps> = ({
                   />
 
                   {/* Calendar Container */}
-                  <div className="fixed lg:absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 lg:top-[34px] lg:mt-1 lg:left-0 lg:translate-x-0 lg:translate-y-0 w-[320px] lg:w-[280px] bg-white border border-slate-200/90 rounded-2xl shadow-xl p-5 lg:p-4 z-[9999] animate-in fade-in zoom-in-95 lg:slide-in-from-top-2 duration-200">
+                  <div
+                    onTouchStart={handleCustomCalTouchStart}
+                    onTouchEnd={handleCustomCalTouchEnd}
+                    className="fixed lg:absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 lg:top-[34px] lg:mt-1 lg:left-0 lg:translate-x-0 lg:translate-y-0 w-[320px] lg:w-[280px] bg-white border border-slate-200/90 rounded-2xl shadow-xl p-5 lg:p-4 z-[9999] animate-in fade-in zoom-in-95 lg:slide-in-from-top-2 duration-200 touch-pan-y"
+                  >
                     {/* Calendar Header */}
                     <div className="flex items-center justify-between mb-4 lg:mb-3 select-none">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const prevMonth = new Date(currentCalendarMonth);
-                          prevMonth.setMonth(prevMonth.getMonth() - 1);
-                          setCurrentCalendarMonth(prevMonth);
+                          handleCustomCalNavigateMonth(-1);
                         }}
                         className="text-slate-600 hover:text-emerald-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors flex items-center justify-center cursor-pointer active:scale-95"
                         title="Vorheriger Monat"
@@ -4122,32 +4112,38 @@ const Dashboard: React.FC<DashboardProps> = ({
                       >
                         <i className="fa-solid fa-chevron-left text-xs"></i>
                       </button>
-                      <span className="text-sm lg:text-xs font-black text-[var(--color-primary)] uppercase tracking-wider">
-                        {
-                          [
-                            "Januar",
-                            "Februar",
-                            "März",
-                            "April",
-                            "Mai",
-                            "Juni",
-                            "Juli",
-                            "August",
-                            "September",
-                            "Oktober",
-                            "November",
-                            "Dezember",
-                          ][currentCalendarMonth.getMonth()]
-                        }{" "}
-                        {currentCalendarMonth.getFullYear()}
-                      </span>
+                      <div className="h-5 flex items-center justify-center overflow-hidden">
+                        <motion.span
+                          key={`${currentCalendarMonth.getFullYear()}-${currentCalendarMonth.getMonth()}`}
+                          initial={{ opacity: 0, y: customCalSwipeDirection > 0 ? 6 : -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.18, ease: "easeOut" }}
+                          className="text-sm lg:text-xs font-black text-[var(--color-primary)] uppercase tracking-wider text-center"
+                        >
+                          {
+                            [
+                              "Januar",
+                              "Februar",
+                              "März",
+                              "April",
+                              "Mai",
+                              "Juni",
+                              "Juli",
+                              "August",
+                              "September",
+                              "Oktober",
+                              "November",
+                              "Dezember",
+                            ][currentCalendarMonth.getMonth()]
+                          }{" "}
+                          {currentCalendarMonth.getFullYear()}
+                        </motion.span>
+                      </div>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          const nextMonth = new Date(currentCalendarMonth);
-                          nextMonth.setMonth(nextMonth.getMonth() + 1);
-                          setCurrentCalendarMonth(nextMonth);
+                          handleCustomCalNavigateMonth(1);
                         }}
                         className="text-slate-600 hover:text-emerald-700 hover:bg-slate-100 p-1.5 rounded-lg transition-colors flex items-center justify-center cursor-pointer active:scale-95"
                         title="Nächster Monat"
@@ -4169,35 +4165,43 @@ const Dashboard: React.FC<DashboardProps> = ({
                       ))}
                     </div>
 
-                    {/* Days grid */}
-                    <div className="grid grid-cols-7 gap-1 place-items-center">
-                      {calendarDays.map((slot, index) => {
-                        const isSelected = slot.dateString === selectedDate;
-                        const todayStr = getLocalDateString(new Date());
-                        const isToday = slot.dateString === todayStr;
-                        return (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDate(slot.dateString);
-                              setShowCustomCalendar(false);
-                            }}
-                            className={`w-full aspect-square rounded-xl lg:rounded-lg flex items-center justify-center font-bold text-sm lg:text-xs transition-all relative active:scale-95 cursor-pointer ${
-                              !slot.isCurrentMonth
-                                ? "text-slate-300 hover:bg-slate-50"
-                                : isSelected
-                                  ? "bg-[var(--color-primary)] text-white font-black shadow-md border-2 border-[var(--color-primary)]"
-                                  : isToday
-                                    ? "border-2 border-[var(--color-primary)] text-[var(--color-primary)] bg-slate-50"
-                                    : "text-slate-700 hover:bg-slate-100 border-2 border-transparent"
-                            }`}
-                          >
-                            {slot.day}
-                          </button>
-                        );
-                      })}
+                    {/* Days grid with swipe motion */}
+                    <div className="overflow-hidden w-full">
+                      <motion.div
+                        key={`${currentCalendarMonth.getFullYear()}-${currentCalendarMonth.getMonth()}`}
+                        initial={{ opacity: 0, x: customCalSwipeDirection * 35 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className="grid grid-cols-7 gap-1 place-items-center"
+                      >
+                        {calendarDays.map((slot, index) => {
+                          const isSelected = slot.dateString === selectedDate;
+                          const todayStr = getLocalDateString(new Date());
+                          const isToday = slot.dateString === todayStr;
+                          return (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDate(slot.dateString);
+                                setShowCustomCalendar(false);
+                              }}
+                              className={`w-full aspect-square rounded-xl lg:rounded-lg flex items-center justify-center font-bold text-sm lg:text-xs transition-all relative active:scale-95 cursor-pointer ${
+                                !slot.isCurrentMonth
+                                  ? "text-slate-300 hover:bg-slate-50"
+                                  : isSelected
+                                    ? "bg-[var(--color-primary)] text-white font-black shadow-md border-2 border-[var(--color-primary)]"
+                                    : isToday
+                                      ? "border-2 border-[var(--color-primary)] text-[var(--color-primary)] bg-slate-50"
+                                      : "text-slate-700 hover:bg-slate-100 border-2 border-transparent"
+                              }`}
+                            >
+                              {slot.day}
+                            </button>
+                          );
+                        })}
+                      </motion.div>
                     </div>
                   </div>
                 </>
@@ -4395,13 +4399,12 @@ const Dashboard: React.FC<DashboardProps> = ({
           {/* Desktop view OR Column layout if selected on mobile */}
           {(() => {
             return (
-              <div
+              <motion.div
+                key={mobileDayLayout === "columns" ? selectedDate : "desktop-columns"}
+                initial={isMobile && mobileDayLayout === "columns" ? { opacity: 0, x: swipeDirection * 45 } : false}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
                 className={`${mobileDayLayout === "columns" ? "flex flex-col max-h-[calc(100dvh-170px)] mb-0 overflow-y-auto hide-scrollbar lg:max-h-none lg:mb-0 lg:overflow-y-visible" : "hidden lg:flex lg:flex-col"} w-full [will-change:transform] custom-calendar-container`}
-                style={
-                  {
-                    ...(isMobile ? swipeStyle : {}),
-                  } as React.CSSProperties
-                }
               >
                 <div className="custom-calendar-scroll w-full flex flex-col overflow-x-auto overflow-y-auto">
                   <div className="flex w-full min-w-[600px] relative">
@@ -4445,7 +4448,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })()}
         </motion.div>
@@ -4457,11 +4460,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
           className="custom-calendar-container w-full relative [will-change:transform]"
-          style={
-            {
-              ...(isMobile ? swipeStyle : {}),
-            } as React.CSSProperties
-          }
         >
           <div className="custom-calendar-scroll w-full flex flex-col overflow-x-auto overflow-y-auto">
             <div className="flex w-full relative min-w-[700px]">

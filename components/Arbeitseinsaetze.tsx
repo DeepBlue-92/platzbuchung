@@ -13,7 +13,6 @@ import {
 } from "../services/db";
 import { motion, AnimatePresence } from "motion/react";
 import { Briefcase } from "lucide-react";
-import OnboardingBanner from "./OnboardingBanner";
 
 interface ArbeitseinsaetzeProps {
   currentUser: User;
@@ -22,7 +21,6 @@ interface ArbeitseinsaetzeProps {
   onSaveSettings: (settings: any) => Promise<void>;
   primaryColor?: string;
   accentColor?: string;
-  onDismissOnboardingHints?: () => void;
 }
 
 const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
@@ -32,7 +30,6 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
   onSaveSettings,
   primaryColor = "#1b4332",
   accentColor = "#c04d2b",
-  onDismissOnboardingHints,
 }) => {
   const currentClubId = settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen";
   const currentYearNum = new Date().getFullYear();
@@ -818,12 +815,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
 
   return (
     <div className="lg:animate-in lg:fade-in lg:duration-500 pb-0 md:pb-3 w-full select-none font-sans flex flex-col space-y-3 lg:space-y-4">
-      <OnboardingBanner
-        show={currentUser?.show_onboarding_hints !== false}
-        text='Mit "Einsatz eintragen" kannst du deine geleisteten Arbeitsstunden hinzufügen.'
-        onDismiss={() => onDismissOnboardingHints?.()}
-      />
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 md:p-6 space-y-6 md:space-y-8 flex flex-col">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 md:p-6 space-y-4 lg:space-y-6 flex flex-col">
         {/* Integrated Page Header */}
       <div className="pb-4 md:pb-6 border-b border-slate-100">
         <div className="flex items-center gap-3">
@@ -907,7 +899,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
         )}
       </div>
 
-      <div className="space-y-6 md:space-y-8">
+      <div className="space-y-4 lg:space-y-6">
         {/* Upper Table - Logs list */}
         <div className="flex flex-col">
           <div className="mb-4 pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

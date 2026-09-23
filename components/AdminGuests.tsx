@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Booking, User, Role } from "../types";
-import { OnboardingBanner } from "./OnboardingBanner";
 import {
   ClubSettings,
   updateBookingPaidStatus,
@@ -30,7 +29,6 @@ interface AdminGuestsProps {
   currentUser: User;
   vereinsId: string;
   onSaveSettings?: (settings: any) => Promise<void>;
-  onDismissOnboardingHints?: () => void;
 }
 
 const AdminGuests: React.FC<AdminGuestsProps> = ({
@@ -40,7 +38,6 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
   currentUser,
   vereinsId,
   onSaveSettings,
-  onDismissOnboardingHints,
 }) => {
   const currentYearNum = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<string>(currentYearNum.toString());
@@ -551,11 +548,6 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
 
   return (
     <div className="lg:animate-in lg:fade-in lg:duration-500 pb-0 md:pb-3 w-full flex flex-col space-y-3 lg:space-y-4">
-      <OnboardingBanner
-        show={currentUser?.show_onboarding_hints !== false}
-        text="Hier erscheinen deine Gastspielegebühren, wenn du bei einer Reservierung Gastspieler angegeben hast."
-        onDismiss={() => onDismissOnboardingHints?.()}
-      />
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-4 md:p-6">
         {/* Upper Dashboard header area */}
         <div className={`flex flex-row justify-between items-center gap-2 md:gap-4 border-b-0 md:border-b border-slate-100 mb-2 pb-0 md:mb-6 md:pb-6 ${!isAdmin ? "hidden md:flex" : "flex"}`}>

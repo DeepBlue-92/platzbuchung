@@ -83,7 +83,7 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
   const pendingCount = usersList.filter((u) => u.onboarding_pending).length;
 
   return (
-    <div className="w-full space-y-8 animate-in fade-in duration-300 pb-12">
+    <div className="w-full space-y-4 lg:space-y-6 animate-in fade-in duration-300 pb-8">
       {/* Header card with status overview */}
       <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
@@ -180,7 +180,6 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
             birthDate: "1990-06-15",
             email: "max.mustermann@example.com",
             avatarIcon: "initials",
-            show_onboarding_hints: true,
           }}
           settings={{
             ...settings,
@@ -194,7 +193,7 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
       )}
 
       {/* Main Settings Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
         {/* Section 1: Activation & Defaults */}
         <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
           <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">

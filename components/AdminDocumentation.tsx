@@ -72,7 +72,7 @@ export const AdminDocumentation: React.FC = () => {
   }, [activeCategoryId]);
 
   return (
-    <div id="admin-documentation-root" className="w-full flex flex-col gap-6">
+    <div id="admin-documentation-root" className="w-full flex flex-col gap-4 lg:gap-5">
       {/* Top Header Card */}
       <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -114,7 +114,7 @@ export const AdminDocumentation: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6">
+      <div className="flex flex-col md:flex-row gap-4 lg:gap-5">
         {/* Mobile dropdown selector */}
         {!searchResults && (
           <div className="md:hidden w-full">

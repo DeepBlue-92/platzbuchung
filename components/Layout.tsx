@@ -488,7 +488,7 @@ const Layout: React.FC<LayoutProps> = ({
         </header>
       )}
 
-      <main className="flex-grow flex flex-col w-full px-3 sm:px-4 pt-3 sm:pt-4 pb-[calc(64px+env(safe-area-inset-bottom,0px))] lg:pb-4 md:px-6 md:pt-4 lg:px-4 lg:pt-4">
+      <main className="flex-grow flex flex-col w-full px-3 sm:px-4 pt-3 sm:pt-4 pb-[calc(64px+env(safe-area-inset-bottom,0px))] md:px-6 md:pt-4 lg:px-5 lg:pt-4 lg:pb-5 xl:px-6">
         <div className="max-w-[1600px] w-full mx-auto flex-grow flex flex-col min-h-0">{children}</div>
       </main>
 

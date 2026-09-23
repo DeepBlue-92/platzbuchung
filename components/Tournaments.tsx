@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { PartyPopper, Plus } from "lucide-react";
 import { Tournament, User, Role } from "../types";
-import OnboardingBanner from "./OnboardingBanner";
 
 interface TournamentsProps {
   tournaments: Tournament[];
@@ -18,7 +18,6 @@ interface TournamentsProps {
   onDeleteTournament: (tournamentId: string) => void;
   onUpdateTournament?: (id: string, updates: Partial<Tournament>) => void;
   highlightEventId?: string | null;
-  onDismissOnboardingHints?: () => void;
 }
 
 const Tournaments: React.FC<TournamentsProps> = ({
@@ -30,7 +29,6 @@ const Tournaments: React.FC<TournamentsProps> = ({
   onDeleteTournament,
   onUpdateTournament,
   highlightEventId,
-  onDismissOnboardingHints,
 }) => {
   const [isSliderOpen, setIsSliderOpen] = useState(false);
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
@@ -1011,19 +1009,47 @@ const Tournaments: React.FC<TournamentsProps> = ({
           document.body,
         )}
 
-      <div className="flex flex-col space-y-3 lg:space-y-4 w-full lg:animate-in lg:fade-in lg:duration-500">
-        <OnboardingBanner
-          show={currentUser?.show_onboarding_hints !== false}
-          desktopText="Klicke auf „Anmelden“, um dich anzumelden oder wieder auszutragen."
-          text='Über "Anmelden" kannst du dich für eine Veranstaltung eintragen.'
-          onDismiss={() => onDismissOnboardingHints?.()}
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 items-stretch">
+      <div className="flex flex-col space-y-4 lg:space-y-5 w-full lg:animate-in lg:fade-in lg:duration-500">
+        {/* 1. TOP HEADER (LIGHT MODE - IDENTISCH ZU RANGLISTE) */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-50 rounded-2xl text-[var(--color-primary)] shrink-0">
+                <PartyPopper className="w-5 h-5 text-[var(--color-primary)]" strokeWidth={1.8} />
+              </div>
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <h3 className="text-xl font-bold text-slate-900 uppercase tracking-wider">
+                    Veranstaltungen
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 font-medium tracking-wide mt-1">
+                  Anmeldung zu Turnieren und anderen Events
+                </p>
+              </div>
+            </div>
+
+            {isAdmin && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenSlider()}
+                  className="h-9 px-3.5 bg-[var(--color-primary)] hover:opacity-90 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs active:scale-95 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Neues Event</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 items-stretch">
           {renderEventList(upcomingTournaments, false, true)}
         </div>
 
         {pastTournaments.length > 0 && (
-          <div className="pt-8 space-y-4">
+          <div className="pt-4 lg:pt-6 space-y-4">
             <button
               onClick={() => setShowPastEvents(!showPastEvents)}
               type="button"
@@ -1036,7 +1062,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
             </button>
 
             {showPastEvents && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 animate-in fade-in slide-in-from-top-4 duration-300">
                 {renderEventList(pastTournaments)}
               </div>
             )}
@@ -1044,7 +1070,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
         )}
 
         {isAdmin && trashTournaments.length > 0 && (
-          <div className="pt-8 space-y-4">
+          <div className="pt-4 lg:pt-6 space-y-4">
             <button
               onClick={() => setShowTrash(!showTrash)}
               type="button"
@@ -1058,7 +1084,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
             </button>
 
             {showTrash && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 animate-in fade-in slide-in-from-top-4 duration-300">
                 {renderEventList(trashTournaments, true)}
               </div>
             )}

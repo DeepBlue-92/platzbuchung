@@ -279,7 +279,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
   }, [newPlayerQuery, userList, activeEntryNames]);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
       {/* Global View Mode Setting */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -319,7 +319,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
         {/* Category Management */}
         <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 shadow-sm">
           <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">

@@ -39,6 +39,7 @@ export interface TournamentTemplate {
   stages: TournamentStageConfig[];
   tieBreakRule: TieBreakRuleType;
   matchFormat: MatchFormat;
+  useRankings?: boolean; // Rangliste berücksichtigen: Blendet Ranglisten-Badges neben Spielern ein
   isLocked: boolean; // Tamper protection: locked as soon as used in an instance
   createdAt: string;
   updatedAt: string;
@@ -164,6 +165,7 @@ export interface TournamentInstance {
   matches: Match[];
   stageDeadlines: Record<string, string>; // stageId -> ISO Date string ("Zu spielen bis" bzw. "Datum" beim Finaltag)
   stageDeadlineTypes?: Record<string, 'deadline' | 'date'>; // stageId -> 'deadline' | 'date'
+  useRankings?: boolean; // Flag "Rangliste berücksichtigen" (zeigt Pos. / # Badges)
   startDate?: string;
   endDate?: string;
   status: TournamentStatus;

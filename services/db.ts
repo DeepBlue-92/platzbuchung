@@ -657,7 +657,6 @@ export function listenToUsers(vereinsId: string, callback: (u: Record<string, Us
         isSuspended: !!docData.isSuspended,
         hauptAdmin: !!docData.hauptAdmin,
         createdAt: docData.createdAt || new Date().toISOString(),
-        show_onboarding_hints: docData.show_onboarding_hints !== false,
         showAiAssistant: docData.showAiAssistant !== false,
         onboarding_pending: !!docData.onboarding_pending,
         birthDate: docData.birthDate || null,
@@ -895,7 +894,6 @@ export async function saveUser(vereinsId: string, user: User) {
   if (user.showContactInfo !== undefined) finalDoc.showContactInfo = !!user.showContactInfo;
   if (user.isSuspended !== undefined) finalDoc.isSuspended = !!user.isSuspended;
   if (user.hauptAdmin !== undefined) finalDoc.hauptAdmin = !!user.hauptAdmin;
-  if (user.show_onboarding_hints !== undefined) finalDoc.show_onboarding_hints = !!user.show_onboarding_hints;
   if (user.showAiAssistant !== undefined) {
     finalDoc.showAiAssistant = !!user.showAiAssistant;
   } else if (existingData.showAiAssistant !== undefined) {
@@ -1083,35 +1081,6 @@ export async function batchCompleteMemberOnboarding(vereinsId: string): Promise<
   });
   await Promise.all(promises);
   return docMap.size;
-}
-
-export async function resetOnboardingHintsForAllUsers(vereinsId: string) {
-  const normalizedId = getNormalizedVereinsId(vereinsId);
-  const [tenantSnap, vereinsSnap] = await Promise.all([
-    getDocs(query(collection(db, 'users'), where('tenantId', '==', normalizedId))),
-    getDocs(query(collection(db, 'users'), where('vereinsId', '==', normalizedId))),
-  ]);
-  const docMap = new Map<string, any>();
-  tenantSnap.docs.forEach((d) => docMap.set(d.id, d));
-  vereinsSnap.docs.forEach((d) => docMap.set(d.id, d));
-
-  const promises = Array.from(docMap.values()).map((docSnap) => {
-    const data = docSnap.data();
-    return setDoc(
-      doc(db, 'users', docSnap.id),
-      {
-        id: data.id || docSnap.id,
-        username: data.username || data.name || docSnap.id,
-        name: data.name || data.username || docSnap.id,
-        tenantId: data.tenantId || data.vereinsId || normalizedId,
-        vereinsId: data.vereinsId || data.tenantId || normalizedId,
-        role: data.role || 'mitglied',
-        show_onboarding_hints: true,
-      },
-      { merge: true }
-    );
-  });
-  await Promise.all(promises);
 }
 
 export async function deleteUserDoc(vereinsId: string, username: string) {

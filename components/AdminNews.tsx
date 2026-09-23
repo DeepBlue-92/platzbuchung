@@ -18,9 +18,9 @@ const AdminNews: React.FC<AdminNewsProps> = ({ currentNews, onUpdateNews }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-4xl mx-auto space-y-4 lg:space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200/80">
-        <div className="flex items-center gap-6 mb-8">
+        <div className="flex items-center gap-4 lg:gap-5 mb-6">
           <div className="w-16 h-16 bg-[var(--color-accent)] rounded-2xl flex items-center justify-center shadow-lg shadow-[var(--color-accent)]/20">
             <i className="fa-solid fa-bullhorn text-white text-2xl"></i>
           </div>

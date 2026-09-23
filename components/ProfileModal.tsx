@@ -52,9 +52,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   const [showContactInfo, setShowContactInfo] = useState(
     currentUser.showContactInfo !== false
   );
-  const [showOnboardingHints, setShowOnboardingHints] = useState(
-    currentUser.show_onboarding_hints !== false
-  );
   const [showAiAssistant, setShowAiAssistant] = useState(
     currentUser.showAiAssistant !== false
   );
@@ -239,7 +236,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
         gender,
         birthDate: birthDate ? birthDate.trim() : null,
         showContactInfo,
-        show_onboarding_hints: showOnboardingHints,
         showAiAssistant,
         avatarUrl: avatarUrl || null,
         avatarIcon: avatarIcon || "initials",
@@ -559,17 +555,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                   />
                   <div>
                     <span className="text-xs font-bold text-slate-800 block">E-Mail und Telefonnummer für andere Spieler anzeigen</span>
-                  </div>
-                </label>
-                <label className="flex items-center gap-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={showOnboardingHints}
-                    onChange={(e) => setShowOnboardingHints(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 block">Tipps anzeigen</span>
                   </div>
                 </label>
               </div>

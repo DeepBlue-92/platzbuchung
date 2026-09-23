@@ -48,7 +48,6 @@ export interface Person {
   isSuspended?: boolean;
   hauptAdmin?: boolean;
   createdAt?: string;
-  show_onboarding_hints?: boolean;
   role?: Role;
   vereinsId?: string; // Primary or current club ID
   is_placeholder_email?: boolean;

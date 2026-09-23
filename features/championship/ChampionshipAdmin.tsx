@@ -445,6 +445,15 @@ export const ChampionshipAdmin: React.FC<ChampionshipAdminProps> = ({
                     };
                     await saveChampionshipTournament(clubId, updated);
                   }}
+                  useRankings={currentTournament.useRankings ?? false}
+                  onChangeUseRankings={async (use) => {
+                    const updated = {
+                      ...currentTournament,
+                      useRankings: use,
+                      updatedAt: new Date().toISOString(),
+                    };
+                    await saveChampionshipTournament(clubId, updated);
+                  }}
                 />
               </div>
             </div>

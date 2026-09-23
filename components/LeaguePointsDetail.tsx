@@ -76,7 +76,7 @@ export function LeaguePointsDetail({
   };
 
   return (
-    <div className="w-full max-w-[1400px] mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-8 min-h-screen text-slate-800">
+    <div className="w-full max-w-[1400px] mx-auto px-4 md:px-6 lg:px-6 py-6 space-y-4 lg:space-y-6 min-h-screen text-slate-800">
       {/* HEADER & NAVIGATION */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 pb-6">
         <div>
@@ -158,7 +158,7 @@ export function LeaguePointsDetail({
         </div>
 
         {/* 4 Structured Sections */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
           {/* SECTION 1: SIEG & NIEDERLAGE */}
           <div className="bg-[var(--bg-surface,white)] rounded-2xl p-6 border border-slate-200/90 shadow-sm space-y-4">
             <div className="flex items-center gap-3">

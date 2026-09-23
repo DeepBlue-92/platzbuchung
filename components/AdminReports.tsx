@@ -244,7 +244,7 @@ const AdminReports: React.FC<AdminReportsProps> = ({
         </div>
 
         {/* Content Wrapper inside Card */}
-        <div className="space-y-6 md:space-y-8 mt-2">
+        <div className="space-y-4 lg:space-y-6 mt-2">
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {kpiCards.map((kpi, i) => (

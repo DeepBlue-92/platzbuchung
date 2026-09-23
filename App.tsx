@@ -401,6 +401,43 @@ const App: React.FC = () => {
   const [tempSelectedDate, setTempSelectedDate] =
     useState<string>(mobileSelectedDate);
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [calendarSwipeDirection, setCalendarSwipeDirection] = useState<1 | -1>(1);
+  const calTouchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleCalendarNavigateMonth = (direction: 1 | -1) => {
+    setCalendarSwipeDirection(direction);
+    const m = new Date(calendarMonth);
+    m.setMonth(m.getMonth() + direction);
+    setCalendarMonth(m);
+  };
+
+  const handleCalendarTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    calTouchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  };
+
+  const handleCalendarTouchEnd = (e: React.TouchEvent) => {
+    if (!calTouchStartRef.current) return;
+    const touch = e.changedTouches[0];
+    const diffX = touch.clientX - calTouchStartRef.current.x;
+    const diffY = touch.clientY - calTouchStartRef.current.y;
+    const elapsed = Date.now() - calTouchStartRef.current.time;
+    calTouchStartRef.current = null;
+
+    if (elapsed > 1000) return;
+
+    const threshold = 38;
+    if (Math.abs(diffX) > threshold && Math.abs(diffX) > Math.abs(diffY) * 1.2) {
+      if (diffX > 0) {
+        // Swiped right -> Vorheriger Monat
+        handleCalendarNavigateMonth(-1);
+      } else {
+        // Swiped left -> Nächster Monat
+        handleCalendarNavigateMonth(1);
+      }
+    }
+  };
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [adminSettingsDirty, setAdminSettingsDirty] = useState(false);
   const [pendingView, setPendingView] = useState<
@@ -1328,22 +1365,6 @@ const App: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [bookings, currentUser, currentVereinsId, settings, isAuthReady]);
-
-  const handleDismissOnboardingHints = async () => {
-    if (!currentUser) return;
-    const updatedUser: User = {
-      ...currentUser,
-      show_onboarding_hints: false,
-    };
-    setCurrentUser(updatedUser);
-    if (currentVereinsId) {
-      try {
-        await saveUser(currentVereinsId, updatedUser);
-      } catch (err) {
-        console.error("Fehler beim Speichern der Onboarding-Einstellung:", err);
-      }
-    }
-  };
 
   // Prevent body/html scrolling on the login page (mobile and desktop)
   useEffect(() => {
@@ -3123,27 +3144,33 @@ const App: React.FC = () => {
           {window.innerWidth < 1024 && view === "reservation" && !isMoreMenuOpen && (
             <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-1.5 shadow-sm flex flex-col gap-1.5 sticky top-[10px] z-[1000] lg:hidden mb-1.5 shrink-0">
               {showMobileCalendar ? (
-                <div className="flex items-center justify-between h-7 px-1 gap-2">
-                  <span className="text-[11px] font-black text-[var(--color-primary)] uppercase tracking-wide truncate select-none leading-none pt-0.5">
-                    DATUM AUSWÄHLEN
+                <div className="flex items-center justify-center h-7 px-1 w-full gap-1.5">
+                  <span className="text-[13px] font-black text-[var(--color-primary)] uppercase tracking-wide text-center truncate select-none leading-none pt-0.5 whitespace-nowrap">
+                    {mobileViewType === "day"
+                      ? new Date(mobileSelectedDate).toLocaleDateString("de-DE", {
+                          weekday: "short",
+                          day: "2-digit",
+                          month: "2-digit",
+                        })
+                      : (() => {
+                          const wDates = getWeekDates(mobileSelectedDate);
+                          return `${new Date(wDates[0]).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} — ${new Date(wDates[6]).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`;
+                        })()}
                   </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1">
-                      <i className="fa-solid fa-location-dot text-[var(--color-primary)] text-[10px]"></i>
-                      <span>Anlage:</span>
-                    </span>
-                    <select
-                      value={currentVereinsId}
-                      onChange={(e) => handleSwitchClub(e.target.value)}
-                      className="text-[10px] font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 outline-none focus:border-[var(--color-primary)] cursor-pointer max-w-[150px] truncate"
+                  {mobileSelectedDate !== getTodayStr() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileSelectedDate(getTodayStr());
+                        setTempSelectedDate(getTodayStr());
+                        setCalendarMonth(new Date());
+                      }}
+                      className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 active:scale-90 transition-all text-[var(--color-primary)] cursor-pointer outline-none shrink-0"
+                      title="Zurück zu Heute"
                     >
-                      {miniCalClubsList.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      <i className="fa-solid fa-house text-[9px]"></i>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-between h-7 gap-2">
@@ -3213,163 +3240,150 @@ const App: React.FC = () => {
               {showMobileCalendar && window.innerWidth < 1024 ? (
                 <div className="w-full lg:animate-in lg:fade-in lg:duration-500 pb-0 md:pb-3 select-none space-y-4">
                   {/* Content area */}
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-md w-full h-auto flex flex-col select-none mb-0">
-                    {/* Facility / Vereinsauswahl Header */}
-                    <div className="p-2.5 px-3 border-b border-slate-100 bg-slate-50/90 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <i className="fa-solid fa-building-columns text-[var(--color-primary)] text-xs shrink-0"></i>
-                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider shrink-0">
-                          Anlage:
-                        </span>
-                        <span className="text-xs font-black text-slate-800 truncate">
-                          {settings.clubName || currentVereinsId}
-                        </span>
-                      </div>
-                      <div className="relative shrink-0">
-                        <select
-                          value={currentVereinsId}
-                          onChange={(e) => handleSwitchClub(e.target.value)}
-                          className="pl-2.5 pr-7 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 shadow-2xs outline-none focus:border-[var(--color-primary)] appearance-none cursor-pointer max-w-[170px] truncate"
-                        >
-                          {miniCalClubsList.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                        <i className="fa-solid fa-chevron-down absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[8px]"></i>
-                      </div>
-                    </div>
-
+                  <div
+                    onTouchStart={handleCalendarTouchStart}
+                    onTouchEnd={handleCalendarTouchEnd}
+                    className="bg-white rounded-2xl border border-slate-200 shadow-md w-full h-auto flex flex-col select-none mb-0 overflow-hidden touch-pan-y"
+                  >
                     {/* Month Navigator */}
-                    <div className="p-2.5 px-3 sm:p-3.5 flex items-center justify-between border-b border-slate-100 bg-slate-50/80 shrink-0 w-full">
+                    <div className="p-2.5 px-3 sm:p-3.5 flex items-center justify-between border-b border-slate-100 bg-slate-50/80 shrink-0 w-full rounded-t-2xl">
                       <button
                         type="button"
-                        onClick={() => {
-                          const m = new Date(calendarMonth);
-                          m.setMonth(m.getMonth() - 1);
-                          setCalendarMonth(m);
-                        }}
-                        className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[var(--color-primary)] border border-slate-200 shadow-sm active:scale-90 transition-all font-black select-none"
+                        onClick={() => handleCalendarNavigateMonth(-1)}
+                        className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[var(--color-primary)] border border-slate-200 shadow-sm active:scale-90 transition-all font-black select-none cursor-pointer"
+                        title="Vorheriger Monat"
                       >
                         <i className="fa-solid fa-chevron-left text-[10px]"></i>
                       </button>
 
-                      <span className="font-black text-[11px] sm:text-xs uppercase tracking-widest text-[var(--color-primary)] select-none">
-                        {
-                          [
-                            "Januar",
-                            "Februar",
-                            "März",
-                            "April",
-                            "Mai",
-                            "Juni",
-                            "Juli",
-                            "August",
-                            "September",
-                            "Oktober",
-                            "November",
-                            "Dezember",
-                          ][calendarMonth.getMonth()]
-                        }{" "}
-                        {calendarMonth.getFullYear()}
-                      </span>
+                      <div className="h-6 flex items-center justify-center overflow-hidden">
+                        <motion.span
+                          key={`${calendarMonth.getFullYear()}-${calendarMonth.getMonth()}`}
+                          initial={{ opacity: 0, y: calendarSwipeDirection > 0 ? 6 : -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.18, ease: "easeOut" }}
+                          className="font-black text-[11px] sm:text-xs uppercase tracking-widest text-[var(--color-primary)] select-none text-center"
+                        >
+                          {
+                            [
+                              "Januar",
+                              "Februar",
+                              "März",
+                              "April",
+                              "Mai",
+                              "Juni",
+                              "Juli",
+                              "August",
+                              "September",
+                              "Oktober",
+                              "November",
+                              "Dezember",
+                            ][calendarMonth.getMonth()]
+                          }{" "}
+                          {calendarMonth.getFullYear()}
+                        </motion.span>
+                      </div>
 
                       <button
                         type="button"
-                        onClick={() => {
-                          const m = new Date(calendarMonth);
-                          m.setMonth(m.getMonth() + 1);
-                          setCalendarMonth(m);
-                        }}
-                        className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[var(--color-primary)] border border-slate-200 shadow-sm active:scale-90 transition-all font-black select-none"
+                        onClick={() => handleCalendarNavigateMonth(1)}
+                        className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[var(--color-primary)] border border-slate-200 shadow-sm active:scale-90 transition-all font-black select-none cursor-pointer"
+                        title="Nächster Monat"
                       >
                         <i className="fa-solid fa-chevron-right text-[10px]"></i>
                       </button>
                     </div>
 
-                    {/* Grid */}
-                    <div className="p-3 sm:p-5 flex flex-col w-full">
-                      <div className="grid grid-cols-7 text-center gap-1 mb-1.5 sm:mb-3 select-none shrink-0 w-full">
-                        {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map(
-                          (wd) => (
-                            <span
-                              key={wd}
-                              className="text-[9px] sm:text-xs font-semibold uppercase text-slate-700 py-0.5 sm:py-1"
-                            >
-                              {wd}
-                            </span>
-                          ),
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-7 gap-1 font-sans items-center">
-                        {(() => {
-                          const tempIndex = calendarDays.findIndex(
-                            (d) => d.dateString === tempSelectedDate,
-                          );
-                          const tempRowIndex =
-                            tempIndex !== -1 ? Math.floor(tempIndex / 7) : -1;
-
-                          return calendarDays.map((slot, index) => {
-                            const isSelected =
-                              slot.dateString === tempSelectedDate;
-                            const todayStr = getTodayStr();
-                            const isToday = slot.dateString === todayStr;
-
-                            const isSelectedWeekRow =
-                              mobileViewType === "week" &&
-                              tempRowIndex !== -1 &&
-                              Math.floor(index / 7) === tempRowIndex;
-
-                            let dayStyleClass =
-                              "text-slate-700 hover:bg-slate-100 border-2 border-transparent font-bold";
-                            if (!slot.isCurrentMonth) {
-                              dayStyleClass =
-                                "text-slate-300 hover:bg-slate-50 border-2 border-transparent font-bold";
-                            }
-
-                            if (mobileViewType === "week") {
-                              if (isSelected) {
-                                dayStyleClass =
-                                  "bg-[var(--color-primary)] text-white font-bold shadow-md border border-[var(--color-primary)]";
-                              } else if (isSelectedWeekRow) {
-                                dayStyleClass =
-                                  "bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-2 border-[var(--color-primary)]/10 font-bold";
-                              } else if (isToday) {
-                                dayStyleClass =
-                                  "border-2 border-slate-300 text-slate-800 bg-slate-50 font-bold";
-                              }
-                            } else {
-                              if (isSelected) {
-                                dayStyleClass =
-                                  "bg-[var(--color-primary)] text-white font-bold shadow-md border border-[var(--color-primary)]";
-                              } else if (isToday) {
-                                dayStyleClass =
-                                  "border-2 border-[var(--color-primary)] text-[var(--color-primary)] bg-slate-50 font-bold";
-                              }
-                            }
-
-                            return (
-                              <button
-                                key={index}
-                                type="button"
-                                onClick={() => {
-                                  setTempSelectedDate(slot.dateString);
-                                  setMobileSelectedDate(slot.dateString);
-                                  setMobileViewType("day");
-                                  setView("reservation");
-                                  setShowMobileCalendar(false);
-                                  setIsMoreMenuOpen(false);
-                                }}
-                                className={`aspect-square ${isSelected ? "rounded-full" : "rounded-xl"} flex items-center justify-center font-medium text-xs sm:text-sm transition-all relative active:scale-95 cursor-pointer select-none ${dayStyleClass}`}
+                    {/* Grid with swipe animation */}
+                    <div className="overflow-hidden w-full">
+                      <motion.div
+                        key={`${calendarMonth.getFullYear()}-${calendarMonth.getMonth()}`}
+                        initial={{ opacity: 0, x: calendarSwipeDirection * 45 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className="p-3 sm:p-5 flex flex-col w-full"
+                      >
+                        <div className="grid grid-cols-7 text-center gap-1 mb-1.5 sm:mb-3 select-none shrink-0 w-full">
+                          {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map(
+                            (wd) => (
+                              <span
+                                key={wd}
+                                className="text-[9px] sm:text-xs font-semibold uppercase text-slate-700 py-0.5 sm:py-1"
                               >
-                                {slot.day}
-                              </button>
+                                {wd}
+                              </span>
+                            ),
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1 font-sans items-center">
+                          {(() => {
+                            const tempIndex = calendarDays.findIndex(
+                              (d) => d.dateString === tempSelectedDate,
                             );
-                          });
-                        })()}
-                      </div>
+                            const tempRowIndex =
+                              tempIndex !== -1 ? Math.floor(tempIndex / 7) : -1;
+
+                            return calendarDays.map((slot, index) => {
+                              const isSelected =
+                                slot.dateString === tempSelectedDate;
+                              const todayStr = getTodayStr();
+                              const isToday = slot.dateString === todayStr;
+
+                              const isSelectedWeekRow =
+                                mobileViewType === "week" &&
+                                tempRowIndex !== -1 &&
+                                Math.floor(index / 7) === tempRowIndex;
+
+                              let dayStyleClass =
+                                "text-slate-700 hover:bg-slate-100 border-2 border-transparent font-bold";
+                              if (!slot.isCurrentMonth) {
+                                dayStyleClass =
+                                  "text-slate-300 hover:bg-slate-50 border-2 border-transparent font-bold";
+                              }
+
+                              if (mobileViewType === "week") {
+                                if (isSelected) {
+                                  dayStyleClass =
+                                    "bg-[var(--color-primary)] text-white font-bold shadow-md border border-[var(--color-primary)]";
+                                } else if (isSelectedWeekRow) {
+                                  dayStyleClass =
+                                    "bg-[var(--color-primary)]/15 text-[var(--color-primary)] border-2 border-[var(--color-primary)]/10 font-bold";
+                                } else if (isToday) {
+                                  dayStyleClass =
+                                    "border-2 border-slate-300 text-slate-800 bg-slate-50 font-bold";
+                                }
+                              } else {
+                                if (isSelected) {
+                                  dayStyleClass =
+                                    "bg-[var(--color-primary)] text-white font-bold shadow-md border border-[var(--color-primary)]";
+                                } else if (isToday) {
+                                  dayStyleClass =
+                                    "border-2 border-[var(--color-primary)] text-[var(--color-primary)] bg-slate-50 font-bold";
+                                }
+                              }
+
+                              return (
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={() => {
+                                    setTempSelectedDate(slot.dateString);
+                                    setMobileSelectedDate(slot.dateString);
+                                    setMobileViewType("day");
+                                    setView("reservation");
+                                    setShowMobileCalendar(false);
+                                    setIsMoreMenuOpen(false);
+                                  }}
+                                  className={`aspect-square ${isSelected ? "rounded-full" : "rounded-xl"} flex items-center justify-center font-medium text-xs sm:text-sm transition-all relative active:scale-95 cursor-pointer select-none ${dayStyleClass}`}
+                                >
+                                  {slot.day}
+                                </button>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </motion.div>
                     </div>
                   </div>
                 </div>
@@ -3394,7 +3408,6 @@ const App: React.FC = () => {
                     onSaveSettings={async (s) => {
                       await saveSettings(currentVereinsId, s);
                     }}
-                    onDismissOnboardingHints={handleDismissOnboardingHints}
                   />
                 </div>
               ) : view === "adminSettings" && isAdmin ? (
@@ -3547,7 +3560,6 @@ const App: React.FC = () => {
                     }
                     onDeleteTournament={handleDeleteTournament}
                     highlightEventId={highlightEventId}
-                    onDismissOnboardingHints={handleDismissOnboardingHints}
                   />
                 </div>
               ) : view === "ranking" ? (
@@ -3584,7 +3596,6 @@ const App: React.FC = () => {
                     }}
                     primaryColor={settings.primaryColor}
                     accentColor={settings.accentColor}
-                    onDismissOnboardingHints={handleDismissOnboardingHints}
                   />
                 </div>
               ) : view === "league" ? (
@@ -3613,11 +3624,12 @@ const App: React.FC = () => {
                 )
               ) : view === "championship" ? (
                 settings.modules?.championship === true || isAdmin ? (
-                  <div className="w-full flex-grow flex flex-col min-h-0">
+                  <div className="flex flex-col h-full">
                     <ChampionshipHub
                       currentUser={proxyUser || currentUser}
                       clubId={currentVereinsId}
                       users={users}
+                      rankings={rankings}
                       onNavigateToReservations={() => setView("reservation")}
                       onNavigateToAdmin={() => {
                         setAdminInitialTab("championship");
@@ -4008,7 +4020,6 @@ const App: React.FC = () => {
                     setCurrentUser(loggedInUser);
                     setOnboardingDismissedForSession(false);
                   }}
-                  onDismissOnboardingHints={handleDismissOnboardingHints}
                 />
               )}
             </motion.div>

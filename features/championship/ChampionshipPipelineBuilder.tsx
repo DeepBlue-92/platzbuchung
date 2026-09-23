@@ -13,6 +13,8 @@ interface ChampionshipPipelineBuilderProps {
   onChangeDeadline: (stageId: string, deadline: string) => void;
   stageDeadlineTypes?: Record<string, 'deadline' | 'date'>;
   onChangeDeadlineType?: (stageId: string, type: 'deadline' | 'date') => void;
+  useRankings?: boolean;
+  onChangeUseRankings?: (use: boolean) => void;
   isReadOnly?: boolean;
 }
 
@@ -27,6 +29,8 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
   onChangeDeadline,
   stageDeadlineTypes,
   onChangeDeadlineType,
+  useRankings = false,
+  onChangeUseRankings,
   isReadOnly = false,
 }) => {
   return (
@@ -184,13 +188,39 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
                   Satzdifferenz vor direktem Duell
                 </strong>
                 <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
-                  Rangfolge bestimmt sich strikt nach Satzverhältnis (Sätze gewonnen minus verloren), danach Gamedifferenz.
+                  Rangfolge bestimmt sich strikt nach Satzverhältnis (Sätze gewonnen minus verloren), danach Spieldifferenz.
                 </p>
               </div>
             </label>
           </div>
         </div>
       </div>
+
+      {/* Ranglisten-Option */}
+      {onChangeUseRankings && (
+        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl space-y-2 shadow-xs">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                Rangliste berücksichtigen
+              </h4>
+              <p className="text-[11px] text-slate-500 font-medium leading-tight mt-0.5">
+                Blendet in den Gruppen- und K.-o.-Tabellen neben den Spielern ihre aktuelle Vereinsposition ein (z. B. #4).
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                disabled={isReadOnly}
+                checked={useRankings}
+                onChange={(e) => onChangeUseRankings(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Low-assumption rule transparency info card */}
       <div className="p-4 bg-emerald-50/70 border border-emerald-200/70 rounded-2xl flex items-start gap-3">

@@ -22,7 +22,6 @@ export default function SuperAdminCreateUserModal({ onClose, clubs, onUserCreate
     gender: "m",
     birthDate: "",
     showContactInfo: true,
-    show_onboarding_hints: true,
     clubAssignments: {} as Record<string, Role>,
     mustChangePassword: true,
   });
@@ -98,7 +97,6 @@ export default function SuperAdminCreateUserModal({ onClose, clubs, onUserCreate
         gender: form.gender,
         birthDate: form.birthDate || null,
         showContactInfo: form.showContactInfo,
-        show_onboarding_hints: form.show_onboarding_hints,
         role: backendRole,
         tenantId: primaryTenant,
         vereinsId: primaryTenant, // Fallback/Legacy
@@ -364,17 +362,6 @@ export default function SuperAdminCreateUserModal({ onClose, clubs, onUserCreate
                 />
                 <span className="text-sm font-bold text-slate-700 group-hover:text-slate-900">
                   Kontaktdaten freigeben (E-Mail / Telefon in Börse anzeigen)
-                </span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={form.show_onboarding_hints}
-                  onChange={(e) => setForm({ ...form, show_onboarding_hints: e.target.checked })}
-                  className="w-4 h-4 rounded text-[#1b4332] focus:ring-[#1b4332] accent-[#1b4332] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                />
-                <span className="text-sm font-bold text-slate-700 group-hover:text-slate-900">
-                  Tipps anzeigen (Onboarding-Hinweise)
                 </span>
               </label>
             </div>

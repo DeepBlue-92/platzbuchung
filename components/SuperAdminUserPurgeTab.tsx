@@ -71,7 +71,6 @@ export default function SuperAdminUserPurgeTab({
     newPassword?: string;
     passwordConfirm?: string;
     showContactInfo: boolean;
-    show_onboarding_hints: boolean;
     clubAssignments: Record<string, Role>;
   }>({
     firstName: "",
@@ -84,7 +83,6 @@ export default function SuperAdminUserPurgeTab({
     newPassword: "",
     passwordConfirm: "",
     showContactInfo: true,
-    show_onboarding_hints: true,
     clubAssignments: {},
   });
   
@@ -109,7 +107,6 @@ export default function SuperAdminUserPurgeTab({
       newPassword: "",
       passwordConfirm: "",
       showContactInfo: user.showContactInfo !== false,
-      show_onboarding_hints: user.show_onboarding_hints !== false,
       clubAssignments: initialAssignments,
     });
   };
@@ -138,7 +135,6 @@ export default function SuperAdminUserPurgeTab({
         gender: globalEditForm.gender,
         birthDate: globalEditForm.birthDate || null,
         showContactInfo: globalEditForm.showContactInfo,
-        show_onboarding_hints: globalEditForm.show_onboarding_hints,
       };
 
       if (globalEditForm.newPassword && globalEditForm.newPassword.trim().length >= 4) {
@@ -1821,17 +1817,6 @@ export default function SuperAdminUserPurgeTab({
                     />
                     <span className="text-sm font-bold text-slate-700 group-hover:text-slate-900">
                       Kontaktdaten freigeben (E-Mail / Telefon in Börse anzeigen)
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={globalEditForm.show_onboarding_hints}
-                      onChange={(e) => setGlobalEditForm({ ...globalEditForm, show_onboarding_hints: e.target.checked })}
-                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-600 accent-blue-600 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                    />
-                    <span className="text-sm font-bold text-slate-700 group-hover:text-slate-900">
-                      Tipps anzeigen (Onboarding-Hinweise)
                     </span>
                   </label>
                 </div>
