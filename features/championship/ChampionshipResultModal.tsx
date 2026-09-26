@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Trophy, Check, AlertTriangle } from 'lucide-react';
 import { Match, MatchResult, MatchSetScore, TournamentInstance } from '../../types/championship';
@@ -41,6 +41,144 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
   const [isAnimatingIn, setIsAnimatingIn] = useState<boolean>(false);
   const [isClosing, setIsClosing] = useState<boolean>(false);
 
+  // Input refs for automatic focus advance & backspace navigation
+  const set1P1Ref = useRef<HTMLInputElement>(null);
+  const set1P2Ref = useRef<HTMLInputElement>(null);
+  const set2P1Ref = useRef<HTMLInputElement>(null);
+  const set2P2Ref = useRef<HTMLInputElement>(null);
+  const set3P1Ref = useRef<HTMLInputElement>(null);
+  const set3P2Ref = useRef<HTMLInputElement>(null);
+
+  const focusInput = (ref: React.RefObject<HTMLInputElement | null>) => {
+    setTimeout(() => {
+      if (ref.current) {
+        ref.current.focus();
+        ref.current.select();
+      }
+    }, 15);
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    if (target.value) {
+      target.select();
+      setTimeout(() => {
+        if (document.activeElement === target) {
+          target.select();
+        }
+      }, 15);
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    if (target.value) {
+      target.select();
+    }
+  };
+
+  const handleRegularSetChange = (
+    rawVal: string,
+    setter: (val: string) => void,
+    nextRef: React.RefObject<HTMLInputElement | null> | null,
+    isS2P2 = false
+  ) => {
+    if (rawVal === '') {
+      setter('');
+      return;
+    }
+
+    // Filter out non-digits
+    const digits = rawVal.replace(/\D/g, '');
+    if (!digits) return;
+
+    // Take the latest entered character
+    const char = digits.slice(-1);
+    const num = parseInt(char, 10);
+
+    // Strictly single digits 0 to 7
+    if (num >= 0 && num <= 7) {
+      setter(char);
+      if (nextRef && !isS2P2) {
+        focusInput(nextRef);
+      } else if (isS2P2) {
+        // If entering Set 2 Player 2, check if tiebreak will be required
+        const s1_1 = parseInt(set1P1, 10);
+        const s1_2 = parseInt(set1P2, 10);
+        const s2_1 = parseInt(set2P1, 10);
+        const s2_2 = num;
+
+        const s1W = !isNaN(s1_1) && !isNaN(s1_2) ? (s1_1 > s1_2 ? 1 : s1_2 > s1_1 ? 2 : null) : null;
+        const s2W = !isNaN(s2_1) && !isNaN(s2_2) ? (s2_1 > s2_2 ? 1 : s2_2 > s2_1 ? 2 : null) : null;
+
+        if (s1W && s2W && s1W !== s2W) {
+          setTimeout(() => {
+            if (set3P1Ref.current) {
+              set3P1Ref.current.focus();
+              set3P1Ref.current.select();
+            }
+          }, 60);
+        }
+      }
+    }
+  };
+
+  const handleSet3P1Change = (rawVal: string) => {
+    if (rawVal === '') {
+      setSet3P1('');
+      return;
+    }
+    const digits = rawVal.replace(/\D/g, '').slice(0, 2);
+    if (!digits) return;
+
+    setSet3P1(digits);
+
+    if (digits.startsWith('1')) {
+      // If starts with '1', stay in field if length is 1; jump to set3P2 if length reaches 2
+      if (digits.length === 2) {
+        focusInput(set3P2Ref);
+      }
+    } else {
+      // If starts with >= 2 (or 0): jump immediately to Set 3 Player 2
+      if (digits.length >= 1) {
+        focusInput(set3P2Ref);
+      }
+    }
+  };
+
+  const handleSet3P2Change = (rawVal: string) => {
+    if (rawVal === '') {
+      setSet3P2('');
+      return;
+    }
+    const digits = rawVal.replace(/\D/g, '').slice(0, 2);
+    if (!digits) return;
+
+    setSet3P2(digits);
+  };
+
+  const handleKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    currentVal: string,
+    prevRef: React.RefObject<HTMLInputElement | null> | null,
+    nextRef: React.RefObject<HTMLInputElement | null> | null
+  ) => {
+    if (e.key === 'Backspace') {
+      // If field is empty and user presses Backspace, focus previous field and select its value
+      if (currentVal === '' && prevRef?.current) {
+        e.preventDefault();
+        prevRef.current.focus();
+        prevRef.current.select();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (nextRef?.current) {
+        nextRef.current.focus();
+        nextRef.current.select();
+      }
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setIsClosing(false);
@@ -51,6 +189,17 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
       setIsClosing(false);
     }
   }, [isOpen]);
+
+  // Initial focus on Set 1 Player 1 when modal opens
+  useEffect(() => {
+    if (isOpen && !isWalkover) {
+      const timer = setTimeout(() => {
+        set1P1Ref.current?.focus();
+        set1P1Ref.current?.select();
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, isWalkover]);
 
   useEffect(() => {
     if (!match) return;
@@ -405,23 +554,33 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
                   </div>
                   <div className="flex items-center gap-2">
                     <input
-                      type="number"
-                      min="0"
-                      max="7"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={1}
                       placeholder="0"
                       value={set1P1}
-                      onChange={(e) => setSet1P1(e.target.value)}
-                      className="w-14 text-center py-1.5 border border-slate-300 rounded-lg text-sm font-black focus:ring-1 focus:ring-[var(--color-primary)]"
+                      ref={set1P1Ref}
+                      onChange={(e) => handleRegularSetChange(e.target.value, setSet1P1, set1P2Ref)}
+                      onKeyDown={(e) => handleKeyDown(e, set1P1, null, set1P2Ref)}
+                      onFocus={handleFocus}
+                      onClick={handleClick}
+                      className="w-14 text-center font-semibold text-lg py-1.5 border border-slate-300 rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none transition-all"
                     />
                     <span className="text-slate-400 font-bold">:</span>
                     <input
-                      type="number"
-                      min="0"
-                      max="7"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={1}
                       placeholder="0"
                       value={set1P2}
-                      onChange={(e) => setSet1P2(e.target.value)}
-                      className="w-14 text-center py-1.5 border border-slate-300 rounded-lg text-sm font-black focus:ring-1 focus:ring-[var(--color-primary)]"
+                      ref={set1P2Ref}
+                      onChange={(e) => handleRegularSetChange(e.target.value, setSet1P2, set2P1Ref)}
+                      onKeyDown={(e) => handleKeyDown(e, set1P2, set1P1Ref, set2P1Ref)}
+                      onFocus={handleFocus}
+                      onClick={handleClick}
+                      className="w-14 text-center font-semibold text-lg py-1.5 border border-slate-300 rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -438,23 +597,33 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
                   </div>
                   <div className="flex items-center gap-2">
                     <input
-                      type="number"
-                      min="0"
-                      max="7"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={1}
                       placeholder="0"
                       value={set2P1}
-                      onChange={(e) => setSet2P1(e.target.value)}
-                      className="w-14 text-center py-1.5 border border-slate-300 rounded-lg text-sm font-black focus:ring-1 focus:ring-[var(--color-primary)]"
+                      ref={set2P1Ref}
+                      onChange={(e) => handleRegularSetChange(e.target.value, setSet2P1, set2P2Ref)}
+                      onKeyDown={(e) => handleKeyDown(e, set2P1, set1P2Ref, set2P2Ref)}
+                      onFocus={handleFocus}
+                      onClick={handleClick}
+                      className="w-14 text-center font-semibold text-lg py-1.5 border border-slate-300 rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none transition-all"
                     />
                     <span className="text-slate-400 font-bold">:</span>
                     <input
-                      type="number"
-                      min="0"
-                      max="7"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={1}
                       placeholder="0"
                       value={set2P2}
-                      onChange={(e) => setSet2P2(e.target.value)}
-                      className="w-14 text-center py-1.5 border border-slate-300 rounded-lg text-sm font-black focus:ring-1 focus:ring-[var(--color-primary)]"
+                      ref={set2P2Ref}
+                      onChange={(e) => handleRegularSetChange(e.target.value, setSet2P2, set3P1Ref, true)}
+                      onKeyDown={(e) => handleKeyDown(e, set2P2, set2P1Ref, set3P1Ref)}
+                      onFocus={handleFocus}
+                      onClick={handleClick}
+                      className="w-14 text-center font-semibold text-lg py-1.5 border border-slate-300 rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -480,23 +649,33 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
                       </div>
                       <div className="flex items-center gap-2">
                         <input
-                          type="number"
-                          min="0"
-                          max="35"
-                          placeholder="z.B. 10"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={2}
+                          placeholder="10"
                           value={set3P1}
-                          onChange={(e) => setSet3P1(e.target.value)}
-                          className="w-16 text-center py-1.5 border border-amber-300 bg-white rounded-lg text-sm font-black focus:ring-1 focus:ring-[var(--color-primary)]"
+                          ref={set3P1Ref}
+                          onChange={(e) => handleSet3P1Change(e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, set3P1, set2P2Ref, set3P2Ref)}
+                          onFocus={handleFocus}
+                          onClick={handleClick}
+                          className="w-16 text-center font-semibold text-lg py-1.5 border border-amber-300 bg-white rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none transition-all"
                         />
                         <span className="text-amber-600 font-bold">:</span>
                         <input
-                          type="number"
-                          min="0"
-                          max="35"
-                          placeholder="z.B. 8"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          maxLength={2}
+                          placeholder="8"
                           value={set3P2}
-                          onChange={(e) => setSet3P2(e.target.value)}
-                          className="w-16 text-center py-1.5 border border-amber-300 bg-white rounded-lg text-sm font-black focus:ring-1 focus:ring-[var(--color-primary)]"
+                          ref={set3P2Ref}
+                          onChange={(e) => handleSet3P2Change(e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, set3P2, set3P1Ref, null)}
+                          onFocus={handleFocus}
+                          onClick={handleClick}
+                          className="w-16 text-center font-semibold text-lg py-1.5 border border-amber-300 bg-white rounded-lg [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none transition-all"
                         />
                       </div>
                     </div>

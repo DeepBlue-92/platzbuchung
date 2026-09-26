@@ -4040,7 +4040,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
 
   return (
-    <div className="space-y-3 lg:space-y-4 w-full flex-grow flex flex-col lg:animate-in lg:fade-in lg:duration-500 min-h-0">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow lg:animate-in lg:fade-in lg:duration-500 min-h-0">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-1 pr-2 lg:pr-2.5 rounded-2xl shadow-sm border border-slate-200/80 gap-1.5 lg:gap-2 w-full shrink-0">
         <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
           <div className="inline-flex items-center bg-white border border-slate-200 rounded-xl shadow-sm p-1 w-full sm:w-auto shrink-0 h-8 relative gap-1">

@@ -290,6 +290,54 @@
                 background-image: none !important;
             }
         }
+
+        /* Clean DIN A4 Print & PDF Styles */
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 10mm 12mm;
+            }
+            html, body {
+                background: #ffffff !important;
+                background-color: #ffffff !important;
+                color: #0f172a !important;
+                overflow: visible !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .print\:hidden,
+            nav,
+            footer,
+            header,
+            .no-print,
+            [role="navigation"],
+            .fixed,
+            #app-bottom-bar {
+                display: none !important;
+            }
+            .print\:block {
+                display: block !important;
+            }
+            .print\:flex {
+                display: flex !important;
+            }
+            .print\:break-inside-avoid {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+            table {
+                page-break-inside: auto;
+            }
+            tr, .break-inside-avoid {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                box-shadow: none !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-900">

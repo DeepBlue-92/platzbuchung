@@ -48,6 +48,8 @@ import { UserAvatar } from "./UserAvatar";
 import { AvatarUploader } from "./AvatarUploader";
 import AdminOnboardingTab from "./AdminOnboardingTab";
 import { ChampionshipAdminTab } from "../features/championship/ChampionshipAdminTab";
+import { EmailTemplateManager } from "./admin/EmailTemplateManager";
+import { AdminNotificationsManagement } from "./admin/AdminNotificationsManagement";
 
 interface AdminSettingsProps {
   users: Record<string, User>;
@@ -82,6 +84,7 @@ const TABS = [
   { id: "layout", label: "Layout", icon: "fa-paint-roller" },
   { id: "users", label: "Benutzer", icon: "fa-users" },
   { id: "onboarding", label: "Mitglieder-Onboarding", icon: "fa-user-check" },
+  { id: "notifications", label: "Benachrichtigungen", icon: "fa-bell" },
   { id: "database", label: "Datenverwaltung", icon: "fa-database" },
   { id: "ranking", label: "Rangliste", icon: "fa-medal" },
   { id: "championship", label: "Meisterschaft", icon: "fa-trophy" },
@@ -122,6 +125,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     | "layout"
     | "users"
     | "onboarding"
+    | "notifications"
     | "database"
     | "ranking"
     | "championship"
@@ -198,6 +202,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const [eventDate, setEventDate] = useState("");
   const [eventStartTime, setEventStartTime] = useState("");
   const [eventEndTime, setEventEndTime] = useState("");
+  const [eventRegistrationStart, setEventRegistrationStart] = useState("");
+  const [eventRegistrationEnd, setEventRegistrationEnd] = useState("");
+  const [eventDeregistrationStart, setEventDeregistrationStart] = useState("");
+  const [eventDeregistrationEnd, setEventDeregistrationEnd] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventHideExpired, setEventHideExpired] = useState(true);
   const [eventAllowComment, setEventAllowComment] = useState(false);
@@ -211,6 +219,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     setEventDate("");
     setEventStartTime("");
     setEventEndTime("");
+    setEventRegistrationStart("");
+    setEventRegistrationEnd("");
+    setEventDeregistrationStart("");
+    setEventDeregistrationEnd("");
     setEventDescription("");
     setEventHideExpired(true);
     setEventAllowComment(false);
@@ -233,6 +245,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       date: eventDate || null,
       startTime: eventStartTime || null,
       endTime: eventEndTime || null,
+      registrationStart: eventRegistrationStart || null,
+      registrationEnd: eventRegistrationEnd || null,
+      deregistrationStart: eventDeregistrationStart || null,
+      deregistrationEnd: eventDeregistrationEnd || null,
       description: eventDescription.trim() || null,
       hideExpired: eventHideExpired,
       allowComment: eventAllowComment,
@@ -264,6 +280,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     setEventDate(t.date || "");
     setEventStartTime(t.startTime || "");
     setEventEndTime(t.endTime || "");
+    setEventRegistrationStart(t.registrationStart || "");
+    setEventRegistrationEnd(t.registrationEnd || "");
+    setEventDeregistrationStart(t.deregistrationStart || "");
+    setEventDeregistrationEnd(t.deregistrationEnd || "");
     setEventDescription(t.description || "");
     setEventHideExpired(t.hideExpired ?? true);
     setEventAllowComment(t.allowComment || false);
@@ -775,20 +795,42 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const [faviconInputMode, setFaviconInputMode] = useState<"upload" | "url">(
     (settings.customFaviconUrl || "").startsWith("http") ? "url" : "upload",
   );
-  const [bannerUrl, setBannerUrl] = useState(settings.bannerUrl);
+  const defaultBannerImg = DEFAULT_SETTINGS.bannerUrl;
+  const defaultLoginBannerImg =
+    DEFAULT_SETTINGS.loginBannerUrl || DEFAULT_SETTINGS.bannerUrl;
+
+  const [useDefaultBanner, setUseDefaultBanner] = useState<boolean>(() => {
+    if (settings.useDefaultBanner !== undefined) {
+      return Boolean(settings.useDefaultBanner);
+    }
+    return Boolean(!settings.bannerUrl || settings.bannerUrl === defaultBannerImg);
+  });
+  const [bannerUrl, setBannerUrl] = useState(settings.bannerUrl || defaultBannerImg);
   const [customBannerUrl, setCustomBannerUrl] = useState(
     settings.customBannerUrl ||
-      (settings.bannerUrl !== DEFAULT_SETTINGS.bannerUrl
+      (settings.bannerUrl && settings.bannerUrl !== defaultBannerImg
         ? settings.bannerUrl
         : ""),
   );
+
+  const [useDefaultLoginBanner, setUseDefaultLoginBanner] = useState<boolean>(() => {
+    if (settings.useDefaultLoginBanner !== undefined) {
+      return Boolean(settings.useDefaultLoginBanner);
+    }
+    return Boolean(
+      !settings.loginBannerUrl ||
+      settings.loginBannerUrl === defaultLoginBannerImg ||
+      settings.loginBannerUrl === defaultBannerImg
+    );
+  });
   const [loginBannerUrl, setLoginBannerUrl] = useState(
-    settings.loginBannerUrl || settings.bannerUrl,
+    settings.loginBannerUrl || defaultLoginBannerImg,
   );
   const [customLoginBannerUrl, setCustomLoginBannerUrl] = useState(
     settings.customLoginBannerUrl ||
       (settings.loginBannerUrl &&
-      settings.loginBannerUrl !== DEFAULT_SETTINGS.bannerUrl
+      settings.loginBannerUrl !== defaultLoginBannerImg &&
+      settings.loginBannerUrl !== defaultBannerImg
         ? settings.loginBannerUrl
         : ""),
   );
@@ -1185,18 +1227,32 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           ? settings.faviconUrl
           : ""),
     );
-    setBannerUrl(settings.bannerUrl);
+    const isDefBanner = settings.useDefaultBanner !== undefined
+      ? Boolean(settings.useDefaultBanner)
+      : Boolean(!settings.bannerUrl || settings.bannerUrl === defaultBannerImg);
+    setUseDefaultBanner(isDefBanner);
+    setBannerUrl(isDefBanner ? defaultBannerImg : (settings.bannerUrl || defaultBannerImg));
     setCustomBannerUrl(
       settings.customBannerUrl ||
-        (settings.bannerUrl !== DEFAULT_SETTINGS.bannerUrl
+        (settings.bannerUrl && settings.bannerUrl !== defaultBannerImg
           ? settings.bannerUrl
           : ""),
     );
-    setLoginBannerUrl(settings.loginBannerUrl || settings.bannerUrl);
+
+    const isDefLoginBanner = settings.useDefaultLoginBanner !== undefined
+      ? Boolean(settings.useDefaultLoginBanner)
+      : Boolean(
+          !settings.loginBannerUrl ||
+          settings.loginBannerUrl === defaultLoginBannerImg ||
+          settings.loginBannerUrl === defaultBannerImg
+        );
+    setUseDefaultLoginBanner(isDefLoginBanner);
+    setLoginBannerUrl(isDefLoginBanner ? defaultLoginBannerImg : (settings.loginBannerUrl || defaultLoginBannerImg));
     setCustomLoginBannerUrl(
       settings.customLoginBannerUrl ||
         (settings.loginBannerUrl &&
-        settings.loginBannerUrl !== DEFAULT_SETTINGS.bannerUrl
+        settings.loginBannerUrl !== defaultLoginBannerImg &&
+        settings.loginBannerUrl !== defaultBannerImg
           ? settings.loginBannerUrl
           : ""),
     );
@@ -1335,9 +1391,34 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           (headerLogoUrl || "") !==
             (settings.headerLogoUrl || settings.logoUrl || "") ||
           (faviconUrl || "") !== (settings.faviconUrl || "/favicon.svg") ||
-          (bannerUrl || "") !== (settings.bannerUrl || "") ||
-          (loginBannerUrl || "") !==
-            (settings.loginBannerUrl || settings.bannerUrl || "") ||
+          useDefaultBanner !==
+            (settings.useDefaultBanner !== undefined
+              ? Boolean(settings.useDefaultBanner)
+              : Boolean(!settings.bannerUrl || settings.bannerUrl === defaultBannerImg)) ||
+          useDefaultLoginBanner !==
+            (settings.useDefaultLoginBanner !== undefined
+              ? Boolean(settings.useDefaultLoginBanner)
+              : Boolean(
+                  !settings.loginBannerUrl ||
+                  settings.loginBannerUrl === defaultLoginBannerImg ||
+                  settings.loginBannerUrl === defaultBannerImg
+                )) ||
+          (!useDefaultBanner &&
+            (customBannerUrl || "") !==
+              (settings.customBannerUrl ||
+                (settings.bannerUrl && settings.bannerUrl !== defaultBannerImg
+                  ? settings.bannerUrl
+                  : "") ||
+                "")) ||
+          (!useDefaultLoginBanner &&
+            (customLoginBannerUrl || "") !==
+              (settings.customLoginBannerUrl ||
+                (settings.loginBannerUrl &&
+                settings.loginBannerUrl !== defaultLoginBannerImg &&
+                settings.loginBannerUrl !== defaultBannerImg
+                  ? settings.loginBannerUrl
+                  : "") ||
+                "")) ||
           (customLogoUrl || "") !==
             (settings.customLogoUrl ||
               (settings.logoUrl !== DEFAULT_SETTINGS.logoUrl
@@ -1355,19 +1436,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             (settings.customFaviconUrl ||
               (settings.faviconUrl !== DEFAULT_SETTINGS.faviconUrl
                 ? settings.faviconUrl
-                : "") ||
-              "") ||
-          (customBannerUrl || "") !==
-            (settings.customBannerUrl ||
-              (settings.bannerUrl !== DEFAULT_SETTINGS.bannerUrl
-                ? settings.bannerUrl
-                : "") ||
-              "") ||
-          (customLoginBannerUrl || "") !==
-            (settings.customLoginBannerUrl ||
-              (settings.loginBannerUrl &&
-              settings.loginBannerUrl !== DEFAULT_SETTINGS.bannerUrl
-                ? settings.loginBannerUrl
                 : "") ||
               "") ||
           (bannerPosition || "50% 50%") !==
@@ -1409,7 +1477,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       headerLogoUrl,
       faviconUrl,
       bannerUrl,
+      useDefaultBanner,
       loginBannerUrl,
+      useDefaultLoginBanner,
       customLogoUrl,
       customHeaderLogoUrl,
       customFaviconUrl,
@@ -1537,18 +1607,24 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         type: "success",
       });
     } else if (tab === "layout") {
+      const resolvedBannerUrl = useDefaultBanner
+        ? defaultBannerImg
+        : (customBannerUrl || (bannerUrl !== defaultBannerImg ? bannerUrl : "") || defaultBannerImg);
+      const resolvedLoginBannerUrl = useDefaultLoginBanner
+        ? defaultLoginBannerImg
+        : (customLoginBannerUrl || (loginBannerUrl !== defaultLoginBannerImg ? loginBannerUrl : "") || defaultLoginBannerImg);
+
       onUpdateSettings({
         ...settings,
+        useDefaultBanner: Boolean(useDefaultBanner),
+        useDefaultLoginBanner: Boolean(useDefaultLoginBanner),
+        bannerUrl: resolvedBannerUrl,
+        loginBannerUrl: resolvedLoginBannerUrl,
+        customBannerUrl: useDefaultBanner ? (customBannerUrl || "") : (customBannerUrl || bannerUrl || ""),
+        customLoginBannerUrl: useDefaultLoginBanner ? (customLoginBannerUrl || "") : (customLoginBannerUrl || loginBannerUrl || ""),
         logoUrl,
         headerLogoUrl,
         faviconUrl,
-        bannerUrl,
-        loginBannerUrl,
-        customLogoUrl,
-        customHeaderLogoUrl,
-        customFaviconUrl,
-        customBannerUrl,
-        customLoginBannerUrl,
         bannerPosition,
         primaryColor,
         accentColor,
@@ -1613,37 +1689,32 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       setLogoUrl(settings.logoUrl);
       setHeaderLogoUrl(settings.headerLogoUrl || settings.logoUrl);
       setFaviconUrl(settings.faviconUrl || "/favicon.svg");
-      setBannerUrl(settings.bannerUrl);
-      setLoginBannerUrl(settings.loginBannerUrl || settings.bannerUrl);
-      setCustomLogoUrl(
-        settings.customLogoUrl ||
-          (settings.logoUrl !== DEFAULT_SETTINGS.logoUrl
-            ? settings.logoUrl
-            : ""),
-      );
-      setCustomHeaderLogoUrl(
-        settings.customHeaderLogoUrl ||
-          (settings.headerLogoUrl &&
-          settings.headerLogoUrl !== DEFAULT_SETTINGS.headerLogoUrl
-            ? settings.headerLogoUrl
-            : ""),
-      );
-      setCustomFaviconUrl(
-        settings.customFaviconUrl ||
-          (settings.faviconUrl !== DEFAULT_SETTINGS.faviconUrl
-            ? settings.faviconUrl
-            : ""),
-      );
+      const isDefBanner = settings.useDefaultBanner !== undefined
+        ? Boolean(settings.useDefaultBanner)
+        : Boolean(!settings.bannerUrl || settings.bannerUrl === defaultBannerImg);
+      setUseDefaultBanner(isDefBanner);
+      setBannerUrl(isDefBanner ? defaultBannerImg : (settings.bannerUrl || defaultBannerImg));
       setCustomBannerUrl(
         settings.customBannerUrl ||
-          (settings.bannerUrl !== DEFAULT_SETTINGS.bannerUrl
+          (settings.bannerUrl && settings.bannerUrl !== defaultBannerImg
             ? settings.bannerUrl
             : ""),
       );
+
+      const isDefLoginBanner = settings.useDefaultLoginBanner !== undefined
+        ? Boolean(settings.useDefaultLoginBanner)
+        : Boolean(
+            !settings.loginBannerUrl ||
+            settings.loginBannerUrl === defaultLoginBannerImg ||
+            settings.loginBannerUrl === defaultBannerImg
+          );
+      setUseDefaultLoginBanner(isDefLoginBanner);
+      setLoginBannerUrl(isDefLoginBanner ? defaultLoginBannerImg : (settings.loginBannerUrl || defaultLoginBannerImg));
       setCustomLoginBannerUrl(
         settings.customLoginBannerUrl ||
           (settings.loginBannerUrl &&
-          settings.loginBannerUrl !== DEFAULT_SETTINGS.bannerUrl
+          settings.loginBannerUrl !== defaultLoginBannerImg &&
+          settings.loginBannerUrl !== defaultBannerImg
             ? settings.loginBannerUrl
             : ""),
       );
@@ -2120,10 +2191,12 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           if (type === "banner") {
             setBannerUrl(dataUrl);
             setCustomBannerUrl(dataUrl);
+            setUseDefaultBanner(false);
           }
           if (type === "loginBanner") {
             setLoginBannerUrl(dataUrl);
             setCustomLoginBannerUrl(dataUrl);
+            setUseDefaultLoginBanner(false);
           }
           if (type === "facilityPhoto") {
             setFacilityPhotoUrl(dataUrl);
@@ -3028,7 +3101,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   }, [sortedAndFilteredUsers, userPage]);
 
   return (
-    <div className="w-full space-y-4 lg:space-y-6 lg:animate-in lg:fade-in lg:duration-500 pb-6 lg:pb-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full lg:animate-in lg:fade-in lg:duration-500">
       <div className="transition-all duration-300 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80">
         {/* Upper Dashboard header area */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-0 md:gap-4 mb-3 pb-3 md:mb-6 md:pb-6 border-b border-slate-100">
@@ -5097,8 +5170,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                               Farben
                             </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            <label className="cursor-pointer select-none inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
                                 checked={!isCustomColors}
                                 onChange={(e) => {
                                   if (e.target.checked) {
@@ -5233,8 +5308,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                                 Logo Anmelde- und Ladebildschirm
                               </label>
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              <label className="cursor-pointer select-none inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
                                   checked={logoUrl === DEFAULT_SETTINGS.logoUrl}
                                   onChange={(e) => {
                                     if (e.target.checked) {
@@ -5334,8 +5411,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                                 Logo Kopfzeile
                               </label>
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              <label className="cursor-pointer select-none inline-flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
                                   checked={
                                     headerLogoUrl ===
                                     (DEFAULT_SETTINGS.headerLogoUrl ||
@@ -5449,8 +5528,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 Symbol für den Browser-Tab
                               </span>
                             </div>
-                            <label className="flex items-center gap-2 cursor-pointer select-none">
-                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            <label className="cursor-pointer select-none inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
                                 checked={
                                   faviconUrl ===
                                   (DEFAULT_SETTINGS.faviconUrl ||
@@ -5690,25 +5771,28 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                               Vereinsbanner
                             </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                checked={
-                                  bannerUrl === DEFAULT_SETTINGS.bannerUrl
-                                }
+                            <label className="cursor-pointer select-none inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
+                                checked={Boolean(
+                                  useDefaultBanner ||
+                                  !bannerUrl ||
+                                  bannerUrl === defaultBannerImg
+                                )}
                                 onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setBannerUrl(DEFAULT_SETTINGS.bannerUrl);
+                                  const isChecked = e.target.checked;
+                                  setUseDefaultBanner(isChecked);
+                                  if (isChecked) {
+                                    setBannerUrl(defaultBannerImg);
                                   } else {
-                                    if (
-                                      !customBannerUrl ||
-                                      customBannerUrl ===
-                                        DEFAULT_SETTINGS.bannerUrl
-                                    ) {
-                                      setBannerUrl("");
-                                      setCustomBannerUrl("");
-                                    } else {
-                                      setBannerUrl(customBannerUrl);
-                                    }
+                                    const fallback =
+                                      customBannerUrl &&
+                                      customBannerUrl !== defaultBannerImg
+                                        ? customBannerUrl
+                                        : "";
+                                    setBannerUrl(fallback);
+                                    setCustomBannerUrl(fallback);
                                   }
                                 }}
                               />
@@ -5719,32 +5803,50 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
 
                           <div
-                            className={`transition-opacity ${bannerUrl === DEFAULT_SETTINGS.bannerUrl ? "opacity-50 pointer-events-none" : ""}`}
+                            className={`transition-opacity ${useDefaultBanner ? "opacity-60" : ""}`}
                           >
-                            {!customBannerUrl ? (
+                            {useDefaultBanner || !customBannerUrl ? (
                               <div className="flex gap-2">
-                                <input 
+                                <input
                                   type="text"
-                                  value={customBannerUrl}
+                                  disabled={useDefaultBanner}
+                                  value={useDefaultBanner ? "" : customBannerUrl}
                                   onChange={(e) => {
                                     setBannerUrl(e.target.value);
                                     setCustomBannerUrl(e.target.value);
+                                    if (useDefaultBanner) setUseDefaultBanner(false);
                                   }}
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                  placeholder="https://example.com/banner.jpg"
+                                  className={`flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400 ${
+                                    useDefaultBanner
+                                      ? "opacity-50 cursor-not-allowed bg-slate-50"
+                                      : ""
+                                  }`}
+                                  placeholder={
+                                    useDefaultBanner
+                                      ? "Standard-Vereinsbanner aktiv"
+                                      : "https://example.com/banner.jpg"
+                                  }
                                 />
-                                <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
+                                <label
+                                  className={`border border-slate-200/80 rounded-xl px-4 flex items-center justify-center h-10 shrink-0 ${
+                                    useDefaultBanner
+                                      ? "bg-slate-100 opacity-50 cursor-not-allowed pointer-events-none"
+                                      : "bg-slate-100 hover:border-[var(--color-primary)] cursor-pointer hover:bg-slate-200 transition-colors"
+                                  }`}
+                                >
                                   {uploadingImage.banner ? (
                                     <i className="fa-solid fa-spinner fa-spin text-sm"></i>
                                   ) : (
                                     <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                   )}
-                                  <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  <input
+                                    type="file"
+                                    className="hidden p-2 font-sans font-medium"
                                     accept="image/*"
                                     onChange={(e) =>
                                       handleImageUpload(e, "banner")
                                     }
-                                    disabled={uploadingImage.banner}
+                                    disabled={useDefaultBanner || uploadingImage.banner}
                                   />
                                 </label>
                               </div>
@@ -5761,7 +5863,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md flex items-center">
                                       <i className="fa-solid fa-upload mr-1.5"></i>
                                       Bild ändern
-                                      <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                      <input
+                                        type="file"
+                                        className="hidden p-2 font-sans font-medium"
                                         accept="image/*"
                                         onChange={(e) =>
                                           handleImageUpload(e, "banner")
@@ -5805,32 +5909,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                               Anmelde-Hintergrund (Grafik)
                             </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input className="w-4 h-4 accent-[var(--color-primary)] placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                checked={
-                                  loginBannerUrl ===
-                                  (DEFAULT_SETTINGS.loginBannerUrl ||
-                                    DEFAULT_SETTINGS.bannerUrl)
-                                }
+                            <label className="cursor-pointer select-none inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
+                                checked={Boolean(
+                                  useDefaultLoginBanner ||
+                                  !loginBannerUrl ||
+                                  loginBannerUrl === defaultLoginBannerImg ||
+                                  loginBannerUrl === defaultBannerImg
+                                )}
                                 onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setLoginBannerUrl(
-                                      DEFAULT_SETTINGS.loginBannerUrl ||
-                                        DEFAULT_SETTINGS.bannerUrl,
-                                    );
+                                  const isChecked = e.target.checked;
+                                  setUseDefaultLoginBanner(isChecked);
+                                  if (isChecked) {
+                                    setLoginBannerUrl(defaultLoginBannerImg);
                                   } else {
-                                    const defLogB =
-                                      DEFAULT_SETTINGS.loginBannerUrl ||
-                                      DEFAULT_SETTINGS.bannerUrl;
-                                    if (
-                                      !customLoginBannerUrl ||
-                                      customLoginBannerUrl === defLogB
-                                    ) {
-                                      setLoginBannerUrl("");
-                                      setCustomLoginBannerUrl("");
-                                    } else {
-                                      setLoginBannerUrl(customLoginBannerUrl);
-                                    }
+                                    const fallback =
+                                      customLoginBannerUrl &&
+                                      customLoginBannerUrl !== defaultLoginBannerImg &&
+                                      customLoginBannerUrl !== defaultBannerImg
+                                        ? customLoginBannerUrl
+                                        : "";
+                                    setLoginBannerUrl(fallback);
+                                    setCustomLoginBannerUrl(fallback);
                                   }
                                 }}
                               />
@@ -5841,32 +5943,50 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
 
                           <div
-                            className={`transition-opacity ${loginBannerUrl === (DEFAULT_SETTINGS.loginBannerUrl || DEFAULT_SETTINGS.bannerUrl) ? "opacity-50 pointer-events-none" : ""}`}
+                            className={`transition-opacity ${useDefaultLoginBanner ? "opacity-60" : ""}`}
                           >
-                            {!customLoginBannerUrl ? (
+                            {useDefaultLoginBanner || !customLoginBannerUrl ? (
                               <div className="flex gap-2">
-                                <input 
+                                <input
                                   type="text"
-                                  value={customLoginBannerUrl}
+                                  disabled={useDefaultLoginBanner}
+                                  value={useDefaultLoginBanner ? "" : customLoginBannerUrl}
                                   onChange={(e) => {
                                     setLoginBannerUrl(e.target.value);
                                     setCustomLoginBannerUrl(e.target.value);
+                                    if (useDefaultLoginBanner) setUseDefaultLoginBanner(false);
                                   }}
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                  placeholder="https://example.com/login-banner.jpg"
+                                  className={`flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400 ${
+                                    useDefaultLoginBanner
+                                      ? "opacity-50 cursor-not-allowed bg-slate-50"
+                                      : ""
+                                  }`}
+                                  placeholder={
+                                    useDefaultLoginBanner
+                                      ? "Standard-Anmeldehintergrund aktiv"
+                                      : "https://example.com/login-banner.jpg"
+                                  }
                                 />
-                                <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
+                                <label
+                                  className={`border border-slate-200/80 rounded-xl px-4 flex items-center justify-center h-10 shrink-0 ${
+                                    useDefaultLoginBanner
+                                      ? "bg-slate-100 opacity-50 cursor-not-allowed pointer-events-none"
+                                      : "bg-slate-100 hover:border-[var(--color-primary)] cursor-pointer hover:bg-slate-200 transition-colors"
+                                  }`}
+                                >
                                   {uploadingImage.loginBanner ? (
                                     <i className="fa-solid fa-spinner fa-spin text-sm"></i>
                                   ) : (
                                     <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                   )}
-                                  <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  <input
+                                    type="file"
+                                    className="hidden p-2 font-sans font-medium"
                                     accept="image/*"
                                     onChange={(e) =>
                                       handleImageUpload(e, "loginBanner")
                                     }
-                                    disabled={uploadingImage.loginBanner}
+                                    disabled={useDefaultLoginBanner || uploadingImage.loginBanner}
                                   />
                                 </label>
                               </div>
@@ -5881,7 +6001,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md flex items-center">
                                     <i className="fa-solid fa-upload mr-1.5"></i>
                                     Bild ändern
-                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    <input
+                                      type="file"
+                                      className="hidden p-2 font-sans font-medium"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "loginBanner")
@@ -7458,6 +7580,19 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                 </div>
               )}
 
+              {/* TAB: BENACHRICHTIGUNGEN & MASSENVERWALTUNG */}
+              {currentTab === "notifications" && (
+                <div className="animate-in fade-in duration-300">
+                  <AdminNotificationsManagement
+                    users={users}
+                    currentUser={currentUser}
+                    currentClubId={settings?.vereinsId || "sv-neuhausen"}
+                    clubName={settings?.clubName || settings?.name || "Tennis-Club e.V."}
+                    onUpdateUsers={onUpdateUsers}
+                  />
+                </div>
+              )}
+
               {/* TAB 5: DATENVERWALTUNG */}
               {currentTab === "database" && (
                 <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
@@ -8835,6 +8970,69 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               onChange={(e) => setEventEndTime(e.target.value)}
                               className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                             />
+                          </div>
+                        </div>
+
+                        {/* An- & Abmeldefristen (Optional) in einer gemeinsamen Karte */}
+                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                                Anmeldung ab (optional)
+                              </label>
+                              <input 
+                                type="date"
+                                value={eventRegistrationStart}
+                                onChange={(e) =>
+                                  setEventRegistrationStart(e.target.value)
+                                }
+                                className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                                Anmeldung bis (optional)
+                              </label>
+                              <input 
+                                type="date"
+                                value={eventRegistrationEnd}
+                                onChange={(e) =>
+                                  setEventRegistrationEnd(e.target.value)
+                                }
+                                className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="border-t border-slate-200/80 pt-2.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                                  Abmeldung ab (optional)
+                                </label>
+                                <input 
+                                  type="date"
+                                  value={eventDeregistrationStart}
+                                  onChange={(e) =>
+                                    setEventDeregistrationStart(e.target.value)
+                                  }
+                                  className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                                  Abmeldung bis (optional)
+                                </label>
+                                <input 
+                                  type="date"
+                                  value={eventDeregistrationEnd}
+                                  onChange={(e) =>
+                                    setEventDeregistrationEnd(e.target.value)
+                                  }
+                                  className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
 

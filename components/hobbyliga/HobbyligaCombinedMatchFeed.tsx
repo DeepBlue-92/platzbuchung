@@ -114,17 +114,17 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
       {/* SECTION 0 (TOP): PENDING MATCHES (PARTICIPANT-SPECIFIC)                   */}
       {/* ========================================================================= */}
       {sortedPending.length > 0 && (
-        <div className="p-4 md:p-5 border-b border-rose-100 bg-rose-50/40 space-y-3">
-          <div className="flex items-center justify-between border-b border-rose-100 pb-2.5">
+        <div className="p-4 md:p-5 border-b border-slate-100 bg-slate-50/50 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200/70 pb-2.5">
             <div className="flex items-center gap-2 min-w-0">
-              <h3 className="text-xs font-black text-rose-800 uppercase tracking-widest flex items-center gap-1.5 truncate">
-                <i className="fa-solid fa-triangle-exclamation text-rose-600"></i>
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5 truncate">
+                <i className="fa-regular fa-clock text-amber-500"></i>
                 <span>Offene Ergebnisse</span>
               </h3>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[10px] font-black uppercase tracking-wider bg-rose-500 text-white px-2 py-0.5 rounded-full shadow-xs flex items-center gap-1">
+              <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-semibold px-2 py-0.5 rounded-full shadow-2xs flex items-center gap-1 uppercase tracking-wider">
                 Dein Match
               </span>
 
@@ -132,17 +132,17 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                 <div className="flex items-center gap-1 ml-1">
                   <button
                     onClick={handlePrevPending}
-                    className="w-5 h-5 rounded-md bg-white hover:bg-rose-100 text-rose-700 flex items-center justify-center transition-colors border border-rose-200 cursor-pointer"
+                    className="w-5 h-5 rounded-md bg-white hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors border border-slate-200 cursor-pointer shadow-2xs"
                     title="Vorheriges offenes Spiel"
                   >
                     <i className="fa-solid fa-chevron-left text-[8px]" />
                   </button>
-                  <span className="text-[10px] font-bold text-rose-600 min-w-[20px] text-center">
+                  <span className="text-[10px] font-bold text-slate-500 min-w-[20px] text-center">
                     {pendingIndex + 1}/{sortedPending.length}
                   </span>
                   <button
                     onClick={handleNextPending}
-                    className="w-5 h-5 rounded-md bg-white hover:bg-rose-100 text-rose-700 flex items-center justify-center transition-colors border border-rose-200 cursor-pointer"
+                    className="w-5 h-5 rounded-md bg-white hover:bg-slate-100 text-slate-600 flex items-center justify-center transition-colors border border-slate-200 cursor-pointer shadow-2xs"
                     title="Nächstes offenes Spiel"
                   >
                     <i className="fa-solid fa-chevron-right text-[8px]" />
@@ -174,7 +174,7 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
 
               return (
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-xs">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-2xs">
                     <span className="flex items-center gap-1.5 truncate">
                       <i className="fa-regular fa-calendar-days text-slate-400 shrink-0" />
                       <span className="truncate font-semibold text-slate-700">
@@ -190,13 +190,13 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                   </div>
 
                   {courtLocation && courtLocation !== 'Platz n.V.' && (
-                    <div className="flex items-center gap-1.5 text-[10.5px] text-rose-600 px-1 -mt-1">
-                      <i className="fa-solid fa-location-dot text-rose-500 text-[10px] shrink-0" />
-                      <span className="font-semibold truncate">{courtLocation}</span>
+                    <div className="flex items-center gap-1.5 text-[10.5px] text-slate-500 px-1 -mt-1">
+                      <i className="fa-solid fa-location-dot text-amber-500 text-[10px] shrink-0" />
+                      <span className="font-semibold text-slate-700 truncate">{courtLocation}</span>
                     </div>
                   )}
 
-                  <div className="p-3 rounded-xl border border-rose-200/80 bg-white shadow-xs transition-all">
+                  <div className="p-3 rounded-xl border border-slate-200 bg-white shadow-2xs transition-all">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className="relative shrink-0">
@@ -208,25 +208,25 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                             name={p1Name}
                             size="sm"
                             variant={p1IsUser ? "green" : "neutral"}
-                            className={p1IsUser ? "ring-2 ring-emerald-500/40 shadow-xs" : ""}
+                            className={p1IsUser ? "ring-1 ring-emerald-400/50 shadow-2xs" : ""}
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className={`text-xs font-bold truncate ${p1IsUser ? 'text-emerald-900 font-black' : 'text-slate-700'}`}>
+                          <div className={`text-xs font-bold truncate ${p1IsUser ? 'text-emerald-950 font-black' : 'text-slate-700'}`}>
                             {p1Name}
                           </div>
-                          {p1IsUser && <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block">Du</span>}
+                          {p1IsUser && <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider block">Du</span>}
                         </div>
                       </div>
 
-                      <span className="text-[10px] font-black text-rose-300 uppercase tracking-widest px-1 shrink-0">VS</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 shrink-0">VS</span>
 
                       <div className="flex items-center gap-2 flex-1 min-w-0 justify-end text-right">
                         <div className="min-w-0 flex-1">
-                          <div className={`text-xs font-bold truncate ${p2IsUser ? 'text-emerald-900 font-black' : 'text-slate-700'}`}>
+                          <div className={`text-xs font-bold truncate ${p2IsUser ? 'text-emerald-950 font-black' : 'text-slate-700'}`}>
                             {p2Name}
                           </div>
-                          {p2IsUser && <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider block">Du</span>}
+                          {p2IsUser && <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider block">Du</span>}
                         </div>
                         <div className="relative shrink-0">
                           <UserAvatar
@@ -237,7 +237,7 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                             name={p2Name}
                             size="sm"
                             variant={p2IsUser ? "green" : "neutral"}
-                            className={p2IsUser ? "ring-2 ring-emerald-500/40 shadow-xs" : ""}
+                            className={p2IsUser ? "ring-1 ring-emerald-400/50 shadow-2xs" : ""}
                           />
                         </div>
                       </div>
@@ -247,7 +247,7 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                   <div className="pt-1 flex items-center gap-2">
                     <button
                       onClick={() => onEnterResult(currentPending)}
-                      className="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white font-medium text-xs rounded-xl shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <i className="fa-solid fa-pen-to-square text-[11px]" />
                       Ergebnis eintragen
@@ -770,13 +770,13 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                   <div className="pt-1 flex items-center gap-2">
                     <button
                       onClick={() => onEditMatch && onEditMatch(currentCompleted)}
-                      className="flex-1 py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="flex-1 py-1.5 px-3 border border-slate-200 bg-white text-slate-600 text-xs font-medium rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                     >
                       <i className="fa-solid fa-pen text-[10px]" /> Korrigieren
                     </button>
                     <button
                       onClick={() => onCancelMatch && onCancelMatch(currentCompleted)}
-                      className="py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="py-1.5 px-3 border border-slate-200 bg-white text-slate-600 text-xs font-medium rounded-xl hover:bg-slate-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                       title="Match-Ergebnis stornieren und Punkte zurücksetzen"
                     >
                       <i className="fa-solid fa-rotate-left text-[10px]" /> Stornieren

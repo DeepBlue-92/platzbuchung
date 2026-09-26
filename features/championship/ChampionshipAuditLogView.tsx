@@ -85,6 +85,7 @@ export const ChampionshipAuditLogView: React.FC<ChampionshipAuditLogViewProps> =
   const getActionBadge = (action: ChampionshipAuditLogEntry['action']) => {
     switch (action) {
       case 'create_result':
+      case 'enter_result':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <CheckCircle2 className="w-3 h-3" />
@@ -92,6 +93,7 @@ export const ChampionshipAuditLogView: React.FC<ChampionshipAuditLogViewProps> =
           </span>
         );
       case 'update_result':
+      case 'edit_result':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
             <Edit3 className="w-3 h-3" />

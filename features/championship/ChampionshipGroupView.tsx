@@ -114,9 +114,23 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                 <div className="flex items-center gap-2">
                   <h4 className="font-bold text-slate-900 text-sm tracking-tight">{group.name}</h4>
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Top {advancingSlots} qualifizieren sich
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Top {advancingSlots} qualifizieren sich
+                  </span>
+                  <div className="relative group/tooltip inline-flex items-center">
+                    <button
+                      type="button"
+                      aria-label="Kriterium bei Punktgleichheit"
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer focus:outline-none flex items-center"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="absolute right-0 top-full mt-1.5 w-64 p-2.5 bg-slate-900 text-white text-[11px] font-normal rounded-lg shadow-lg pointer-events-none z-50 invisible opacity-0 group-hover/tooltip:visible group-hover/tooltip:opacity-100 group-focus-within/tooltip:visible group-focus-within/tooltip:opacity-100 transition-all duration-150 leading-snug">
+                      Kriterium bei Punktgleichheit: Direkter Vergleich (bei 2 Spielern), danach Satzdifferenz und Spieldifferenz.
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Table */}
@@ -125,7 +139,10 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                   <thead>
                     <tr className="border-b border-slate-200 text-xs sm:text-[13px] font-normal uppercase tracking-wider text-slate-600 bg-slate-50/80">
                       <th className="py-2.5 px-2 sm:px-3 w-8 sm:w-10 text-center font-normal text-slate-600">#</th>
-                      <th className="py-2.5 px-2 sm:px-3 min-w-[120px] sm:min-w-[140px] font-normal text-slate-600">Spieler / Team</th>
+                      <th className="py-2.5 px-2 sm:px-3 min-w-[120px] sm:min-w-[140px] font-normal text-slate-600">
+                        <span>Spieler / Team</span>
+                        <span className="text-[10px] font-normal text-slate-400 ml-1">(Klick filtert)</span>
+                      </th>
                       
                       {/* Mobile-only Bilanz (S:N) */}
                       <th className="py-2.5 px-1.5 w-16 text-center font-normal text-slate-600 table-cell sm:hidden" title="Bilanz (Siege : Niederlagen)">
@@ -155,14 +172,14 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
                         <tr
                           key={row.participantId}
                           onClick={() => handleRowClick(row.participantId)}
-                          className={`transition-all cursor-pointer ${
+                          className={`cursor-pointer hover:bg-slate-50 transition-colors ${
                             isSelected
                               ? 'bg-emerald-100/70 border-l-4 border-emerald-600 shadow-xs'
                               : row.isAdvancing
-                              ? 'bg-emerald-50/40 hover:bg-emerald-50/70'
-                              : 'hover:bg-slate-50'
+                              ? 'bg-emerald-50/40'
+                              : ''
                           }`}
-                          title="Klicken, um nur die Spiele dieses Spielers anzuzeigen"
+                          title={`Spiele von ${displayName} anzeigen`}
                         >
                           <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-center">
                             <div className="flex items-center justify-center">
@@ -246,29 +263,6 @@ export const ChampionshipGroupView: React.FC<ChampionshipGroupViewProps> = ({
             </div>
           );
         })}
-      </div>
-
-      {/* Tie Break rule hint */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[12.5px] sm:text-[13px] text-slate-600 font-medium leading-relaxed">
-        <div className="flex items-center gap-2.5">
-          <HelpCircle className="w-4.5 h-4.5 text-slate-400 shrink-0" />
-          <span>
-            <strong>Kriterium bei Punktgleichheit:</strong>{' '}
-            {tournament.tieBreakRule === 'head_to_head'
-              ? 'Direkter Vergleich (bei 2 Spielern), danach Satzdifferenz und Spieldifferenz.'
-              : 'Satzdifferenz, danach Spieldifferenz.'}
-            {' '}Klicke auf einen Spieler in der Tabelle, um seine Spiele zu filtern.
-          </span>
-        </div>
-        {internalSelectedId && (
-          <button
-            type="button"
-            onClick={handleResetFilter}
-            className="text-xs sm:text-[12.5px] font-bold text-emerald-700 hover:text-emerald-900 shrink-0 underline cursor-pointer"
-          >
-            Filter zurücksetzen
-          </button>
-        )}
       </div>
 
       {/* Embedded Match List below groups */}

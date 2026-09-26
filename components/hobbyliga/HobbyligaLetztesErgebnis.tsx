@@ -254,13 +254,13 @@ export const HobbyligaLetztesErgebnis: React.FC<HobbyligaLetztesErgebnisProps> =
                 <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
                   <button
                     onClick={() => onEditMatch && onEditMatch(latestCompletedMatch)}
-                    className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 py-1.5 px-3 border border-slate-200 bg-white text-slate-600 text-xs font-medium rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                   >
                     <i className="fa-solid fa-pen text-[10px]" /> Korrigieren
                   </button>
                   <button
                     onClick={() => onCancelMatch && onCancelMatch(latestCompletedMatch)}
-                    className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="py-1.5 px-3 border border-slate-200 bg-white text-slate-600 text-xs font-medium rounded-xl hover:bg-slate-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                     title="Match-Ergebnis stornieren und Punkte zurücksetzen"
                   >
                     <i className="fa-solid fa-rotate-left text-[10px]" /> Stornieren

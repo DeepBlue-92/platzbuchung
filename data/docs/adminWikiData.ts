@@ -77,9 +77,11 @@ Unter **Einstellungen ➔ Mitglieder-Onboarding** kann der Begrüßungsdialog ge
   - Sobald ein Mitglied sein Erst-Onboarding bestätigt, zeigt das System über dem schwebenden Maskottchen-Button eine dezente Sprechblase (*„Hi, ich bin ACE! 👋“*).
   - Der Status wird über das Benutzerprofil (\`has_seen_ace_welcome: true\`) und im LocalStorage dauerhaft gespeichert, sodass der Hinweis garantiert nur einmalig pro Benutzerlebenszeit erscheint.
   - Das Element blendet sich nach 8 Sekunden selbstständig aus oder schließt sich per Klick.
-- **Stapelverarbeitung (Batch-Reset):**
-  - **„Für alle einschalten“:** Setzt clubweit bei allen Mitgliedern \`onboarding_pending: true\`. Beim nächsten Einloggen muss jeder Spieler seine Stammdaten bestätigen (ideal zur Frühjahrssaison).
-  - **„Für alle ausschalten“:** Schaltet das Onboarding für alle Mitglieder sofort auf erledigt.`
+- **Stapelverarbeitung: Onboarding-Status (Selektiv & Global):**
+  - **Schnellsuche & Filter:** Suche nach Vor-/Nachnamen und E-Mail sowie Filterung nach *„Ausstehend“* und *„Erledigt“*.
+  - **Mehrfachauswahl & Bulk-Aktionen:** Markiere gezielt einzelne oder alle gefilterten Mitglieder und aktiviere das Onboarding oder markiere es mit einem Klick als erledigt.
+  - **Einzel-Umschalter:** Schalte das Onboarding für ein einzelnes Mitglied direkt in der Liste um.
+  - **Globale Aktionen:** Über *„Für alle anwenden...“* kann das Onboarding weiterhin für die gesamte Mitgliedschaft auf einmal ein- oder ausgeschaltet werden (inkl. Sicherheits-Abfrage).`
       },
       {
         id: 'dsgvo-loeschung-papierkorb',

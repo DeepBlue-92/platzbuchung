@@ -22,11 +22,14 @@ import {
 import { listenToRankings } from '../../services/db';
 import { propagateWinnersInTournament } from '../../utils/championshipCalculator';
 import { canUserEditChampionshipMatch, isChampionshipAdmin } from '../../utils/championshipPermissions';
+import { formatParticipantById } from '../../utils/championshipNameResolver';
 import { ChampionshipGroupView } from './ChampionshipGroupView';
 import { ChampionshipMatchCard } from './ChampionshipMatchCard';
 import { ChampionshipResultModal } from './ChampionshipResultModal';
 import { ChampionshipAdmin } from './ChampionshipAdmin';
 import { ChampionshipBentoHeader, ChampionshipPhaseKey } from './ChampionshipBentoHeader';
+import { ChampionshipPrintView } from './ChampionshipPrintView';
+import { ChampionshipPrintModal } from './ChampionshipPrintModal';
 import { User, RankingState } from '../../types';
 
 interface ChampionshipHubProps {
@@ -37,6 +40,8 @@ interface ChampionshipHubProps {
   onNavigateToReservations: () => void;
   onNavigateToAdmin?: () => void;
   initialAdminView?: boolean;
+  clubName?: string;
+  logoUrl?: string;
 }
 
 export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
@@ -47,6 +52,8 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   onNavigateToReservations,
   onNavigateToAdmin,
   initialAdminView = false,
+  clubName = 'Tennis-Club',
+  logoUrl,
 }) => {
   const [tournaments, setTournaments] = useState<TournamentInstance[]>([]);
   const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
@@ -62,6 +69,9 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   // Result entry modal
   const [modalMatch, setModalMatch] = useState<Match | null>(null);
   const [isResultModalOpen, setIsResultModalOpen] = useState<boolean>(false);
+
+  // Print & PDF Preview modal
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
   const isAdmin = isChampionshipAdmin(currentUser);
 
@@ -241,19 +251,41 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
     const oldScoreSummary = formatScoreSummary(existingMatch.result);
     const newScoreSummary = formatScoreSummary(result);
 
+    const p1Name = formatParticipantById(existingMatch.participant1Id, currentTournament.participants || [], users);
+    const p2Name = formatParticipantById(existingMatch.participant2Id, currentTournament.participants || [], users);
+    const winnerName = formatParticipantById(result.winnerParticipantId, currentTournament.participants || [], users);
+    const resolvedUserName = currentUser?.firstName && currentUser?.lastName
+      ? `${currentUser.firstName} ${currentUser.lastName}`
+      : currentUser?.name || currentUser?.username || 'Unbekannt';
+
     const auditEntry: ChampionshipAuditLogEntry = {
       id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      matchId,
-      action: isCorrection ? 'edit_result' : 'enter_result',
-      actorId: currentUser?.id || 'unknown',
-      actorName: currentUser?.name || currentUser?.username || 'Unbekannt',
-      actorRole: isAdmin ? 'admin' : 'player',
       timestamp: new Date().toISOString(),
+      matchId,
+      userId: currentUser?.id || 'unknown',
+      userName: resolvedUserName,
+      userRole: isAdmin ? 'admin' : 'player',
+      actorId: currentUser?.id || 'unknown',
+      actorName: resolvedUserName,
+      actorRole: isAdmin ? 'admin' : 'player',
+      action: result.isWalkover ? 'walkover' : (isCorrection ? 'update_result' : 'create_result'),
+      roundLabel: existingMatch.roundLabel || 'Begegnung',
+      stageName: currentTournament.stages?.find((s) => s.id === existingMatch.stageId)?.name || '',
+      participant1Name: p1Name,
+      participant2Name: p2Name,
+      previousResultSummary: oldScoreSummary,
+      newResultSummary: newScoreSummary || 'Ergebnis erfasst',
+      winnerName: winnerName || (result.isWalkover ? 'Aufgabe' : ''),
+      isWalkover: result.isWalkover,
+      walkoverReason: result.walkoverReason,
       details: {
         roundLabel: existingMatch.roundLabel,
         participant1Id: existingMatch.participant1Id,
         participant2Id: existingMatch.participant2Id,
+        participant1Name: p1Name,
+        participant2Name: p2Name,
         winnerParticipantId: result.winnerParticipantId,
+        winnerName,
         oldResult: existingMatch.result || null,
         newResult: result,
         oldScoreSummary,
@@ -296,8 +328,14 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
     setIsResultModalOpen(true);
   };
 
+  const phases: Array<{ key: 'groups' | 'semis' | 'finals'; num: number; label: string; mobileLabel: string }> = [
+    { key: 'groups', num: 1, label: 'Gruppenphase', mobileLabel: 'Gruppen' },
+    { key: 'semis', num: 2, label: 'Halbfinale', mobileLabel: 'Halbfinale' },
+    { key: 'finals', num: 3, label: 'Endrunde', mobileLabel: 'Endrunde' },
+  ];
+
   return (
-    <div className="w-full space-y-4 lg:space-y-4 pb-8 lg:pb-10">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full">
       {/* ======================================================== */}
       {/* BENTO-CARD 1: Globaler Steuerungs-Header (Oben)          */}
       {/* ======================================================== */}
@@ -311,20 +349,55 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
             setSelectedParticipantFilter(null);
           }}
           activePhase={activePhase}
-          onSelectPhase={(phase) => {
-            setActivePhase(phase);
-            setSelectedParticipantFilter(null);
-          }}
           isAdmin={isAdmin}
           onNavigateToAdmin={onNavigateToAdmin}
           onSelectAdmin={() => setActivePhase('admin')}
+          users={users}
+          clubName={clubName}
+          onOpenPrintPreview={() => setIsPrintModalOpen(true)}
         />
       )}
 
       {/* ======================================================== */}
       {/* BENTO-CARD 2: Dynamischer Inhalts-Container (Unten)      */}
       {/* ======================================================== */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6 min-h-[360px]">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6 min-h-[360px] space-y-4 sm:space-y-5 print:hidden">
+        {/* Phasen-Navigation (1: Gruppe, 2: HF, 3: Finale) */}
+        {currentTournament && (
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-3 pb-3 sm:pb-4 border-b border-slate-100">
+            {phases.map((phase) => {
+              const isActive = activePhase === phase.key;
+              return (
+                <button
+                  key={phase.key}
+                  type="button"
+                  onClick={() => {
+                    setActivePhase(phase.key);
+                    setSelectedParticipantFilter(null);
+                  }}
+                  className={`flex items-center justify-center gap-1 sm:gap-2 px-2.5 py-1.5 sm:px-4 sm:py-2.5 rounded-xl border text-xs sm:text-sm font-medium transition-all cursor-pointer text-center ${
+                    isActive
+                      ? 'bg-emerald-50/80 border-emerald-600 text-emerald-950 font-bold ring-1 ring-emerald-500 shadow-2xs'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <span
+                    className={`w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full text-[10px] sm:text-[11px] font-bold flex items-center justify-center shrink-0 ${
+                      isActive
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {phase.num}
+                  </span>
+                  <span className="hidden sm:inline whitespace-nowrap">{phase.label}</span>
+                  <span className="inline sm:hidden whitespace-nowrap">{phase.mobileLabel}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
           {activePhase === 'admin' && isAdmin ? (
             <motion.div
@@ -345,6 +418,7 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
                   setActivePhase('groups');
                 }}
                 activeTournamentId={selectedTournamentId}
+                clubName={clubName}
               />
             </motion.div>
           ) : currentTournament ? (
@@ -494,6 +568,30 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
           currentUser={currentUser}
           onSaveResult={handleSaveResult}
           users={users}
+        />
+      )}
+
+      {/* Print & PDF Preview Modal */}
+      {currentTournament && (
+        <ChampionshipPrintModal
+          isOpen={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          tournament={currentTournament}
+          users={users}
+          clubName={clubName}
+          logoUrl={logoUrl}
+          rankings={effectiveRankings}
+        />
+      )}
+
+      {/* Clean DIN A4 Print & PDF View */}
+      {currentTournament && (
+        <ChampionshipPrintView
+          tournament={currentTournament}
+          users={users}
+          clubName={clubName}
+          logoUrl={logoUrl}
+          rankings={effectiveRankings}
         />
       )}
     </div>

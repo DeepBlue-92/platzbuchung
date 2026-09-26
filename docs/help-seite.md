@@ -49,11 +49,39 @@ Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Mit
 - **Passwort-Sicherheit:** Wird im Onboarding die Vergabe eines neuen Passworts genutzt, gilt eine barrierefreie Mindestanforderung von 8 Zeichen (mit passendem Hilfetext und Eingabeüberprüfung).
 - **Klares Avatar-Design:** Der Bereich für das persönliche Profilbild zeigt eine kompakte Kachel ohne doppelte Überschriftenzeilen.
 - **Bestätigen oder Später anzeigen:** Am unteren Rand des Formulars befindet sich links neben dem Button *„Bestätigen“* ein dezenter Textlink *„Später anzeigen“*. Klickt das Mitglied auf *„Später anzeigen“*, schließt sich das Fenster für die laufende Sitzung, ohne die Stammdaten oder die Kennzeichnung „Onboarding ausstehend“ in der Datenbank zu verändern. Beim nächsten Anmelden wird das Begrüßungsfenster automatisch erneut angezeigt. Erst mit Klick auf *„Bestätigen“* werden die aktualisierten Daten in der Datenbank gespeichert und das Onboarding gilt dauerhaft als abgeschlossen.
-- **Stapelverarbeitung (Einschalten & Ausschalten für alle):** Im unteren Bereich der Einstellungen stehen zwei Knöpfe für die gesamte Mitgliedschaft bereit:
-  - *Für alle einschalten:* Setzt bei allen Mitgliedern die Kennzeichnung „Onboarding ausstehend“, sodass jeder beim nächsten Einloggen das Begrüßungsfenster sieht und seine Stammdaten bestätigen muss (ideal z. B. zu Beginn einer neuen Saison oder nach Ergänzung neuer Pflichtfelder).
-  - *Für alle ausschalten:* Markiert das Onboarding für alle Mitglieder sofort als erledigt, sodass niemand mehr beim Login dazu aufgefordert wird.
-  - Beide Aktionen sind mit einem Sicherheits-Dialog versehen, damit Änderungen nicht versehentlich ausgelöst werden.
+- **Stapelverarbeitung: Onboarding-Status (Selektive Steuerung & Schnellsuche):** Im unteren Bereich der Einstellungen steht eine flexible Verwaltungskarte für alle Mitglieder bereit:
+  - *Schnellsuche:* Durchsuche die Mitgliederliste in Echtzeit nach Vorname, Nachname, Benutzername oder E-Mail-Adresse.
+  - *Schnellfilter (Pills):* Wechsle mit einem Klick zwischen *„Alle“*, *„Ausstehend“* (Onboarding offen) und *„Erledigt“* (bereits bestätigt).
+  - *Einzelauswahl & Mehrfachauswahl (Bulk):* Über die Checkbox im Tabellenkopf („Mitglied“) lassen sich alle aktuell gefilterten oder sämtliche Vereinsmitglieder mit einem Klick markieren bzw. abwählen. Zudem kann jedes Mitglied über die linke Checkbox einzeln ausgewählt werden.
+  - *Aktionsleiste für Markierte:* Sobald Mitglieder markiert sind, erscheint automatisch die Aktionsleiste mit den Schaltflächen *„Onboarding aktivieren“* (setzt den Status auf ausstehend) und *„Als erledigt markieren“*. So lässt sich das Onboarding sowohl für gezielte Gruppen als auch für alle Mitglieder einheitlich steuern.
+  - *Direkt-Umschalter:* Jedes Mitglied besitzt in der Liste ganz rechts einen Schnell-Knopf (*„Aktivieren“* bzw. *„Erledigt“*), um den Status sofort ohne Umwege umzuschalten.
 - **Erfolgs- und Fehlermeldungen:** Nach dem Speichern oder Ausführen einer Stapelaktion zeigt ein klarer Infobalken direkt an, ob die Aktion erfolgreich war oder ob ein Fehler aufgetreten ist.
+
+### Benachrichtigungs-System & Massenverwaltung (Bulk Actions)
+Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Benachrichtigungen** (Glocken-Symbol 🔔) alle Benachrichtigungs-Abonnements der Mitglieder verwalten, Massenaktionen durchführen, Onboarding-Standards festlegen und Vorlagen bearbeiten:
+
+- **Massenbearbeitung (Bulk Actions & Filter):**
+  - *Such- & Filtersystem:* Suche Mitglieder in Echtzeit nach Vor-/Nachname oder E-Mail-Adresse. Filtere nach Ligen (z. B. *„Nur Hobbyliga aktiv“* oder *„Keine Hobbyliga“*) sowie gezielt nach einzelnen Benachrichtigungs-Events.
+  - *Mehrfachauswahl & Tabellen-Checkbox:* Über die Master-Checkbox im Tabellenkopf lassen sich alle aktuell gefilterten Spieler mit einem Klick auswählen (z. B. *„Alle 142 Spieler markieren“*).
+  - *Kontextuelle Bulk-Action-Bar:* Sobald mindestens ein Spieler markiert ist, erscheint die Aktionsleiste. Admins wählen ein Event (z. B. `HOBBYLIGA_NEW_POST` oder `MATCH_RESULT_SUBMITTED`) und können dieses für alle markierten Spieler mit einem Klick gebündelt *aktivieren* oder *deaktivieren*.
+  - *Direkt-Umschalter:* In der Mitgliederliste kann jedes Event für ein einzelnes Mitglied sofort per Klick auf die Status-Schaltfläche ein- oder ausgeschaltet werden.
+
+- **Onboarding-Defaults (Standardvorgaben für Neumitglieder):**
+  - Im oberen Bereich der Seite können Administratoren festlegen, welche Benachrichtigungen neu registrierte Mitglieder standardmäßig beim Beitritt oder im Onboarding aktiviert haben.
+  - Mit Klick auf *„Defaults speichern“* werden diese Vorgaben dauerhaft im Vereinsprofil hinterlegt.
+
+- **Spezifische Event-Logik & Empfänger-Filterung:**
+  - *`HOBBYLIGA_NEW_POST` (Hobbyliga: Neuer Beitrag):* Broadcast-Benachrichtigung an alle aktiven Teilnehmer der Hobbyliga, sobald ein neuer Pinnwand-Beitrag erstellt wird. Der Verfasser des Beitrags wird automatisch und strikt aus dem Empfängerkreis ausgeschlossen.
+  - *`MATCH_RESULT_SUBMITTED` (Match-Ergebnis eingetragen):* Geht nach der Ergebniseingabe eines Matches strikt und ausschließlich an den gegnerischen Spieler. Der eintragende Spieler selbst erhält niemals eine redundante E-Mail.
+  - *`RESERVATION_CONFIRMED` / `RESERVATION_CANCELLED`:* Bestätigungs- und Stornierungs-E-Mails bei Buchungsvorgängen.
+
+- **Event-Testbench & Simulation:**
+  - Unter dem Reiter *„Event-Testbench (Broadcast & Match)“* können Administratoren Test-Broadcasts und Ergebnis-Nachrichten simulieren.
+  - Das System zeigt transparent an, wie viele E-Mails generiert wurden, wer als Verfasser ignoriert wurde und wie viele Spieler aufgrund von Opt-out-Einstellungen übersprungen wurden.
+
+- **Enterprise-E-Mail-Vorlagen (Workday-Modell):**
+  - Unter dem Reiter *„E-Mail-Vorlagen & Editor“* können E-Mail-Texte mit klickbaren Platzhaltern (`{{user_name}}`, `{{court_name}}`, `{{date}}`, etc.) angepasst werden.
+  - Beim Versand wird der Text automatisch in ein festes, responsives und tabellenbasiertes HTML-Layout mit Header-Banner und Footer eingebettet. Live-Vorschau in Echtzeit für Desktop und Smartphone sowie Testmail-Versand via Resend.
 
 ### Vereinsmeisterschaft (Modul)
 Das offizielle Vereinsmeisterschafts-Modul ermöglicht die Austragung von Sommer- und Wintermeisterschaften mit automatischer Tabellen- und Turnierbaumberechnung.

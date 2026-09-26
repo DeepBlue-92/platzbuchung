@@ -204,51 +204,38 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   }
 
   const hasCustomBg = className.includes("bg-");
-  let defaultBg = "bg-[var(--color-primary)] text-white font-black";
+
+  // Einheitliches Avatar-Schema:
+  // Standard-Spieler: bg-slate-100 text-slate-700 font-medium
+  // Eigener Account ("Du" / eingeloggter User): bg-emerald-100 text-emerald-800 font-semibold
+  let defaultBg = "bg-slate-100 text-slate-700 font-medium";
   if (variant === "green") {
-    defaultBg = "bg-emerald-600 text-white font-black";
+    defaultBg = "bg-emerald-100 text-emerald-800 font-semibold";
   } else if (variant === "dark") {
-    defaultBg = "bg-slate-700 text-slate-100 font-bold";
+    defaultBg = "bg-slate-700 text-slate-100 font-medium";
   } else if (variant === "neutral") {
-    defaultBg = "bg-slate-200 text-slate-700 font-bold";
+    defaultBg = "bg-slate-100 text-slate-700 font-medium";
   }
 
-  const iconBg =
-    iconId === "tennis-ball"
-      ? "bg-slate-900/5 text-amber-600"
-      : iconId === "racket"
-      ? "bg-emerald-50 text-emerald-700"
-      : iconId === "trophy"
-      ? "bg-yellow-50 text-yellow-700"
-      : iconId === "medal"
-      ? "bg-amber-50 text-amber-700"
-      : iconId === "flame"
-      ? "bg-rose-50 text-rose-600"
-      : iconId === "zap"
-      ? "bg-yellow-50 text-yellow-600"
-      : iconId === "shield"
-      ? "bg-blue-50 text-blue-700"
-      : iconId === "crown"
-      ? "bg-purple-50 text-purple-700"
-      : iconId === "star"
-      ? "bg-indigo-50 text-indigo-700"
-      : iconId === "coffee"
-      ? "bg-amber-50 text-amber-800"
-      : iconId === "beer"
-      ? "bg-orange-50 text-orange-700"
-      : iconId === "sunglasses"
-      ? "bg-amber-50 text-amber-700"
-      : iconId === "dumbbell"
-      ? "bg-slate-100 text-slate-700"
-      : iconId === "target"
-      ? "bg-red-50 text-red-600"
-      : iconId === "rocket"
-      ? "bg-violet-50 text-violet-700"
-      : iconId === "heart"
-      ? "bg-pink-50 text-pink-600"
-      : iconId === "user"
-      ? "bg-slate-100 text-slate-500"
-      : defaultBg;
+  // Wenn explizit variant="green" oder "neutral" gesetzt ist, immer das einheitliche Schema verwenden
+  let iconBg = defaultBg;
+  if (variant === "green") {
+    iconBg = "bg-emerald-100 text-emerald-800 font-semibold";
+  } else if (variant === "neutral") {
+    iconBg = "bg-slate-100 text-slate-700 font-medium";
+  } else if (iconId === "user" || iconId === "initials") {
+    iconBg = defaultBg;
+  } else {
+    // Harmonische, dezente Icons ohne grelle Pastell-Mischungen
+    iconBg =
+      iconId === "tennis-ball"
+        ? "bg-slate-100 text-amber-700"
+        : iconId === "racket"
+        ? "bg-slate-100 text-emerald-700"
+        : iconId === "trophy" || iconId === "medal"
+        ? "bg-amber-50 text-amber-800"
+        : "bg-slate-100 text-slate-700 font-medium";
+  }
 
   return (
     <div
@@ -310,7 +297,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
         <UserIcon className={sizeConfig ? sizeConfig.icon : "w-1/2 h-1/2"} strokeWidth={2.2} />
       )}
       {iconId === "initials" && (
-        <span className={`font-black tracking-wider uppercase ${sizeConfig ? sizeConfig.text : "text-xs"}`}>
+        <span className={`font-semibold tracking-wider uppercase ${sizeConfig ? sizeConfig.text : "text-xs"}`}>
           {initials}
         </span>
       )}

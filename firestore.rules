@@ -120,17 +120,21 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'title']) &&
              data.id is string && data.id.size() <= 128 &&
              data.title is string && data.title.size() <= 100 &&
-             (!('date' in data) || (data.date is string && data.date.size() <= 32)) &&
-             (!('startTime' in data) || (data.startTime is string && data.startTime.size() <= 32)) &&
-             (!('endTime' in data) || (data.endTime is string && data.endTime.size() <= 32)) &&
-             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('date' in data) || data.date == null || (data.date is string && data.date.size() <= 32)) &&
+             (!('startTime' in data) || data.startTime == null || (data.startTime is string && data.startTime.size() <= 32)) &&
+             (!('endTime' in data) || data.endTime == null || (data.endTime is string && data.endTime.size() <= 32)) &&
+             (!('registrationStart' in data) || data.registrationStart == null || (data.registrationStart is string && data.registrationStart.size() <= 32)) &&
+             (!('registrationEnd' in data) || data.registrationEnd == null || (data.registrationEnd is string && data.registrationEnd.size() <= 32)) &&
+             (!('deregistrationStart' in data) || data.deregistrationStart == null || (data.deregistrationStart is string && data.deregistrationStart.size() <= 32)) &&
+             (!('deregistrationEnd' in data) || data.deregistrationEnd == null || (data.deregistrationEnd is string && data.deregistrationEnd.size() <= 32)) &&
+             (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 2000)) &&
              (!('participants' in data) || (data.participants is list && data.participants.size() <= 200)) &&
-             (!('hideExpired' in data) || data.hideExpired is bool) &&
-             (!('allowComment' in data) || data.allowComment is bool) &&
-             (!('registrationComments' in data) || data.registrationComments is map) &&
-             (!('maxParticipants' in data) || data.maxParticipants is int) &&
-             (!('isRegistrationBlocked' in data) || data.isRegistrationBlocked is bool) &&
-             (!('deletedAt' in data) || (data.deletedAt is string && data.deletedAt.size() <= 32)) &&
+             (!('hideExpired' in data) || data.hideExpired == null || data.hideExpired is bool) &&
+             (!('allowComment' in data) || data.allowComment == null || data.allowComment is bool) &&
+             (!('registrationComments' in data) || data.registrationComments == null || data.registrationComments is map) &&
+             (!('maxParticipants' in data) || data.maxParticipants == null || data.maxParticipants is int) &&
+             (!('isRegistrationBlocked' in data) || data.isRegistrationBlocked == null || data.isRegistrationBlocked is bool) &&
+             (!('deletedAt' in data) || data.deletedAt == null || (data.deletedAt is string && data.deletedAt.size() <= 64)) &&
              (!('auditLog' in data) || (data.auditLog is list && data.auditLog.size() <= 500 && (data.auditLog.size() == 0 || data.auditLog[0] is map)));
     }
     
@@ -329,7 +333,7 @@ service cloud.firestore {
         allow update: if (isClubAdmin(vereinsId) && isValidTournament(incoming())) ||
                       (
                         belongsToVerein(vereinsId) && isValidTournament(incoming()) &&
-                        incoming().diff(existing()).affectedKeys().hasOnly(['participants', 'auditLog'])
+                        incoming().diff(existing()).affectedKeys().hasOnly(['participants', 'auditLog', 'registrationComments'])
                       );
         allow delete: if isClubAdmin(vereinsId);
       }

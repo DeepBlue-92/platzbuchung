@@ -517,15 +517,13 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
               getUserRank(profile.userId) ?? (safeCurrentPage - 1) * pageSize + idx + 1;
             const userObj = getUserObject(profile.userId);
 
-            // Größere, prägnantere Rang-Badge mit Top-3 Hervorhebung
-            let rankClass = 'text-slate-600 bg-slate-100/90 border border-slate-200/80';
-            if (rank === 1) {
-              rankClass = 'text-amber-900 bg-amber-100/90 border border-amber-300 shadow-xs';
-            } else if (rank === 2) {
-              rankClass = 'text-slate-800 bg-slate-200/90 border border-slate-300 shadow-xs';
-            } else if (rank === 3) {
-              rankClass = 'text-orange-950 bg-orange-100/90 border border-orange-300/80 shadow-xs';
-            }
+            // Rangliste (#1, #2...): Einheitliche, dezente Trophäen-/Rang-Badges
+            // Platz 1: warmes, dezentes Gold (bg-amber-50 border-amber-200 text-amber-800 font-semibold)
+            // Andere Ränge: bg-slate-50 border border-slate-200 text-slate-700 font-semibold
+            const rankClass =
+              rank === 1
+                ? 'bg-amber-50 border border-amber-200 text-amber-800 font-semibold'
+                : 'bg-slate-50 border border-slate-200 text-slate-700 font-semibold';
 
             // Vereinsname für Untertitel (bereinigt & ohne technische System-Einträge)
             const rawClub = userObj?.vereinsId || profile.clubId;
@@ -548,14 +546,14 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
                 }}
                 className={`flex items-center justify-between px-2.5 py-1.5 sm:py-2 rounded-xl transition-all cursor-pointer select-none shrink-0 ${
                   isCurrentUser
-                    ? 'bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/25 shadow-xs hover:bg-[var(--color-primary)]/15 active:bg-[var(--color-primary)]/20'
-                    : 'hover:bg-slate-100/70 border border-transparent hover:border-slate-200/60 active:bg-slate-100'
+                    ? 'bg-emerald-50/50 border border-emerald-200/60 shadow-2xs hover:bg-emerald-50/80 active:bg-emerald-100/60'
+                    : 'hover:bg-slate-50 border border-transparent hover:border-slate-200/60 active:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {/* LARGER RANK NUMBER */}
                   <div
-                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl text-sm sm:text-base font-black shrink-0 tracking-tight select-none ${rankClass}`}
+                    className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl text-sm sm:text-base shrink-0 tracking-tight select-none shadow-2xs ${rankClass}`}
                   >
                     #{rank}
                   </div>
@@ -567,6 +565,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
                     avatarIcon={userObj?.avatarIcon}
                     fallbackMode="icon"
                     size="sm"
+                    variant={isCurrentUser ? "green" : "neutral"}
                     className="shrink-0"
                   />
 
@@ -575,14 +574,14 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span
                         className={`text-sm font-bold truncate max-w-[140px] sm:max-w-[170px] ${
-                          isCurrentUser ? 'text-[var(--color-primary)]' : 'text-slate-800'
+                          isCurrentUser ? 'text-emerald-950 font-black' : 'text-slate-800'
                         }`}
                         title={profile.userName}
                       >
                         {profile.userName}
                       </span>
                       {isCurrentUser && (
-                        <span className="text-[9px] font-black uppercase tracking-wider bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded-sm shrink-0">
+                        <span className="text-[9px] font-semibold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200/60 px-1.5 py-0.5 rounded-sm shrink-0">
                           Du
                         </span>
                       )}

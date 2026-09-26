@@ -133,21 +133,24 @@ export interface GroupStandingRow {
 export interface ChampionshipAuditLogEntry {
   id: string;
   timestamp: string; // ISO string
-  userId: string;
-  userName: string;
+  userId?: string;
+  userName?: string;
   userRole?: string;
-  action: 'create_result' | 'update_result' | 'delete_result' | 'walkover';
+  actorId?: string;
+  actorName?: string;
+  actorRole?: string;
+  action: 'create_result' | 'update_result' | 'delete_result' | 'walkover' | 'enter_result' | 'edit_result';
   matchId: string;
-  roundLabel: string;
+  roundLabel?: string;
   stageName?: string;
-  participant1Name: string;
-  participant2Name: string;
+  participant1Name?: string;
+  participant2Name?: string;
   previousResultSummary?: string | null;
-  newResultSummary: string;
-  winnerName: string;
+  newResultSummary?: string;
+  winnerName?: string;
   isWalkover?: boolean;
   walkoverReason?: string;
-  details?: string;
+  details?: any;
 }
 
 export interface TournamentInstance {

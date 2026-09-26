@@ -5,6 +5,21 @@ import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "./lib/firebase";
+import {
+  sendNotificationMail,
+  getAllTemplates,
+  saveCustomTemplate,
+} from "./services/resendService";
+import { renderEmail } from "./services/templateEngine";
+import {
+  bulkUpdateUserNotificationSettings,
+  updateClubDefaultNotificationSettings,
+  getClubDefaultNotificationSettings,
+} from "./services/db";
+import {
+  broadcastHobbyligaNewPost,
+  notifyMatchResultSubmitted,
+} from "./services/notificationDispatcher";
 
 async function startServer() {
   const app = express();
@@ -221,6 +236,275 @@ ${cachedTutorial}
         error: "AI_GENERATION_FAILED",
         message: error.message || "Failed to generate AI response"
       });
+    }
+  });
+
+  // EMAIL NOTIFICATION SYSTEM ROUTES
+
+  // 1. Send Notification / Test Email via Resend
+  app.post("/api/send-email", async (req: express.Request, res: express.Response) => {
+    try {
+      const {
+        eventKey,
+        recipientEmail,
+        payload,
+        customTemplate,
+        clubName,
+        clubLogoUrl,
+      } = req.body || {};
+
+      if (!recipientEmail || !recipientEmail.includes("@")) {
+        return res.status(400).json({
+          success: false,
+          status: "failed",
+          error: "INVALID_RECIPIENT",
+          message: "Bitte gib eine gültige Empfänger-E-Mail-Adresse an.",
+        });
+      }
+
+      if (!eventKey) {
+        return res.status(400).json({
+          success: false,
+          status: "failed",
+          error: "MISSING_EVENT_KEY",
+          message: "eventKey (z. B. RESERVATION_CONFIRMED) ist erforderlich.",
+        });
+      }
+
+      const result = await sendNotificationMail({
+        eventKey,
+        recipientEmail,
+        payload: payload || {},
+        customTemplate,
+        clubName: clubName || "Tennis-Club e.V.",
+        clubLogoUrl,
+      });
+
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Error in /api/send-email:", err);
+      return res.status(500).json({
+        success: false,
+        status: "failed",
+        error: "INTERNAL_ERROR",
+        message: err.message || "Fehler beim Versenden der Benachrichtigungs-E-Mail.",
+      });
+    }
+  });
+
+  // 2. Fetch all templates
+  app.get("/api/email-templates", (_req: express.Request, res: express.Response) => {
+    const templates = getAllTemplates();
+    return res.json(templates);
+  });
+
+  // 3. Save / Update a template
+  app.post("/api/email-templates", (req: express.Request, res: express.Response) => {
+    try {
+      const template = req.body;
+      if (!template || !template.id) {
+        return res.status(400).json({ error: "Missing template id" });
+      }
+      saveCustomTemplate(template);
+      return res.json({ success: true, template });
+    } catch (err: any) {
+      console.error("Error saving template:", err);
+      return res.status(500).json({ error: "FAILED_TO_SAVE_TEMPLATE" });
+    }
+  });
+
+  // 4. Render email preview
+  app.post("/api/email-preview", (req: express.Request, res: express.Response) => {
+    try {
+      const { subjectTemplate, bodyTemplate, payload, wrapperOptions } = req.body || {};
+      const rendered = renderEmail({
+        subjectTemplate: subjectTemplate || "",
+        bodyTemplate: bodyTemplate || "",
+        payload: payload || {},
+        wrapperOptions,
+      });
+      return res.json(rendered);
+    } catch (err: any) {
+      console.error("Error in /api/email-preview:", err);
+      return res.status(500).json({ error: "RENDER_FAILED", message: err.message });
+    }
+  });
+
+  // 5. Bulk Update User Notification Settings (Database Mutation)
+  app.post("/api/notifications/bulk-update", async (req: express.Request, res: express.Response) => {
+    try {
+      const { userIds, eventKey, enabled, vereinsId } = req.body || {};
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "MISSING_USER_IDS",
+          message: "Keine Benutzer-IDs für die Massenaktualisierung übergeben.",
+        });
+      }
+      if (!eventKey) {
+        return res.status(400).json({
+          success: false,
+          error: "MISSING_EVENT_KEY",
+          message: "Event-Schlüssel erforderlich.",
+        });
+      }
+
+      const result = await bulkUpdateUserNotificationSettings(
+        vereinsId || "sv-neuhausen",
+        userIds,
+        eventKey,
+        enabled === true
+      );
+
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Error in /api/notifications/bulk-update:", err);
+      return res.status(500).json({
+        success: false,
+        error: "BULK_UPDATE_FAILED",
+        message: err.message || "Fehler bei der Massenaktualisierung der Benachrichtigungen.",
+      });
+    }
+  });
+
+  // 6. Broadcast Hobbyliga New Post Event
+  app.post("/api/notifications/broadcast-post", async (req: express.Request, res: express.Response) => {
+    try {
+      const { authorId, authorName, leagueId, leagueName, postTitle, postContent, vereinsId, clubName, users } = req.body || {};
+
+      if (!postTitle || !postContent) {
+        return res.status(400).json({
+          success: false,
+          error: "MISSING_CONTENT",
+          message: "Titel und Text des Beitrags erforderlich.",
+        });
+      }
+
+      // If users are passed in request, use them; otherwise fetch from DB
+      let usersMap = users || {};
+      if (Object.keys(usersMap).length === 0) {
+        try {
+          const usersSnap = await getDocs(collection(db, "users"));
+          usersMap = {};
+          usersSnap.docs.forEach((d) => {
+            usersMap[d.id] = { id: d.id, ...d.data() };
+          });
+        } catch (dbErr) {
+          console.warn("Could not fetch users collection from Firestore directly:", dbErr);
+        }
+      }
+
+      const result = await broadcastHobbyligaNewPost(
+        {
+          authorId: authorId || "system",
+          authorName: authorName || "Pinnwand",
+          leagueId,
+          leagueName,
+          postTitle,
+          postContent,
+          vereinsId,
+        },
+        usersMap,
+        clubName || "Tennis-Club e.V."
+      );
+
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Error in /api/notifications/broadcast-post:", err);
+      return res.status(500).json({
+        success: false,
+        error: "BROADCAST_FAILED",
+        message: err.message || "Fehler beim Versenden des Hobbyliga-Broadcasts.",
+      });
+    }
+  });
+
+  // 7. Match Result Submitted Event (Strictly to Opponent)
+  app.post("/api/notifications/match-result", async (req: express.Request, res: express.Response) => {
+    try {
+      const {
+        submitterId,
+        submitterName,
+        opponentId,
+        opponentName,
+        resultScore,
+        matchDate,
+        leagueName,
+        courtName,
+        clubName,
+        users,
+      } = req.body || {};
+
+      if (!opponentId || !resultScore) {
+        return res.status(400).json({
+          success: false,
+          error: "MISSING_DATA",
+          message: "Gegner-ID und Ergebnis erforderlich.",
+        });
+      }
+
+      let usersMap = users || {};
+      if (Object.keys(usersMap).length === 0) {
+        try {
+          const usersSnap = await getDocs(collection(db, "users"));
+          usersMap = {};
+          usersSnap.docs.forEach((d) => {
+            usersMap[d.id] = { id: d.id, ...d.data() };
+          });
+        } catch (dbErr) {
+          console.warn("Could not fetch users collection from Firestore directly:", dbErr);
+        }
+      }
+
+      const result = await notifyMatchResultSubmitted(
+        {
+          submitterId: submitterId || "unknown",
+          submitterName: submitterName || "Spielpartner",
+          opponentId,
+          opponentName,
+          resultScore,
+          matchDate,
+          leagueName,
+          courtName,
+        },
+        usersMap,
+        clubName || "Tennis-Club e.V."
+      );
+
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Error in /api/notifications/match-result:", err);
+      return res.status(500).json({
+        success: false,
+        error: "MATCH_RESULT_NOTIFY_FAILED",
+        message: err.message || "Fehler beim Versenden der Ergebnis-Benachrichtigung.",
+      });
+    }
+  });
+
+  // 8. Onboarding / Club Notification Defaults
+  app.get("/api/notifications/defaults", async (req: express.Request, res: express.Response) => {
+    try {
+      const vereinsId = (req.query.vereinsId as string) || "sv-neuhausen";
+      const defaults = await getClubDefaultNotificationSettings(vereinsId);
+      return res.json({ defaults });
+    } catch (err: any) {
+      console.error("Error in GET /api/notifications/defaults:", err);
+      return res.status(500).json({ error: "LOAD_DEFAULTS_FAILED" });
+    }
+  });
+
+  app.post("/api/notifications/defaults", async (req: express.Request, res: express.Response) => {
+    try {
+      const { vereinsId, defaults } = req.body || {};
+      if (!defaults) {
+        return res.status(400).json({ error: "Missing defaults payload" });
+      }
+      await updateClubDefaultNotificationSettings(vereinsId || "sv-neuhausen", defaults);
+      return res.json({ success: true, defaults });
+    } catch (err: any) {
+      console.error("Error in POST /api/notifications/defaults:", err);
+      return res.status(500).json({ error: "SAVE_DEFAULTS_FAILED" });
     }
   });
 

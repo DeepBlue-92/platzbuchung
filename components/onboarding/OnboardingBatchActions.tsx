@@ -1,19 +1,14 @@
-import React, { useState } from "react";
-import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
+import React, { useState, useMemo } from "react";
 import {
-  RotateCcw,
+  Users,
+  Search,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
-  Users,
 } from "lucide-react";
 import { User } from "../../types";
-import {
-  batchResetMemberOnboarding,
-  batchCompleteMemberOnboarding,
-  saveUser,
-} from "../../services/db";
+import { updateMembersOnboardingStatus } from "../../services/db";
+import { OnboardingMemberSelectorList } from "./OnboardingMemberSelectorList";
+import { OnboardingBulkActionBar } from "./OnboardingBulkActionBar";
 
 interface OnboardingBatchActionsProps {
   currentClubId: string;
@@ -26,132 +21,284 @@ export const OnboardingBatchActions: React.FC<OnboardingBatchActionsProps> = ({
   users,
   onUpdateUsers,
 }) => {
-  const [modalType, setModalType] = useState<"enable" | "disable" | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
 
-  const usersList = Object.values(users);
-  const pendingCount = usersList.filter((u) => u.onboarding_pending).length;
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "completed">("all");
+  const [selectedUserKeys, setSelectedUserKeys] = useState<Set<string>>(new Set());
 
-  const handleBatchAction = async (action: "enable" | "disable") => {
-    setIsProcessing(true);
-    setFeedback(null);
-    const targetPendingState = action === "enable";
+  // Prepare user list sorted by name
+  const usersList = useMemo(() => {
+    return Object.values(users).sort((a, b) => {
+      const nameA = (a.lastName || a.name || "").toLowerCase();
+      const nameB = (b.lastName || b.name || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  }, [users]);
 
-    try {
-      let count = 0;
-      const updatedUsersMap: Record<string, User> = { ...users };
+  // Overall statistics
+  const totalCount = usersList.length;
+  const pendingCount = useMemo(
+    () => usersList.filter((u) => !!(u.onboarding_pending ?? u.onboardingPending)).length,
+    [usersList]
+  );
+  const completedCount = totalCount - pendingCount;
 
-      try {
-        if (targetPendingState) {
-          count = await batchResetMemberOnboarding(currentClubId);
-        } else {
-          count = await batchCompleteMemberOnboarding(currentClubId);
-        }
-      } catch (directErr) {
-        console.warn(
-          `Direct batch ${action} encountered an issue, falling back to individual updates:`,
-          directErr
-        );
-        // Fallback to safe individual saveUser
-        for (const u of usersList) {
-          const updated: User = {
-            ...u,
-            onboarding_pending: targetPendingState,
-          };
-          await saveUser(currentClubId, updated);
-          count++;
+  // Filtered members by search query and status filter
+  const filteredMembers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return usersList.filter((user) => {
+      const isPending = !!(user.onboarding_pending ?? user.onboardingPending);
+
+      // Status Filter
+      if (statusFilter === "pending" && !isPending) return false;
+      if (statusFilter === "completed" && isPending) return false;
+
+      // Search Query
+      if (q) {
+        const fullName = `${user.firstName || ""} ${user.lastName || ""} ${user.name || ""}`.toLowerCase();
+        const email = (user.email || "").toLowerCase();
+        const username = (user.username || "").toLowerCase();
+        if (!fullName.includes(q) && !email.includes(q) && !username.includes(q)) {
+          return false;
         }
       }
 
-      // Update local state map
-      for (const u of usersList) {
+      return true;
+    });
+  }, [usersList, searchQuery, statusFilter]);
+
+  // Selection helpers
+  const handleToggleMember = (key: string) => {
+    setSelectedUserKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const isAllFilteredSelected = useMemo(() => {
+    if (filteredMembers.length === 0) return false;
+    return filteredMembers.every((u) => selectedUserKeys.has(u.id || u.name));
+  }, [filteredMembers, selectedUserKeys]);
+
+  const handleToggleAllFiltered = () => {
+    setSelectedUserKeys((prev) => {
+      const next = new Set(prev);
+      if (isAllFilteredSelected) {
+        // Deselect all filtered
+        filteredMembers.forEach((u) => next.delete(u.id || u.name));
+      } else {
+        // Select all filtered
+        filteredMembers.forEach((u) => next.add(u.id || u.name));
+      }
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedUserKeys(new Set());
+  };
+
+  // Bulk actions for selected users
+  const handleBulkSetStatus = async (targetPending: boolean) => {
+    const selectedUsers = usersList.filter((u) => selectedUserKeys.has(u.id || u.name));
+    if (selectedUsers.length === 0) return;
+
+    setIsProcessing(true);
+    setFeedback(null);
+
+    try {
+      const updatedCount = await updateMembersOnboardingStatus(
+        currentClubId,
+        selectedUsers,
+        targetPending
+      );
+
+      // Update parent state
+      const updatedUsersMap: Record<string, User> = { ...users };
+      for (const u of selectedUsers) {
         const key = u.id || u.name;
         updatedUsersMap[key] = {
           ...u,
-          onboarding_pending: targetPendingState,
+          onboarding_pending: targetPending,
+          onboardingPending: targetPending,
         };
       }
-
       if (onUpdateUsers) {
         onUpdateUsers(updatedUsersMap);
       }
 
       setFeedback({
         type: "success",
-        message:
-          action === "enable"
-            ? `Onboarding erfolgreich für alle ${count || usersList.length} Mitglieder eingeschaltet (ausstehend).`
-            : `Onboarding erfolgreich für alle ${count || usersList.length} Mitglieder ausgeschaltet (abgeschlossen).`,
+        message: targetPending
+          ? `Onboarding für ${updatedCount} ausgewählte Mitglieder erfolgreich aktiviert (ausstehend).`
+          : `Onboarding für ${updatedCount} ausgewählte Mitglieder als erledigt markiert.`,
       });
-      setModalType(null);
-      setTimeout(() => setFeedback(null), 5000);
+      setSelectedUserKeys(new Set());
+      setTimeout(() => setFeedback(null), 4500);
     } catch (err: any) {
-      console.error(`Failed to batch ${action} onboarding:`, err);
+      console.error("Bulk onboarding update error:", err);
       setFeedback({
         type: "error",
-        message:
-          err.message ||
-          `Fehler bei der Stapelverarbeitung zum ${action === "enable" ? "Einschalten" : "Ausschalten"}.`,
+        message: err.message || "Fehler beim Aktualisieren der ausgewählten Mitglieder.",
       });
-      setTimeout(() => setFeedback(null), 6000);
+      setTimeout(() => setFeedback(null), 5000);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Toggle single member status
+  const handleToggleSingleStatus = async (user: User) => {
+    const userKey = user.id || user.name;
+    const currentPending = !!(user.onboarding_pending ?? user.onboardingPending);
+    const nextPending = !currentPending;
+
+    setUpdatingUserId(userKey);
+    setFeedback(null);
+
+    try {
+      await updateMembersOnboardingStatus(currentClubId, [user], nextPending);
+
+      const updatedUsersMap: Record<string, User> = {
+        ...users,
+        [userKey]: {
+          ...user,
+          onboarding_pending: nextPending,
+          onboardingPending: nextPending,
+        },
+      };
+      if (onUpdateUsers) {
+        onUpdateUsers(updatedUsersMap);
+      }
+
+      setFeedback({
+        type: "success",
+        message: `Onboarding für „${user.name || userKey}“ auf ${
+          nextPending ? "„Ausstehend“" : "„Erledigt“"
+        } gesetzt.`,
+      });
+      setTimeout(() => setFeedback(null), 3500);
+    } catch (err: any) {
+      console.error("Toggle single member onboarding error:", err);
+      setFeedback({
+        type: "error",
+        message: err.message || "Fehler beim Umschalten des Onboarding-Status.",
+      });
+      setTimeout(() => setFeedback(null), 5000);
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
   return (
     <div
       id="admin-onboarding-batch-card"
-      className="bg-slate-50 border border-slate-200/80 p-6 sm:p-8 rounded-[1rem] space-y-6 shadow-sm"
+      className="bg-slate-50 border border-slate-200/80 p-5 sm:p-7 rounded-[1rem] space-y-4 sm:space-y-5 shadow-sm"
     >
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-        <div className="space-y-1.5 max-w-2xl">
-          <h3 className="text-sm font-black text-slate-900 uppercase flex items-center gap-2">
-            <Users className="w-4 h-4 text-slate-700" />
-            <span>Stapelverarbeitung: Onboarding für alle Mitglieder</span>
-          </h3>
-          <p className="text-xs text-slate-600 leading-relaxed">
-            Verwalte den Onboarding-Status aller <strong>{usersList.length} Mitglieder</strong> zentral:
-            Schalte das Begrüßungsfenster für alle ein (z. B. nach Saisonbeginn oder bei neuen Pflichtfeldern) oder schalte es für alle aus (als erledigt markieren).
-          </p>
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 pt-1">
-            <span className="inline-block w-2 h-2 rounded-full bg-amber-500"></span>
-            <span>Aktuell ausstehend: <strong>{pendingCount}</strong> von <strong>{usersList.length}</strong> Mitgliedern</span>
-          </div>
+      {/* 1. Header & Title */}
+      <div className="space-y-1">
+        <h3 className="text-sm font-black text-slate-900 uppercase flex items-center gap-2">
+          <Users className="w-4 h-4 text-slate-700" />
+          <span>STAPELVERARBEITUNG: ONBOARDING-STATUS</span>
+        </h3>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Gezielte Steuerung des Begrüßungsfensters per Schnellsuche, Filter und Mehrfachauswahl:
+        </p>
+      </div>
+
+      {/* 2. Such- und Filterleiste */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+        {/* Suchfeld mit Lupe */}
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Mitglied suchen..."
+            className="w-full h-9 pl-9 pr-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-700 transition-colors shadow-2xs"
+          />
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 shrink-0">
+        {/* Schnellfilter Segment-Pills */}
+        <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-xl shrink-0 text-xs select-none">
           <button
             type="button"
-            id="admin-batch-reset-onboarding-btn"
-            onClick={() => setModalType("enable")}
-            className="bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
+            onClick={() => setStatusFilter("all")}
+            className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+              statusFilter === "all"
+                ? "bg-white text-slate-900 shadow-2xs"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Für alle einschalten</span>
+            Alle ({totalCount})
           </button>
 
           <button
             type="button"
-            id="admin-batch-disable-onboarding-btn"
-            onClick={() => setModalType("disable")}
-            className="bg-slate-700 hover:bg-slate-800 text-white font-black text-[10px] uppercase tracking-widest px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
+            onClick={() => setStatusFilter("pending")}
+            className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+              statusFilter === "pending"
+                ? "bg-amber-100/90 text-amber-900 font-bold shadow-2xs"
+                : "text-amber-800/80 hover:text-amber-950"
+            }`}
           >
-            <XCircle className="w-3.5 h-3.5" />
-            <span>Für alle ausschalten</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+            <span>Ausstehend ({pendingCount})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter("completed")}
+            className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+              statusFilter === "completed"
+                ? "bg-emerald-100/90 text-emerald-950 font-bold shadow-2xs"
+                : "text-emerald-800/80 hover:text-emerald-950"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+            <span>Erledigt ({completedCount})</span>
           </button>
         </div>
       </div>
 
-      {/* Feedback banner */}
+      {/* 3. Kontextuelle Aktionsleiste bei selektierten Mitgliedern */}
+      <OnboardingBulkActionBar
+        selectedCount={selectedUserKeys.size}
+        isProcessing={isProcessing}
+        onActivateSelected={() => handleBulkSetStatus(true)}
+        onCompleteSelected={() => handleBulkSetStatus(false)}
+        onClearSelection={handleClearSelection}
+      />
+
+      {/* 4. Selektierbare Mitglieder-Liste */}
+      <OnboardingMemberSelectorList
+        members={filteredMembers}
+        selectedKeys={selectedUserKeys}
+        onToggleMember={handleToggleMember}
+        onToggleAllFiltered={handleToggleAllFiltered}
+        isAllSelected={isAllFilteredSelected}
+        onToggleSingleStatus={handleToggleSingleStatus}
+        updatingUserId={updatingUserId}
+        disabled={isProcessing}
+      />
+
+      {/* 5. Feedback banner */}
       {feedback && (
         <div
-          className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200 ${
+          className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in duration-150 ${
             feedback.type === "success"
               ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
               : "bg-red-50 text-red-800 border border-red-200"
@@ -165,98 +312,6 @@ export const OnboardingBatchActions: React.FC<OnboardingBatchActionsProps> = ({
           <span>{feedback.message}</span>
         </div>
       )}
-
-      {/* Confirmation Modal */}
-      {typeof document !== "undefined" &&
-        createPortal(
-          <AnimatePresence>
-            {modalType && (
-              <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 space-y-4"
-                >
-                  <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto ${
-                      modalType === "enable"
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-slate-100 text-slate-700"
-                    }`}
-                  >
-                    {modalType === "enable" ? (
-                      <AlertTriangle className="w-6 h-6" />
-                    ) : (
-                      <XCircle className="w-6 h-6" />
-                    )}
-                  </div>
-
-                  <div className="text-center space-y-2">
-                    <h3 className="text-lg font-bold text-slate-900">
-                      {modalType === "enable"
-                        ? "Onboarding für alle einschalten?"
-                        : "Onboarding für alle ausschalten?"}
-                    </h3>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {modalType === "enable" ? (
-                        <>
-                          Möchtest du das Onboarding wirklich für alle{" "}
-                          <strong>{usersList.length} Mitglieder</strong> des Vereins einschalten?
-                          Jedes Mitglied wird beim nächsten Login das Begrüßungsfenster sehen und seine Daten bestätigen müssen.
-                        </>
-                      ) : (
-                        <>
-                          Möchtest du das Onboarding wirklich für alle{" "}
-                          <strong>{usersList.length} Mitglieder</strong> des Vereins ausschalten?
-                          Alle Mitglieder werden als abgeschlossen markiert und sehen beim nächsten Login kein Begrüßungsfenster mehr.
-                        </>
-                      )}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setModalType(null)}
-                      disabled={isProcessing}
-                      className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer"
-                    >
-                      Abbrechen
-                    </button>
-                    <button
-                      type="button"
-                      id={
-                        modalType === "enable"
-                          ? "confirm-batch-enable-btn"
-                          : "confirm-batch-disable-btn"
-                      }
-                      onClick={() => handleBatchAction(modalType)}
-                      disabled={isProcessing}
-                      className={`px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 ${
-                        modalType === "enable"
-                          ? "bg-amber-600 hover:bg-amber-700"
-                          : "bg-slate-800 hover:bg-slate-900"
-                      }`}
-                    >
-                      {isProcessing ? (
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4" />
-                      )}
-                      <span>
-                        {modalType === "enable"
-                          ? "Ja, für alle einschalten"
-                          : "Ja, für alle ausschalten"}
-                      </span>
-                    </button>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
     </div>
   );
 };

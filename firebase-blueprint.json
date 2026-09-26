@@ -48,9 +48,18 @@
         "description": { "type": "string" },
         "participants": { "type": "array" },
         "maxParticipants": { "type": "integer" },
-        "isRegistrationBlocked": { "type": "boolean" }
+        "isRegistrationBlocked": { "type": "boolean" },
+        "hideExpired": { "type": "boolean" },
+        "allowComment": { "type": "boolean" },
+        "registrationComments": { "type": "object" },
+        "registrationStart": { "type": "string" },
+        "registrationEnd": { "type": "string" },
+        "deregistrationStart": { "type": "string" },
+        "deregistrationEnd": { "type": "string" },
+        "deletedAt": { "type": "string" },
+        "auditLog": { "type": "array" }
       },
-      "required": ["id", "title", "date", "startTime", "endTime"]
+      "required": ["id", "title"]
     },
     "Rankings": {
       "title": "Rankings",
@@ -71,6 +80,11 @@
         "clubName": { "type": "string" },
         "logoUrl": { "type": "string" },
         "bannerUrl": { "type": "string" },
+        "useDefaultBanner": { "type": "boolean" },
+        "customBannerUrl": { "type": "string" },
+        "loginBannerUrl": { "type": "string" },
+        "useDefaultLoginBanner": { "type": "boolean" },
+        "customLoginBannerUrl": { "type": "string" },
         "primaryColor": { "type": "string" },
         "accentColor": { "type": "string" },
         "accentColor2": { "type": "string" },

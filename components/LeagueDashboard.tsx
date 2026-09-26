@@ -689,7 +689,7 @@ export function LeagueDashboard({ currentUser, clubId, users, settings, bookings
   const currentUserRank = getUserRank(currentUser.id);
 
   return (
-    <div className="w-full flex-grow flex flex-col min-h-0 space-y-4 lg:space-y-5 lg:animate-in lg:fade-in lg:duration-500">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow min-h-0 lg:animate-in lg:fade-in lg:duration-500">
       
       {/* 1. BANNER-HERO-HEADER */}
       <HobbyligaBanner
@@ -707,9 +707,9 @@ export function LeagueDashboard({ currentUser, clubId, users, settings, bookings
       {/* 6. DASHBOARD BENTO-GRID LAYOUT */}
       
       {/* OBERER ABSCHNITT: BÖRSE, MINI-KALENDER & STATUS-KARTEN */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-4 items-stretch">
         {/* LEFT COLUMN: Börse & Kalender */}
-        <div className="lg:col-span-2 space-y-4 lg:space-y-5">
+        <div className="lg:col-span-2 flex flex-col gap-3.5 sm:gap-4">
           <SpielpartnerBoerse
             currentUser={currentUser}
             partnerSearches={partnerSearches}
@@ -743,7 +743,7 @@ export function LeagueDashboard({ currentUser, clubId, users, settings, bookings
         </div>
 
         {/* RIGHT COLUMN: Kombinierter Match-Feed (Anstehende Matches & Letzte Ergebnisse) & Rangliste */}
-        <div className="lg:col-span-1 flex flex-col space-y-4 lg:space-y-5 h-full">
+        <div className="lg:col-span-1 flex flex-col gap-3.5 sm:gap-4 h-full">
           <div className="shrink-0">
             <HobbyligaCombinedMatchFeed
               pendingMatches={pendingUserMatches}

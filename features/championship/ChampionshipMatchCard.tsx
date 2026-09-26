@@ -187,7 +187,7 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
         {/* Äußere Kanten: Links Phasen-Badge & Rechts Ergebnis/Aktion */}
         <div className="flex items-center justify-between gap-2">
           {/* Links: Phasen-Badge */}
-          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 truncate">
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-600 truncate min-w-0">
             {isGrandFinal ? (
               <Trophy className="w-3 h-3 text-amber-600 shrink-0" />
             ) : isThirdPlace ? (
@@ -262,31 +262,31 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
         </div>
 
         {/* Mittelteil: Symmetrisches 3-Spalten-Layout mit zentriertem "vs." */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center min-w-0 w-full pt-0.5">
-          {/* Spieler 1 (Heim): Rechtsbündig ausgerichtet */}
-          <div className="flex items-center justify-end gap-1.5 min-w-0 text-right">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full pt-0.5">
+          {/* Spieler 1: Muss zwingend rechtsbündig sein */}
+          <div className="text-right pr-3 truncate">
             {tournament.useRankings && p1Rank && (
-              <span className={`px-1.5 py-0.2 rounded text-[9.5px] border shrink-0 ${p1RankBadgeClasses}`}>
+              <span className={`inline-flex items-center px-1.5 py-0.2 mr-1 rounded text-[9.5px] border align-middle shrink-0 ${p1RankBadgeClasses}`}>
                 #{p1Rank}
               </span>
             )}
-            <span className={`truncate text-xs ${p1TextClasses}`} title={p1Name}>
+            <span className={`text-xs ${p1TextClasses}`} title={p1Name}>
               {p1Name}
             </span>
           </div>
 
           {/* Trenner ("vs."): Exakt im geometrischen Zentrum fixiert */}
-          <div className="text-center px-2.5 text-xs font-normal text-slate-400 select-none shrink-0">
+          <div className="w-10 text-center text-xs font-normal text-slate-400 select-none shrink-0">
             vs.
           </div>
 
-          {/* Spieler 2 (Gast): Linksbündig ausgerichtet */}
-          <div className="flex items-center justify-start gap-1.5 min-w-0 text-left">
-            <span className={`truncate text-xs ${p2TextClasses}`} title={p2Name}>
+          {/* Spieler 2: Muss zwingend linksbündig sein */}
+          <div className="text-left pl-3 truncate">
+            <span className={`text-xs ${p2TextClasses}`} title={p2Name}>
               {p2Name}
             </span>
             {tournament.useRankings && p2Rank && (
-              <span className={`px-1.5 py-0.2 rounded text-[9.5px] border shrink-0 ${p2RankBadgeClasses}`}>
+              <span className={`inline-flex items-center px-1.5 py-0.2 ml-1 rounded text-[9.5px] border align-middle shrink-0 ${p2RankBadgeClasses}`}>
                 #{p2Rank}
               </span>
             )}
@@ -298,62 +298,68 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
       {/* DESKTOP ROW (>= sm:)                                     */}
       {/* Symmetrisches 3-Spalten-Layout mit zentriertem "vs."      */}
       {/* ======================================================== */}
-      <div className="hidden sm:flex p-3 sm:p-3.5 items-center justify-between gap-3 lg:gap-4">
-        {/* Links: Phasen-Badge fest an linker Kante verankert */}
-        <div className="flex items-center gap-1.5 shrink-0 sm:min-w-[130px] lg:min-w-[160px]">
-          <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[11px] tracking-tight flex items-center gap-1 shrink-0">
+      <div className="hidden sm:flex items-center justify-between p-3">
+        {/* Bereich 1 (Links): Das Runden-Badge mit fixer/stabiler Breite */}
+        <div className="w-36 shrink-0 flex items-center gap-1.5 min-w-0">
+          <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold text-[11px] tracking-tight flex items-center gap-1 truncate max-w-full" title={displayRound}>
             {isGrandFinal ? (
               <Trophy className="w-3 h-3 text-amber-600 shrink-0" />
             ) : isThirdPlace ? (
               <Medal className="w-3 h-3 text-orange-600 shrink-0" />
             ) : null}
-            <span>{displayRound}</span>
+            <span className="truncate">{displayRound}</span>
           </span>
 
           {(match.startTime || match.courtId) && (
-            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
-              <Clock className="w-3 h-3 text-slate-400" />
-              {match.courtId ? `Platz ${match.courtId.replace('court-', '')}` : ''}
-              {match.courtId && match.startTime ? ' · ' : ''}
-              {match.startTime ? `${match.startTime} Uhr` : ''}
+            <span
+              className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0"
+              title={`${match.courtId ? `Platz ${match.courtId.replace('court-', '')}` : ''}${match.courtId && match.startTime ? ' · ' : ''}${match.startTime ? `${match.startTime} Uhr` : ''}`}
+            >
+              <Clock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+              <span className="truncate">
+                {match.courtId ? `P${match.courtId.replace('court-', '')}` : ''}
+                {match.startTime ? ` ${match.startTime}` : ''}
+              </span>
             </span>
           )}
         </div>
 
-        {/* Mitte: Symmetrischer 3-Spalten-Bereich mit zentriertem "vs." */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center min-w-0 flex-1 px-3 sm:px-4">
-          {/* Spieler 1 (Heim): Rechtsbündig ausgerichtet */}
-          <div className="flex items-center justify-end gap-1.5 min-w-0 text-right">
-            {tournament.useRankings && p1Rank && (
-              <span className={`px-1.5 py-0.2 rounded text-[10px] border shrink-0 ${p1RankBadgeClasses}`}>
-                #{p1Rank}
+        {/* Bereich 2 (Mitte): Nimmt den gesamten restlichen Platz ein als 3-Spalten-Grid */}
+        <div className="flex-1 mx-4 min-w-0">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full">
+            {/* Spieler 1: Muss zwingend rechtsbündig sein */}
+            <div className="text-right pr-3 truncate">
+              {tournament.useRankings && p1Rank && (
+                <span className={`inline-flex items-center px-1.5 py-0.2 mr-1.5 rounded text-[10px] border align-middle shrink-0 ${p1RankBadgeClasses}`}>
+                  #{p1Rank}
+                </span>
+              )}
+              <span className={`text-sm ${p1TextClasses}`} title={p1Name}>
+                {p1Name}
               </span>
-            )}
-            <span className={`truncate text-sm ${p1TextClasses}`} title={p1Name}>
-              {p1Name}
-            </span>
-          </div>
+            </div>
 
-          {/* Trenner ("vs."): Exakt im geometrischen Zentrum fixiert */}
-          <div className="text-center px-3 text-xs font-normal text-slate-400 select-none shrink-0">
-            vs.
-          </div>
+            {/* "vs.": Muss eine feste Breite haben und exakt zentriert sein */}
+            <div className="w-10 text-center text-xs font-normal text-slate-400 select-none shrink-0">
+              vs.
+            </div>
 
-          {/* Spieler 2 (Gast): Linksbündig ausgerichtet */}
-          <div className="flex items-center justify-start gap-1.5 min-w-0 text-left">
-            <span className={`truncate text-sm ${p2TextClasses}`} title={p2Name}>
-              {p2Name}
-            </span>
-            {tournament.useRankings && p2Rank && (
-              <span className={`px-1.5 py-0.2 rounded text-[10px] border shrink-0 ${p2RankBadgeClasses}`}>
-                #{p2Rank}
+            {/* Spieler 2: Muss zwingend linksbündig sein */}
+            <div className="text-left pl-3 truncate">
+              <span className={`text-sm ${p2TextClasses}`} title={p2Name}>
+                {p2Name}
               </span>
-            )}
+              {tournament.useRankings && p2Rank && (
+                <span className={`inline-flex items-center px-1.5 py-0.2 ml-1.5 rounded text-[10px] border align-middle shrink-0 ${p2RankBadgeClasses}`}>
+                  #{p2Rank}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Rechts: Ergebnis-Badge bzw. Aktions-Button fest an rechter Kante verankert */}
-        <div className="flex items-center justify-end gap-2 shrink-0 sm:min-w-[130px] lg:min-w-[160px]">
+        {/* Bereich 3 (Rechts): Ergebnis-Badge bzw. Aktions-Button rechtsbündig fixiert */}
+        <div className="w-48 flex items-center justify-end gap-1.5 shrink-0">
           {isCompleted ? (
             <div className="flex items-center gap-1.5">
               <span className="tabular-nums font-bold text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200/70 whitespace-nowrap">
@@ -375,24 +381,22 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
                 </button>
               )}
             </div>
+          ) : onEnterResult && canEdit ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEnterResult(match);
+              }}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[var(--color-primary)] hover:opacity-90 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Ergebnis eintragen</span>
+            </button>
           ) : (
-            onEnterResult && canEdit ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEnterResult(match);
-                }}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[var(--color-primary)] hover:opacity-90 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Ergebnis eintragen</span>
-              </button>
-            ) : (
-              <span className="text-xs text-slate-400 font-normal whitespace-nowrap">
-                Noch nicht gespielt
-              </span>
-            )
+            <span className="text-xs text-slate-400 font-normal whitespace-nowrap">
+              Noch nicht gespielt
+            </span>
           )}
 
           {/* Admin Audit Button - dezentes Icon ohne Text */}
@@ -403,7 +407,7 @@ export const ChampionshipMatchCard: React.FC<ChampionshipMatchCardProps> = ({
                 e.stopPropagation();
                 setIsAuditDrawerOpen(true);
               }}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer border border-transparent hover:border-emerald-200/60"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer border border-transparent hover:border-emerald-200/60 shrink-0"
               title="Audit-Protokoll dieser Partie anzeigen"
               aria-label="Audit-Protokoll anzeigen"
             >

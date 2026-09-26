@@ -2121,6 +2121,7 @@ const App: React.FC = () => {
   const handleToggleRegistration = async (
     tournamentId: string,
     playerName?: string,
+    comment?: string,
   ) => {
     if (!currentUser) return;
     const targetPlayer = playerName || currentUser.name;
@@ -2134,11 +2135,18 @@ const App: React.FC = () => {
         timestamp: new Date().toISOString(),
         actorName: currentUser.name,
       });
+      const newComments = { ...(t.registrationComments || {}) };
+      if (isRegistered) {
+        delete newComments[targetPlayer];
+      } else if (comment && comment.trim()) {
+        newComments[targetPlayer] = comment.trim();
+      }
       await updateTournament(currentVereinsId, tournamentId, {
         participants: isRegistered
           ? t.participants.filter((p) => p !== targetPlayer)
           : [...t.participants, targetPlayer],
         auditLog: newAuditLog,
+        registrationComments: newComments,
       });
     }
   };
@@ -3026,9 +3034,10 @@ const App: React.FC = () => {
         currentVereinsId={currentVereinsId}
         onSwitchClub={handleSwitchClub}
       >
-        <div className="w-full flex-grow flex flex-col min-h-0 space-y-3">
+        <div className="w-full flex-grow flex flex-col min-h-0">
           {superAdminContext && !proxyUser && (
-            <div className="bg-rose-50 border-2 border-rose-200 text-rose-900 px-5 py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in slide-in-from-top-3 duration-300 select-none">
+            <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 pt-3">
+              <div className="bg-rose-50 border-2 border-rose-200 text-rose-900 px-5 py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in slide-in-from-top-3 duration-300 select-none">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center text-white shadow-md shrink-0">
                   <i className="fa-solid fa-user-check text-lg"></i>
@@ -3081,39 +3090,42 @@ const App: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
           )}
           {proxyUser && (
-            <div className="bg-amber-50 border-2 border-amber-200 text-amber-900 px-5 py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in slide-in-from-top-3 duration-300 select-none">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-md shrink-0">
-                  <i className="fa-solid fa-user-secret text-lg"></i>
+            <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 pt-3">
+              <div className="bg-amber-50 border-2 border-amber-200 text-amber-900 px-5 py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in slide-in-from-top-3 duration-300 select-none">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-md shrink-0">
+                    <i className="fa-solid fa-user-secret text-lg"></i>
+                  </div>
+                  <div className="text-left">
+                    <h4 className="font-black text-xs uppercase tracking-wider text-amber-800">
+                      Proxy-Modus Aktiv
+                    </h4>
+                    <p className="text-xs font-bold text-slate-700">
+                      Du agierst aktuell als{" "}
+                      <span className="font-black text-amber-600 underline">
+                        {proxyUser.lastName || proxyUser.firstName
+                          ? `${proxyUser.firstName || ""} ${proxyUser.lastName || ""}`.trim()
+                          : proxyUser.name}
+                      </span>{" "}
+                      (Login: {proxyUser.name}).
+                    </p>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <h4 className="font-black text-xs uppercase tracking-wider text-amber-800">
-                    Proxy-Modus Aktiv
-                  </h4>
-                  <p className="text-xs font-bold text-slate-700">
-                    Du agierst aktuell als{" "}
-                    <span className="font-black text-amber-600 underline">
-                      {proxyUser.lastName || proxyUser.firstName
-                        ? `${proxyUser.firstName || ""} ${proxyUser.lastName || ""}`.trim()
-                        : proxyUser.name}
-                    </span>{" "}
-                    (Login: {proxyUser.name}).
-                  </p>
-                </div>
+                <button
+                  onClick={() => {
+                    if (currentUser?.vereinsId) {
+                      setActiveTenantId(currentUser.vereinsId);
+                    }
+                    setProxyUser(null);
+                  }}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-black text-white font-black uppercase text-[9px] tracking-widest rounded-xl transition-all shadow-sm shrink-0 active:scale-95 flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-arrow-left-long"></i> Proxy beenden
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  if (currentUser?.vereinsId) {
-                    setActiveTenantId(currentUser.vereinsId);
-                  }
-                  setProxyUser(null);
-                }}
-                className="px-3.5 py-2 bg-amber-600 hover:bg-black text-white font-black uppercase text-[9px] tracking-widest rounded-xl transition-all shadow-sm shrink-0 active:scale-95 flex items-center gap-1.5"
-              >
-                <i className="fa-solid fa-arrow-left-long"></i> Proxy beenden
-              </button>
             </div>
           )}
 
@@ -3388,8 +3400,7 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ) : view === "reports" && isAdmin ? (
-                <div className="flex flex-col h-full">
-                  
+                <div className="w-full flex-grow flex flex-col min-h-0">
                   <AdminReports
                     bookings={bookings}
                     users={users}
@@ -3397,8 +3408,7 @@ const App: React.FC = () => {
                   />
                 </div>
               ) : view === "guests" && currentUser ? (
-                <div className="flex flex-col h-full">
-                  
+                <div className="w-full flex-grow flex flex-col min-h-0">
                   <AdminGuests
                     bookings={bookings}
                     users={users}
@@ -3411,7 +3421,7 @@ const App: React.FC = () => {
                   />
                 </div>
               ) : view === "adminSettings" && isAdmin ? (
-                <div className="w-full flex flex-col h-full">
+                <div className="w-full flex-grow flex flex-col min-h-0">
                   
                   <AdminSettings
                     users={users}
@@ -3547,8 +3557,7 @@ const App: React.FC = () => {
                   />
                 </div>
               ) : view === "tournaments" ? (
-                <div className="flex flex-col h-full">
-                  
+                <div className="w-full flex-grow flex flex-col min-h-0">
                   <Tournaments
                     tournaments={tournaments}
                     users={users}
@@ -3563,8 +3572,7 @@ const App: React.FC = () => {
                   />
                 </div>
               ) : view === "ranking" ? (
-                <div className="flex flex-col h-full">
-                  
+                <div className="w-full flex-grow flex flex-col min-h-0">
                   {rankings ? (
                     <RankingView
                       data={rankings}
@@ -3573,7 +3581,7 @@ const App: React.FC = () => {
                       settings={settings}
                       onUpdate={(r) =>
                         saveRankings(
-                          currentVereinsId,
+                           currentVereinsId,
                           r as unknown as RankingState,
                         )
                       }
@@ -3585,8 +3593,7 @@ const App: React.FC = () => {
                   )}
                 </div>
               ) : view === "arbeitseinsaetze" ? (
-                <div className="flex flex-col h-full">
-                  
+                <div className="w-full flex-grow flex flex-col min-h-0">
                   <Arbeitseinsaetze
                     currentUser={proxyUser || currentUser}
                     users={users}
@@ -3624,7 +3631,7 @@ const App: React.FC = () => {
                 )
               ) : view === "championship" ? (
                 settings.modules?.championship === true || isAdmin ? (
-                  <div className="flex flex-col h-full">
+                  <div className="w-full flex-grow flex flex-col min-h-0">
                     <ChampionshipHub
                       currentUser={proxyUser || currentUser}
                       clubId={currentVereinsId}
@@ -3635,6 +3642,8 @@ const App: React.FC = () => {
                         setAdminInitialTab("championship");
                         handleSetView("adminSettings");
                       }}
+                      clubName={settings.clubName || currentVereinsId}
+                      logoUrl={settings.customHeaderLogoUrl || settings.headerLogoUrl || settings.customLogoUrl || settings.logoUrl}
                     />
                   </div>
                 ) : (

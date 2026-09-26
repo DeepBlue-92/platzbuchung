@@ -709,14 +709,14 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
 
                       {/* Meta Pills */}
                       <div className="flex flex-wrap gap-1.5 mb-3 text-[11px]">
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
                           {tourn.discipline === 'doubles' ? 'Doppel' : 'Einzel'}
                         </span>
                         <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
                           {tourn.participants?.length || 0} Teilnehmer
                         </span>
                         {tourn.groups && tourn.groups.length > 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium border border-blue-100">
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
                             {tourn.groups.length} Gruppen
                           </span>
                         )}

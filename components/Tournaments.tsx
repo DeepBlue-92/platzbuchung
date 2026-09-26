@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { PartyPopper, Plus } from "lucide-react";
+import { PartyPopper } from "lucide-react";
 import { Tournament, User, Role } from "../types";
 
 interface TournamentsProps {
@@ -63,10 +63,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
         console.error("Fehler beim Kopieren des Links:", err);
       });
   };
-  const [playerSearch, setPlayerSearch] = useState<{
-    tournamentId: string;
-    query: string;
-  }>({ tournamentId: "", query: "" });
+
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>(
     {},
   );
@@ -79,6 +76,10 @@ const Tournaments: React.FC<TournamentsProps> = ({
     date: "",
     startTime: "",
     endTime: "",
+    registrationStart: "",
+    registrationEnd: "",
+    deregistrationStart: "",
+    deregistrationEnd: "",
     description: "",
     hideExpired: false,
     allowComment: false,
@@ -116,6 +117,10 @@ const Tournaments: React.FC<TournamentsProps> = ({
         date: tournament.date || "",
         startTime: tournament.startTime || "",
         endTime: tournament.endTime || "",
+        registrationStart: tournament.registrationStart || "",
+        registrationEnd: tournament.registrationEnd || "",
+        deregistrationStart: tournament.deregistrationStart || "",
+        deregistrationEnd: tournament.deregistrationEnd || "",
         description: tournament.description || "",
         hideExpired: tournament.hideExpired ?? false,
         allowComment: tournament.allowComment ?? false,
@@ -131,6 +136,10 @@ const Tournaments: React.FC<TournamentsProps> = ({
         date: "",
         startTime: "",
         endTime: "",
+        registrationStart: "",
+        registrationEnd: "",
+        deregistrationStart: "",
+        deregistrationEnd: "",
         description: "",
         hideExpired: false,
         allowComment: false,
@@ -159,6 +168,10 @@ const Tournaments: React.FC<TournamentsProps> = ({
         date: "",
         startTime: "",
         endTime: "",
+        registrationStart: "",
+        registrationEnd: "",
+        deregistrationStart: "",
+        deregistrationEnd: "",
         description: "",
         hideExpired: false,
         allowComment: false,
@@ -187,6 +200,16 @@ const Tournaments: React.FC<TournamentsProps> = ({
     return nameOrId;
   };
 
+  const formatShortDate = (dateStr?: string | null) => {
+    if (!dateStr) return "";
+    const clean = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+    const parts = clean.split("-");
+    if (parts.length === 3) {
+      return `${parseInt(parts[2], 10)}.${parseInt(parts[1], 10)}.`;
+    }
+    return clean;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
@@ -196,13 +219,17 @@ const Tournaments: React.FC<TournamentsProps> = ({
       date: formData.date || null,
       startTime: formData.startTime || null,
       endTime: formData.endTime || null,
+      registrationStart: formData.registrationStart || null,
+      registrationEnd: formData.registrationEnd || null,
+      deregistrationStart: formData.deregistrationStart || null,
+      deregistrationEnd: formData.deregistrationEnd || null,
       description: formData.description.trim() || null,
-      hideExpired: formData.hideExpired,
-      allowComment: formData.allowComment,
+      hideExpired: !!formData.hideExpired,
+      allowComment: !!formData.allowComment,
       maxParticipants: formData.maxParticipants
         ? parseInt(formData.maxParticipants, 10)
         : null,
-      isRegistrationBlocked: formData.isRegistrationBlocked || null,
+      isRegistrationBlocked: !!formData.isRegistrationBlocked,
     };
 
     if (editingTournamentId && onUpdateTournament) {
@@ -214,11 +241,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
     handleCloseSlider();
   };
 
-  const filteredUsers = useMemo(() => {
-    if (!playerSearch.query) return [];
-    const q = playerSearch.query.toLowerCase();
-    return allUsers.filter((u) => u.name.toLowerCase().includes(q)).slice(0, 5);
-  }, [playerSearch.query, allUsers]);
+
 
   const { upcomingTournaments, pastTournaments, trashTournaments } =
     useMemo(() => {
@@ -361,6 +384,24 @@ const Tournaments: React.FC<TournamentsProps> = ({
                 <i className="fa-regular fa-clock text-slate-400"></i>
                 {formattedTimeStr}
               </span>
+              {(t.registrationStart || t.registrationEnd) && (
+                <span
+                  className="inline-flex items-center gap-1.5 bg-slate-100/80 text-slate-700 border border-slate-200/80 px-2 py-0.5 rounded-md text-[10px] font-black md:font-normal uppercase tracking-wider"
+                  title={`Anmeldung: ${t.registrationStart ? `ab ${formatShortDate(t.registrationStart)}` : ""} ${t.registrationEnd ? `bis ${formatShortDate(t.registrationEnd)}` : ""}`}
+                >
+                  <i className="fa-regular fa-calendar-check text-slate-400"></i>
+                  Anmeldung {t.registrationStart ? `ab ${formatShortDate(t.registrationStart)}` : ""} {t.registrationEnd ? `bis ${formatShortDate(t.registrationEnd)}` : ""}
+                </span>
+              )}
+              {(t.deregistrationStart || t.deregistrationEnd) && (
+                <span
+                  className="inline-flex items-center gap-1.5 bg-slate-100/80 text-slate-700 border border-slate-200/80 px-2 py-0.5 rounded-md text-[10px] font-black md:font-normal uppercase tracking-wider"
+                  title={`Abmeldung: ${t.deregistrationStart ? `ab ${formatShortDate(t.deregistrationStart)}` : ""} ${t.deregistrationEnd ? `bis ${formatShortDate(t.deregistrationEnd)}` : ""}`}
+                >
+                  <i className="fa-regular fa-calendar-xmark text-slate-400"></i>
+                  Abmeldung {t.deregistrationStart ? `ab ${formatShortDate(t.deregistrationStart)}` : ""} {t.deregistrationEnd ? `bis ${formatShortDate(t.deregistrationEnd)}` : ""}
+                </span>
+              )}
               {t.isRegistrationBlocked && (
                 <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-600 border border-red-100 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
                   <i className="fa-solid fa-lock text-red-400"></i>
@@ -446,74 +487,25 @@ const Tournaments: React.FC<TournamentsProps> = ({
                 )}
             </div>
 
-            {isAdmin && (
-              <div className="relative pt-2 border-t border-slate-100 flex flex-col gap-1">
-                <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest pl-1">
-                  Teilnehmer manuell (Admin)
-                </label>
-                <input className="w-full px-2.5 border border-slate-200 rounded-lg outline-none focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                  placeholder="Name suchen..."
-                  value={
-                    playerSearch.tournamentId === t.id ? playerSearch.query : ""
-                  }
-                  onChange={(e) =>
-                    setPlayerSearch({
-                      tournamentId: t.id,
-                      query: e.target.value,
-                    })
-                  }
-                />
-                {playerSearch.tournamentId === t.id &&
-                  filteredUsers.length > 0 && (
-                    <div className="absolute z-50 w-full mt-[50px] bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
-                      {filteredUsers.map((u) => {
-                        const nameText =
-                          u.klarname ||
-                          (u.firstName || u.lastName
-                            ? `${u.firstName || ""} ${u.lastName || ""}`.trim()
-                            : u.name);
-                        const hasLabel =
-                          u.klarname || u.firstName || u.lastName;
-                        return (
-                          <button
-                            key={u.id}
-                            className="w-full text-left px-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-center justify-between py-2.5 text-sm font-medium"
-                            onClick={() => {
-                              onToggleRegistration(t.id, u.name);
-                              setPlayerSearch({ tournamentId: "", query: "" });
-                            }}
-                          >
-                            <span className="truncate">{nameText}</span>
-                            {hasLabel && (
-                              <span className="text-[9px] text-slate-400 font-mono font-medium ml-2">
-                                @{u.name}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-              </div>
-            )}
 
-            <div className="pt-3 border-t border-slate-100 flex-1 flex flex-col">
+
+            <div className="pt-2.5 border-t border-slate-100 flex-1 flex flex-col">
               {t.maxParticipants && t.maxParticipants > 0 ? (
-                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 flex items-center justify-between">
+                <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
                   <span>
                     Teilnehmer ({t.participants?.length || 0} von{" "}
                     {t.maxParticipants})
                   </span>
-                  <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
+                  <span className="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200 font-medium">
                     Max. {t.maxParticipants}
                   </span>
                 </h4>
               ) : (
-                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">
+                <h4 className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
                   Teilnehmer ({t.participants?.length || 0})
                 </h4>
               )}
-              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto scrollbar-thin">
+              <div className="flex flex-col max-h-48 overflow-y-auto pr-1 scrollbar-thin">
                 {t.participants &&
                   t.participants.map((p, idx) => {
                     const comment = (t as any).registrationComments?.[p];
@@ -521,23 +513,26 @@ const Tournaments: React.FC<TournamentsProps> = ({
                     return (
                       <div
                         key={idx}
-                        className="bg-slate-50 border border-slate-200 p-2 rounded-xl flex flex-col gap-1"
+                        className="py-1.5 px-2.5 rounded border border-slate-100 bg-slate-50/70 text-xs flex flex-col gap-0.5 mb-1.5 last:mb-0"
                       >
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 flex-wrap">
-                            <span>{playerDisplayName}</span>
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="font-medium text-slate-800 truncate" title={playerDisplayName}>
+                            {playerDisplayName}
                           </span>
                           {isAdmin && (
                             <button
+                              type="button"
                               onClick={() => onToggleRegistration(t.id, p)}
-                              className="text-red-400 hover:text-red-600 transition-colors"
+                              className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors shrink-0 cursor-pointer"
+                              title="Teilnehmer abmelden"
+                              aria-label="Teilnehmer abmelden"
                             >
-                              <i className="fa-solid fa-circle-xmark"></i>
+                              <i className="fa-solid fa-xmark text-xs"></i>
                             </button>
                           )}
                         </div>
                         {comment && (
-                          <p className="text-[10px] font-semibold text-slate-500 italic pl-5">
+                          <p className="text-[10px] text-slate-500 italic truncate pl-0.5">
                             "{comment}"
                           </p>
                         )}
@@ -545,22 +540,32 @@ const Tournaments: React.FC<TournamentsProps> = ({
                     );
                   })}
                 {(!t.participants || t.participants.length === 0) && (
-                  <span className="text-slate-400 text-[10px] font-bold italic">
+                  <span className="text-slate-400 text-[10px] font-bold italic py-1">
                     Noch keine Anmeldungen
                   </span>
                 )}
               </div>
             </div>
 
-            {!isAdmin &&
-              t.allowComment &&
-              !isRegistered &&
-              !t.isRegistrationBlocked &&
-              !(
+            {(() => {
+              const todayStr = new Date().toISOString().split("T")[0];
+              const isBeforeRegStart = !!t.registrationStart && todayStr < (t.registrationStart.includes("T") ? t.registrationStart.split("T")[0] : t.registrationStart);
+              const isAfterRegEnd = !!t.registrationEnd && todayStr > (t.registrationEnd.includes("T") ? t.registrationEnd.split("T")[0] : t.registrationEnd);
+              const isRegPeriodOpen = !isBeforeRegStart && !isAfterRegEnd;
+
+              const isFull =
                 t.maxParticipants &&
                 t.maxParticipants > 0 &&
-                (t.participants?.length || 0) >= t.maxParticipants
-              ) && (
+                (t.participants?.length || 0) >= t.maxParticipants;
+
+              const showCommentField =
+                t.allowComment &&
+                !isRegistered &&
+                (isAdmin || (isRegPeriodOpen && !t.isRegistrationBlocked && !isFull));
+
+              if (!showCommentField) return null;
+
+              return (
                 <div className="mt-3 space-y-1">
                   <label className="block text-[9px] font-black text-slate-400 uppercase">
                     Optionaler Kommentar
@@ -578,103 +583,132 @@ const Tournaments: React.FC<TournamentsProps> = ({
                     className="w-full px-2.5 border-2 border-slate-200 rounded-xl text-xs outline-none bg-white focus:border-[var(--color-accent)] py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                 </div>
-              )}
+              );
+            })()}
           </div>
 
-          <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-3 pb-6 shrink-0 mt-auto">
-            <div className="flex gap-2">
-              {!isAdmin &&
-                (() => {
-                  const isFull =
-                    t.maxParticipants &&
-                    t.maxParticipants > 0 &&
-                    (t.participants?.length || 0) >= t.maxParticipants;
-                  const disableRegister =
-                    t.isRegistrationBlocked || (isFull && !isRegistered);
+          <div className="p-4 bg-slate-50 border-t border-slate-100 flex flex-col gap-2.5 pb-6 shrink-0 mt-auto">
+            {(() => {
+              const todayStr = new Date().toISOString().split("T")[0];
+              const isBeforeRegStart = !!t.registrationStart && todayStr < (t.registrationStart.includes("T") ? t.registrationStart.split("T")[0] : t.registrationStart);
+              const isAfterRegEnd = !!t.registrationEnd && todayStr > (t.registrationEnd.includes("T") ? t.registrationEnd.split("T")[0] : t.registrationEnd);
 
-                  let btnText = isRegistered ? "Abmelden" : "Anmelden";
-                  let btnIcon = isRegistered ? "fa-user-minus" : "fa-user-plus";
+              const isBeforeDeregStart = !!t.deregistrationStart && todayStr < (t.deregistrationStart.includes("T") ? t.deregistrationStart.split("T")[0] : t.deregistrationStart);
+              const isAfterDeregEnd = !!t.deregistrationEnd && todayStr > (t.deregistrationEnd.includes("T") ? t.deregistrationEnd.split("T")[0] : t.deregistrationEnd);
 
-                  if (t.isRegistrationBlocked) {
+              const isFull =
+                t.maxParticipants &&
+                t.maxParticipants > 0 &&
+                (t.participants?.length || 0) >= t.maxParticipants;
+
+              let btnText = isRegistered ? "Abmelden" : "Anmelden";
+              let btnIcon = isRegistered ? "fa-user-minus" : "fa-user-plus";
+              let isActionDisabled = false;
+
+              if (!isAdmin) {
+                if (!isRegistered) {
+                  if (isBeforeRegStart) {
+                    btnText = `Anmeldung ab ${formatShortDate(t.registrationStart)}`;
+                    btnIcon = "fa-clock";
+                    isActionDisabled = true;
+                  } else if (isAfterRegEnd) {
+                    btnText = "Anmeldefrist abgelaufen";
+                    btnIcon = "fa-calendar-xmark";
+                    isActionDisabled = true;
+                  } else if (t.isRegistrationBlocked) {
                     btnText = "Anmeldung gesperrt";
                     btnIcon = "fa-lock";
-                  } else if (isFull && !isRegistered) {
+                    isActionDisabled = true;
+                  } else if (isFull) {
                     btnText = "Ausgebucht";
                     btnIcon = "fa-user-slash";
+                    isActionDisabled = true;
                   }
+                } else {
+                  if (isBeforeDeregStart) {
+                    btnText = `Abmeldung ab ${formatShortDate(t.deregistrationStart)}`;
+                    btnIcon = "fa-clock";
+                    isActionDisabled = true;
+                  } else if (isAfterDeregEnd) {
+                    btnText = "Abmeldefrist abgelaufen";
+                    btnIcon = "fa-calendar-xmark";
+                    isActionDisabled = true;
+                  }
+                }
+              }
 
-                  return (
-                    <button
-                      disabled={disableRegister && !isRegistered} // block registration if closed/full, but let them deregister if already in list
-                      onClick={() => {
-                        if (disableRegister && !isRegistered) return;
-                        onToggleRegistration(
-                          t.id,
-                          undefined,
-                          commentInputs[t.id],
-                        );
-                        if (!isRegistered) {
-                          setCommentInputs({ ...commentInputs, [t.id]: "" });
-                        }
-                      }}
-                      className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-md flex items-center justify-center gap-2 ${
-                        disableRegister && !isRegistered
-                          ? "bg-slate-150 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
-                          : isRegistered
-                            ? "bg-slate-200 text-slate-600 hover:bg-slate-300 active:scale-95"
-                            : "bg-[var(--color-primary)] text-white hover:bg-[color-mix(in srgb, var(--color-primary) 80%, black)] active:scale-95"
-                      }`}
-                    >
-                      <i className={`fa-solid ${btnIcon}`}></i>
-                      {btnText}
-                    </button>
-                  );
-                })()}
-              {isAdmin && !isTrashView && (
-                <div className="flex gap-1.5 w-full opacity-60 hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleOpenAudit(t.id)}
-                    className="flex-1 p-2 border border-slate-200 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-1.5"
-                  >
-                    <i className="fa-solid fa-list-check hidden sm:inline-block"></i>{" "}
-                    Audit
-                  </button>
-                  <button
-                    onClick={() => handleOpenSlider(t)}
-                    className="flex-1 px-3 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-1.5"
-                  >
-                    <i className="fa-solid fa-pen hidden sm:inline-block"></i>{" "}
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (onUpdateTournament) {
-                        onUpdateTournament(t.id, {
-                          deletedAt: new Date().toISOString(),
-                        });
-                      }
-                    }}
-                    className="flex-1 p-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-1.5"
-                  >
-                    <i className="fa-solid fa-trash-can hidden sm:inline-block"></i>{" "}
-                    Del
-                  </button>
-                </div>
-              )}
-              {isAdmin && isTrashView && (
+              return (
+                <button
+                  disabled={isActionDisabled}
+                  onClick={() => {
+                    if (isActionDisabled) return;
+                    onToggleRegistration(
+                      t.id,
+                      undefined,
+                      commentInputs[t.id],
+                    );
+                    if (!isRegistered) {
+                      setCommentInputs({ ...commentInputs, [t.id]: "" });
+                    }
+                  }}
+                  className={`w-full py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all shadow-md flex items-center justify-center gap-2 ${
+                    isActionDisabled
+                      ? "bg-slate-150 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                      : isRegistered
+                        ? "bg-slate-200 text-slate-600 hover:bg-slate-300 active:scale-95 cursor-pointer"
+                        : "bg-[var(--color-primary)] text-white hover:bg-[color-mix(in srgb, var(--color-primary) 80%, black)] active:scale-95 cursor-pointer"
+                  }`}
+                >
+                  <i className={`fa-solid ${btnIcon}`}></i>
+                  {btnText}
+                </button>
+              );
+            })()}
+
+            {isAdmin && !isTrashView && (
+              <div className="flex gap-1.5 w-full opacity-70 hover:opacity-100 transition-opacity pt-1 border-t border-slate-200/60">
+                <button
+                  onClick={() => handleOpenAudit(t.id)}
+                  className="flex-1 p-2 border border-slate-200 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-1.5"
+                >
+                  <i className="fa-solid fa-list-check hidden sm:inline-block"></i>{" "}
+                  Audit
+                </button>
+                <button
+                  onClick={() => handleOpenSlider(t)}
+                  className="flex-1 px-3 border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-white rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-1.5"
+                >
+                  <i className="fa-solid fa-pen hidden sm:inline-block"></i>{" "}
+                  Edit
+                </button>
                 <button
                   onClick={() => {
                     if (onUpdateTournament) {
-                      onUpdateTournament(t.id, { deletedAt: null as any });
+                      onUpdateTournament(t.id, {
+                        deletedAt: new Date().toISOString(),
+                      });
                     }
                   }}
-                  className="flex-1 py-2 bg-[var(--color-primary)] text-white hover:bg-[color-mix(in srgb, var(--color-primary) 80%, black)] rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-2"
+                  className="flex-1 p-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-1.5"
                 >
-                  <i className="fa-solid fa-trash-arrow-up"></i>{" "}
-                  Wiederherstellen
+                  <i className="fa-solid fa-trash-can hidden sm:inline-block"></i>{" "}
+                  Del
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+            {isAdmin && isTrashView && (
+              <button
+                onClick={() => {
+                  if (onUpdateTournament) {
+                    onUpdateTournament(t.id, { deletedAt: null as any });
+                  }
+                }}
+                className="w-full py-2 bg-[var(--color-primary)] text-white hover:bg-[color-mix(in srgb, var(--color-primary) 80%, black)] rounded-lg transition-colors font-bold uppercase text-[9px] flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <i className="fa-solid fa-trash-arrow-up"></i>{" "}
+                Wiederherstellen
+              </button>
+            )}
           </div>
         </div>
       );
@@ -701,7 +735,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
   };
 
   return (
-    <div className="lg:animate-in lg:fade-in lg:duration-500 space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full lg:animate-in lg:fade-in lg:duration-500">
       {/* Slider Drawer via Portal */}
       {isSliderOpen &&
         createPortal(
@@ -836,6 +870,84 @@ const Tournaments: React.FC<TournamentsProps> = ({
                     </div>
                   </div>
 
+                  {/* Anmelde- & Abmeldefristen (Optional) - in einer gemeinsamen Karte */}
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3 shrink-0 shadow-sm">
+                    {/* Reihe 1: Anmeldefristen */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                          Anmeldung ab
+                        </label>
+                        <input 
+                          type="date"
+                          value={formData.registrationStart || ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              registrationStart: e.target.value,
+                            })
+                          }
+                          className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium uppercase text-slate-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                          Anmeldung bis
+                        </label>
+                        <input 
+                          type="date"
+                          value={formData.registrationEnd || ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              registrationEnd: e.target.value,
+                            })
+                          }
+                          className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium uppercase text-slate-700"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Trennlinie */}
+                    <div className="border-t border-slate-200/80 pt-2.5">
+                      {/* Reihe 2: Abmeldefristen */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                            Abmeldung ab
+                          </label>
+                          <input 
+                            type="date"
+                            value={formData.deregistrationStart || ""}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                deregistrationStart: e.target.value,
+                              })
+                            }
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium uppercase text-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider mb-1">
+                            Abmeldung bis
+                          </label>
+                          <input 
+                            type="date"
+                            value={formData.deregistrationEnd || ""}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                deregistrationEnd: e.target.value,
+                              })
+                            }
+                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-lg bg-white text-sm outline-none focus:border-[var(--color-primary)] transition-colors placeholder:font-normal placeholder:text-slate-400 font-sans font-medium uppercase text-slate-700"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
                       Beschreibung (Optional)
@@ -861,8 +973,8 @@ const Tournaments: React.FC<TournamentsProps> = ({
                   </h4>
                   <div className="space-y-4">
                     <div>
-                      <div className="flex flex-col gap-3">
-                        <label className="flex items-center gap-3 text-[12px] font-bold text-slate-700 cursor-pointer bg-slate-50 hover:bg-slate-100 p-3 rounded-xl border border-slate-200 transition-colors">
+                      <div className="bg-slate-50 rounded-xl border border-slate-200 divide-y divide-slate-200 overflow-hidden shadow-sm">
+                        <label className="flex items-center gap-3 text-[12px] font-bold text-slate-700 cursor-pointer hover:bg-slate-100/70 p-3 transition-colors">
                           <input
                             type="radio"
                             checked={!formData.hideExpired}
@@ -876,7 +988,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
                             verschieben (Standard)
                           </span>
                         </label>
-                        <label className="flex items-center gap-3 text-[12px] font-bold text-slate-700 cursor-pointer bg-slate-50 hover:bg-slate-100 p-3 rounded-xl border border-slate-200 transition-colors">
+                        <label className="flex items-center gap-3 text-[12px] font-bold text-slate-700 cursor-pointer hover:bg-slate-100/70 p-3 transition-colors">
                           <input
                             type="radio"
                             checked={formData.hideExpired}
@@ -1009,7 +1121,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
           document.body,
         )}
 
-      <div className="flex flex-col space-y-4 lg:space-y-5 w-full lg:animate-in lg:fade-in lg:duration-500">
+      <div className="flex flex-col gap-3.5 sm:gap-4 w-full">
         {/* 1. TOP HEADER (LIGHT MODE - IDENTISCH ZU RANGLISTE) */}
         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1029,27 +1141,16 @@ const Tournaments: React.FC<TournamentsProps> = ({
               </div>
             </div>
 
-            {isAdmin && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleOpenSlider()}
-                  className="h-9 px-3.5 bg-[var(--color-primary)] hover:opacity-90 text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs active:scale-95 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Neues Event</span>
-                </button>
-              </div>
-            )}
+
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 items-stretch">
           {renderEventList(upcomingTournaments, false, true)}
         </div>
 
         {pastTournaments.length > 0 && (
-          <div className="pt-4 lg:pt-6 space-y-4">
+          <div className="space-y-3.5 sm:space-y-4">
             <button
               onClick={() => setShowPastEvents(!showPastEvents)}
               type="button"
@@ -1062,7 +1163,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
             </button>
 
             {showPastEvents && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
                 {renderEventList(pastTournaments)}
               </div>
             )}
@@ -1070,7 +1171,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
         )}
 
         {isAdmin && trashTournaments.length > 0 && (
-          <div className="pt-4 lg:pt-6 space-y-4">
+          <div className="space-y-3.5 sm:space-y-4">
             <button
               onClick={() => setShowTrash(!showTrash)}
               type="button"
@@ -1084,7 +1185,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
             </button>
 
             {showTrash && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
                 {renderEventList(trashTournaments, true)}
               </div>
             )}

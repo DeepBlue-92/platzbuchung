@@ -814,7 +814,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
   });
 
   return (
-    <div className="lg:animate-in lg:fade-in lg:duration-500 pb-0 md:pb-3 w-full select-none font-sans flex flex-col space-y-3 lg:space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full select-none font-sans lg:animate-in lg:fade-in lg:duration-500">
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 md:p-6 space-y-4 lg:space-y-6 flex flex-col">
         {/* Integrated Page Header */}
       <div className="pb-4 md:pb-6 border-b border-slate-100">

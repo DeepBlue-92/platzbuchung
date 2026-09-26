@@ -192,7 +192,7 @@ const AdminReports: React.FC<AdminReportsProps> = ({
   };
 
   return (
-    <div className="lg:animate-in lg:fade-in lg:duration-500 pb-0 md:pb-3 w-full">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full lg:animate-in lg:fade-in lg:duration-500">
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden p-4 md:p-6">
         {/* Upper Dashboard header area */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-0 md:gap-4 mb-3 pb-3 md:mb-6 md:pb-6 border-b border-slate-100">

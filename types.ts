@@ -1,3 +1,5 @@
+import type { UserNotificationSettings } from "./types/notifications";
+
 export enum Role {
   ADMIN = "admin",
   USER = "mitglied",
@@ -56,8 +58,11 @@ export interface Person {
   avatarUrl?: string | null; // WebP komprimiertes Profilbild (< 25 KB, permanent gecached)
   avatarIcon?: string | null; // Zero-Bandwidth Vektor-Icon ID (z.B. "tennis-ball", "racket", "trophy")
   onboarding_pending?: boolean; // Indicates if member onboarding is required
+  onboardingPending?: boolean; // CamelCase alias for onboarding_pending
   showAiAssistant?: boolean; // Club-Assistent ('Ace') aktivieren (Default: true)
   has_seen_ace_welcome?: boolean; // Whether the user has seen the Ace welcome callout bubble
+  notification_settings?: UserNotificationSettings; // Notification event subscriptions
+  notificationSettings?: UserNotificationSettings; // CamelCase alias
 }
 
 export type OnboardingFieldPermission = "HIDDEN" | "READ_ONLY" | "EDITABLE";
@@ -75,6 +80,7 @@ export interface ClubOnboardingSettings {
   field_demographics?: OnboardingFieldPermission;
   field_avatar: OnboardingFieldPermission;
   field_password: OnboardingPasswordFieldPermission;
+  default_notification_settings?: UserNotificationSettings; // Default notifications for newly registered users
 }
 
 export type User = Person & {
@@ -182,6 +188,13 @@ export interface Tournament {
   maxParticipants: number;
   isRegistrationBlocked?: boolean;
   participants: string[];
+  registrationStart?: string | null;
+  registrationEnd?: string | null;
+  deregistrationStart?: string | null;
+  deregistrationEnd?: string | null;
+  deletedAt?: string | null;
+  auditLog?: any[];
+  registrationComments?: Record<string, string>;
 }
 
 export interface ArbeitsEinsatz {
