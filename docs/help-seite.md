@@ -57,31 +57,69 @@ Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Mit
   - *Direkt-Umschalter:* Jedes Mitglied besitzt in der Liste ganz rechts einen Schnell-Knopf (*„Aktivieren“* bzw. *„Erledigt“*), um den Status sofort ohne Umwege umzuschalten.
 - **Erfolgs- und Fehlermeldungen:** Nach dem Speichern oder Ausführen einer Stapelaktion zeigt ein klarer Infobalken direkt an, ob die Aktion erfolgreich war oder ob ein Fehler aufgetreten ist.
 
-### Benachrichtigungs-System & Massenverwaltung (Bulk Actions)
-Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Benachrichtigungen** (Glocken-Symbol 🔔) alle Benachrichtigungs-Abonnements der Mitglieder verwalten, Massenaktionen durchführen, Onboarding-Standards festlegen und Vorlagen bearbeiten:
+### Benachrichtigungs-System & E-Mail-Verwaltung
+Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Benachrichtigungen** (Glocken-Symbol 🔔) alle Benachrichtigungs-Vorlagen verwalten, globale Vereinsvorgaben steuern und den E-Mail-Versand über Master-Schalter kontrollieren:
 
-- **Massenbearbeitung (Bulk Actions & Filter):**
-  - *Such- & Filtersystem:* Suche Mitglieder in Echtzeit nach Vor-/Nachname oder E-Mail-Adresse. Filtere nach Ligen (z. B. *„Nur Hobbyliga aktiv“* oder *„Keine Hobbyliga“*) sowie gezielt nach einzelnen Benachrichtigungs-Events.
-  - *Mehrfachauswahl & Tabellen-Checkbox:* Über die Master-Checkbox im Tabellenkopf lassen sich alle aktuell gefilterten Spieler mit einem Klick auswählen (z. B. *„Alle 142 Spieler markieren“*).
-  - *Kontextuelle Bulk-Action-Bar:* Sobald mindestens ein Spieler markiert ist, erscheint die Aktionsleiste. Admins wählen ein Event (z. B. `HOBBYLIGA_NEW_POST` oder `MATCH_RESULT_SUBMITTED`) und können dieses für alle markierten Spieler mit einem Klick gebündelt *aktivieren* oder *deaktivieren*.
-  - *Direkt-Umschalter:* In der Mitgliederliste kann jedes Event für ein einzelnes Mitglied sofort per Klick auf die Status-Schaltfläche ein- oder ausgeschaltet werden.
+- **Klare Strukturierung in zwei Haupt-Reiter:**
+  - **1. E-Mail-Einstellungen (Standardmäßig aktiv):** Aufgeteilt in zwei übersichtliche Bento-Bereiche: die globalen Vereinseinstellungen samt Not-Aus-Schalter und die schlanke Spieler-Massenverwaltung.
+  - **2. Nachrichtenvorlagen:** Die Vorlagen-Bibliothek mit strukturierter Übersichtstabelle aller erstellten Designs, 30-Tage-Papierkorb und dem visuellen modularen Block-Editor.
 
-- **Onboarding-Defaults (Standardvorgaben für Neumitglieder):**
-  - Im oberen Bereich der Seite können Administratoren festlegen, welche Benachrichtigungen neu registrierte Mitglieder standardmäßig beim Beitritt oder im Onboarding aktiviert haben.
-  - Mit Klick auf *„Defaults speichern“* werden diese Vorgaben dauerhaft im Vereinsprofil hinterlegt.
+- **Reiter „E-Mail-Einstellungen“ (Zwei klare Bento-Bereiche):**
+  - **Bereich 1 (oben): Globale E-Mail-Einstellungen:**
+    - *Globaler Not-Aus-Schalter („E-Mail-Versand global pausieren“):* Platziert oben rechts im Kopfbereich. Nach einer Sicherheits-Rückfrage lässt sich der gesamte E-Mail-Versand des Vereins sofort stoppen. Bei aktivem Not-Aus werden sämtliche E-Mail-Vorgänge pausiert und die darunterliegende E-Mail-Matrix wird ausgegraut. Auch für die erneute Reaktivierung des Versands ist aus Sicherheitsgründen eine Bestätigungsabfrage vorgeschaltet.
+    - *Schlanke 4-spaltige Matrix:* Übersichtliche Tabelle aller 5 System-Events:
+      1. **Buchungsbestätigung**
+      2. **Buchungsstornierung**
+      3. **Buchungsänderung**
+      4. **Neuer Hobbyliga-Beitrag**
+      5. **Match-Ergebnis eingetragen**
+    - *Spalte 2 („Versand systemweit aktiv“):* Schlichte Checkbox, um einzelne E-Mail-Typen klubweit als Master-Schalter zu steuern.
+    - *Spalte 3 („Standard bei Registrierung“):* Schlichte Checkbox, ob neue Mitglieder dieses Event automatisch voreingestellt abonniert haben.
+    - *Spalte 4 („Aktive Vorlage“):* Dropdown zur 1:1 Zuweisung des Designs aus der Bibliothek samt Direktlink zum visuellen Editor.
+    - *Speichern-Schaltfläche:* Änderungen an der Systemaktivität, den Registrierungsstandards oder der Vorlagenzuweisung werden per Klick auf die Schaltfläche *„Speichern“* dauerhaft gesichert.
+  - **Bereich 2 (darunter): Individuelle Spieler-Benachrichtigungen:**
+    - *Großes Suchfeld & Schnell-Leeren:* Griffiges Suchfeld zur Echtzeit-Filterung nach Namen oder E-Mail-Adresse inklusive „✕“-Schaltfläche zum schnellen Zurücksetzen.
+    - *Auswahlanzeige & Speichern-Button:* Neben dem Suchfeld befindet sich die Zähler-Info („X von Y markiert“) und der Button *„Speichern“*, mit dem vorgenommene Änderungen an den Berechtigungen dauerhaft in die Datenbank übernommen werden.
+    - *Spieler-Tabelle (Höhenstabilität & Leerraum):* Eine Zeile pro Mitglied mit Name, E-Mail und 5 separaten Spalten mit schlichten Checkboxen für die 5 E-Mail-Typen. Die Tabelle besitzt eine feste Mindesthöhe: Wird durch eine Suche nur ein Spieler gefunden, bleibt der Tabellenbereich unten sauber und leer, wodurch die Seitenhöhe nicht mehr springt.
+    - *Paginierung (30 Spieler pro Seite):* Es werden maximal 30 Spieler pro Seite angezeigt. Überschreitet die Anzahl 30 Mitglieder (z. B. bei größeren Vereinen), erscheint am Fuß der Tabelle eine Paginierungsleiste zum Blättern zwischen den Seiten.
+    - *„Alle auswählen“-Checkbox:* Die Checkbox im Tabellenkopf neben „Mitglied“ wählt alle aktuell sichtbaren bzw. gefilterten Spieler mit einem Klick an oder ab.
+    - *Direktklick & Master-Abhängigkeit:* Die Checkboxen in den Zeilen lassen sich für jeden Spieler direkt anklicken und umschalten; die Änderungen werden beim Klick auf *„Speichern“* übernommen. Ist ein E-Mail-Typ in den globalen Einstellungen deaktiviert oder der Not-Aus aktiv, wird die entsprechende Checkbox automatisch gesperrt („Global aus“).
+
+- **Vorlagen-Bibliothek (Reiter „Nachrichtenvorlagen“):**
+  - *Übersichtstabelle aller Vereins-Vorlagen:* Eine aufgeräumte Tabelle listet alle für den Verein erstellten E-Mail-Designs auf:
+    - **Name der Vorlage:** Individuelle Bezeichnung (z. B. *„Standard Buchungsbestätigung 2026“* oder *„Sommer-Turnier Sonderdesign“*).
+    - **Event-Typ:** Der fest zugeordnete Anwendungsfall (z. B. Buchungsbestätigung, Stornierung, Pinnwand-Post). Nach der Erstellung bleibt dieser Typ unveränderlich, damit Platzhalter und Daten immer 100 % zueinander passen.
+    - **Status:** Grünes Badge *„Aktiv zugewiesen“*, falls diese Vorlage im Reiter *„E-Mail-Einstellungen“* aktuell für den Live-Versand ausgewählt ist; andernfalls *„Bereit“*.
+    - **Aktionen:** 
+      - *„Bearbeiten“:* Lädt das Design und klappt den visuellen Block-Editor darunter sanft und ohne störendes Springen der Ansicht auf.
+      - *„Löschen“ (Papierkorb):* Verschiebt nicht mehr benötigte Vorlagen in den Soft-Delete. *Schutzregel:* Eine Vorlage, die aktuell einem Event aktiv zugewiesen ist, kann nicht gelöscht werden, bevor nicht eine andere Vorlage als aktiv hinterlegt wurde.
+  - *„Neue Vorlage anlegen“:* Über den Button oben rechts öffnet sich ein schlankes Fenster zur Eingabe des Namens, Auswahl des Event-Typs und Duplizieren bestehender Bausteine.
+  - *30-Tage-Papierkorb (Soft Delete):*
+    - Über die Schaltfläche *„Papierkorb anzeigen“* lassen sich gelöschte Vorlagen einsehen, wiederherstellen oder endgültig löschen.
+    - Vorlagen, die länger als 30 Tage im Papierkorb liegen, werden automatisch bereinigt.
+  - *Strikter Vereinsbezug:* Vorlagen werden für den jeweiligen Verein in der Datenbank gespeichert – alle Administratoren desselben Vereins sehen denselben Stand, ohne dass Daten vereinsübergreifend vermischt werden.
+
+### Persönliche Benachrichtigungs-Einstellungen (Spieler-Profil)
+Jedes Vereinsmitglied kann seine Benachrichtigungen im persönlichen Profil selbstständig verwalten:
+- **Profil aufrufen:** Klick auf den eigenen Benutzernamen bzw. Avatar in der oberen Navigationsleiste öffnet das Fenster *„Profil bearbeiten“*.
+- **Einklappbare Sektion „Benachrichtigungen“:**
+  - Standardmäßig eingeklappt, um das Profil kompakt zu halten. Ein Klick auf das Akkordeon klappt die 5 Kategorien auf.
+  - Zeigt auf einen Blick die Anzahl der aktiven Benachrichtigungen (z. B. *„5 von 5 E-Mail-Kategorien aktiv“*).
+  - Jede Kategorie kann einzeln per Checkbox aktiviert oder abbestellt werden:
+    1. *Buchungsbestätigung*
+    2. *Buchungsstornierung*
+    3. *Buchungsänderung*
+    4. *Neuer Hobbyliga-Beitrag*
+    5. *Match-Ergebnis eingetragen*
+- **Abhängigkeit zum Vereins-Master-Schalter & Not-Aus:**
+  - Ist der gesamte E-Mail-Versand vom Verein über den Not-Aus pausiert, werden alle Checkboxen im Profil mit dem Hinweis *„(Der E-Mail-Versand ist vom Verein derzeit vollständig pausiert)“* gesperrt.
+  - Hat der Administrator ein einzelnes Event über den Master-Kill-Switch deaktiviert, wird die entsprechende Checkbox im Profil mit dem Hinweis *„(Vom Verein derzeit global deaktiviert)“* gesperrt.
+- **Persistente Speicherung:** Die getroffenen Auswahlen werden beim Speichern des Profils direkt im Benutzerkonto hinterlegt.
 
 - **Spezifische Event-Logik & Empfänger-Filterung:**
   - *`HOBBYLIGA_NEW_POST` (Hobbyliga: Neuer Beitrag):* Broadcast-Benachrichtigung an alle aktiven Teilnehmer der Hobbyliga, sobald ein neuer Pinnwand-Beitrag erstellt wird. Der Verfasser des Beitrags wird automatisch und strikt aus dem Empfängerkreis ausgeschlossen.
   - *`MATCH_RESULT_SUBMITTED` (Match-Ergebnis eingetragen):* Geht nach der Ergebniseingabe eines Matches strikt und ausschließlich an den gegnerischen Spieler. Der eintragende Spieler selbst erhält niemals eine redundante E-Mail.
   - *`RESERVATION_CONFIRMED` / `RESERVATION_CANCELLED`:* Bestätigungs- und Stornierungs-E-Mails bei Buchungsvorgängen.
-
-- **Event-Testbench & Simulation:**
-  - Unter dem Reiter *„Event-Testbench (Broadcast & Match)“* können Administratoren Test-Broadcasts und Ergebnis-Nachrichten simulieren.
-  - Das System zeigt transparent an, wie viele E-Mails generiert wurden, wer als Verfasser ignoriert wurde und wie viele Spieler aufgrund von Opt-out-Einstellungen übersprungen wurden.
-
-- **Enterprise-E-Mail-Vorlagen (Workday-Modell):**
-  - Unter dem Reiter *„E-Mail-Vorlagen & Editor“* können E-Mail-Texte mit klickbaren Platzhaltern (`{{user_name}}`, `{{court_name}}`, `{{date}}`, etc.) angepasst werden.
-  - Beim Versand wird der Text automatisch in ein festes, responsives und tabellenbasiertes HTML-Layout mit Header-Banner und Footer eingebettet. Live-Vorschau in Echtzeit für Desktop und Smartphone sowie Testmail-Versand via Resend.
 
 ### Vereinsmeisterschaft (Modul)
 Das offizielle Vereinsmeisterschafts-Modul ermöglicht die Austragung von Sommer- und Wintermeisterschaften mit automatischer Tabellen- und Turnierbaumberechnung.

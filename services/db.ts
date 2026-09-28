@@ -1,5 +1,5 @@
 import { collection, doc, query, where, onSnapshot, getDoc, getDocs, setDoc, updateDoc, deleteDoc, runTransaction, deleteField, writeBatch } from 'firebase/firestore';
-import { db, auth, testConnection, handleFirestoreError, OperationType, waitForAuth } from '../lib/firebase';
+import { db, auth, testConnection, handleFirestoreError, OperationType, waitForAuth, ensureServerAuthenticated } from '../lib/firebase';
 import { Booking, Tournament, RankingState, User, Role, RegularLock, RangeLock, ArbeitsEinsatz, PlannedWorkShift, Gender, Person, Mitgliedschaft, Verein, UserClub, ClubFeeSettings, ClubOnboardingSettings } from '../types';
 import { UserNotificationSettings } from '../types/notifications';
 import { getUserClubs, isUserMemberOfClub } from '../lib/userUtils';
@@ -1243,19 +1243,24 @@ export async function updateMembersOnboardingStatus(
   return updatedCount;
 }
 
+// Module-level in-memory cache for club default notification settings
+const inMemoryClubDefaults: Record<string, UserNotificationSettings> = {};
+
 /**
- * Efficient bulk update of user notification settings for a list of user IDs.
- * Uses Firestore writeBatch in chunks of 450 documents (batch limit 500) to ensure
- * atomic execution and low database latency.
+ * Bulk updates notification settings for a list of user IDs in Firestore.
  */
 export async function bulkUpdateUserNotificationSettings(
   vereinsId: string,
   userIds: string[],
-  eventKey: string,
+  eventKey: NotificationEventKey,
   enabled: boolean
 ): Promise<{ success: boolean; updatedCount: number }> {
-  if (!userIds || userIds.length === 0) {
+  if (!Array.isArray(userIds) || userIds.length === 0) {
     return { success: true, updatedCount: 0 };
+  }
+
+  if (typeof window === 'undefined') {
+    await ensureServerAuthenticated().catch(() => {});
   }
 
   const normalizedId = getNormalizedVereinsId(vereinsId);
@@ -1274,6 +1279,7 @@ export async function bulkUpdateUserNotificationSettings(
       batch.set(
         userRef,
         {
+          id: cleanId,
           notification_settings: {
             [eventKey]: enabled,
           },
@@ -1296,6 +1302,7 @@ export async function bulkUpdateUserNotificationSettings(
           await setDoc(
             userRef,
             {
+              id: String(rawId).trim(),
               notification_settings: { [eventKey]: enabled },
               notificationSettings: { [eventKey]: enabled },
             },
@@ -1303,6 +1310,74 @@ export async function bulkUpdateUserNotificationSettings(
           );
         } catch (singleErr) {
           console.error(`Single update failed for user ${rawId}:`, singleErr);
+        }
+      }
+    }
+  }
+
+  return { success: true, updatedCount: totalUpdated };
+}
+
+export async function bulkUpdateUserNotificationSettingsMap(
+  vereinsId: string,
+  entries: Array<{ id: string; settings: UserNotificationSettings }>
+): Promise<{ success: boolean; updatedCount: number }> {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return { success: true, updatedCount: 0 };
+  }
+
+  if (typeof window === 'undefined') {
+    await ensureServerAuthenticated().catch(() => {});
+  }
+
+  const CHUNK_SIZE = 450;
+  let totalUpdated = 0;
+
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const chunk = entries.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+
+    for (const item of chunk) {
+      const cleanId = String(item.id || '').trim();
+      if (!cleanId) continue;
+
+      const userRef = doc(db, 'users', cleanId);
+      const safeSettings = { ...item.settings };
+      batch.set(
+        userRef,
+        {
+          id: cleanId,
+          notification_settings: safeSettings,
+          notificationSettings: safeSettings,
+          notificationPreferences: safeSettings,
+        },
+        { merge: true }
+      );
+      totalUpdated++;
+    }
+
+    try {
+      await batch.commit();
+    } catch (batchErr) {
+      console.warn(`Firestore batch commit failed for chunk, falling back to individual updates:`, batchErr);
+      for (const item of chunk) {
+        try {
+          const cleanId = String(item.id || '').trim();
+          if (!cleanId) continue;
+          const userRef = doc(db, 'users', cleanId);
+          const safeSettings = { ...item.settings };
+          await setDoc(
+            userRef,
+            {
+              id: cleanId,
+              notification_settings: safeSettings,
+              notificationSettings: safeSettings,
+              notificationPreferences: safeSettings,
+            },
+            { merge: true }
+          );
+        } catch (singleErr) {
+          console.error(`Single update failed for user ${item.id}:`, singleErr);
         }
       }
     }
@@ -1319,15 +1394,26 @@ export async function updateClubDefaultNotificationSettings(
   defaultSettings: UserNotificationSettings
 ): Promise<void> {
   const normalizedId = getNormalizedVereinsId(vereinsId);
-  const vereinRef = doc(db, 'vereine', normalizedId);
-  await setDoc(
-    vereinRef,
-    {
-      default_notification_settings: defaultSettings,
-      defaultNotificationSettings: defaultSettings,
-    },
-    { merge: true }
-  );
+  inMemoryClubDefaults[normalizedId] = { ...defaultSettings };
+
+  if (typeof window === 'undefined') {
+    await ensureServerAuthenticated().catch(() => {});
+  }
+
+  try {
+    const vereinRef = doc(db, 'vereine', normalizedId);
+    await setDoc(
+      vereinRef,
+      {
+        id: normalizedId,
+        default_notification_settings: defaultSettings,
+        defaultNotificationSettings: defaultSettings,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('updateClubDefaultNotificationSettings Firestore write warning (cached in-memory):', err);
+  }
 }
 
 /**
@@ -1341,12 +1427,16 @@ export async function getClubDefaultNotificationSettings(
     const vereinSnap = await getDoc(doc(db, 'vereine', normalizedId));
     if (vereinSnap.exists()) {
       const data = vereinSnap.data();
-      return data?.default_notification_settings || data?.defaultNotificationSettings || null;
+      const loaded = data?.default_notification_settings || data?.defaultNotificationSettings || null;
+      if (loaded) {
+        inMemoryClubDefaults[normalizedId] = loaded;
+        return loaded;
+      }
     }
   } catch (err) {
-    console.warn('Failed to load club default notification settings:', err);
+    console.warn('Failed to load club default notification settings from Firestore, checking cache:', err);
   }
-  return null;
+  return inMemoryClubDefaults[normalizedId] || null;
 }
 
 export async function deleteUserDoc(vereinsId: string, username: string) {

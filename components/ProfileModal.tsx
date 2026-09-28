@@ -3,8 +3,11 @@ import { updateEmail, updatePassword } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { saveUser, isUsernameTakenGlobally, updateUserAiAssistant, ClubSettings, DEFAULT_ONBOARDING_SETTINGS } from "../services/db";
 import { User, Gender } from "../types";
+import { UserNotificationSettings } from "../types/notifications";
+import { DEFAULT_USER_NOTIFICATION_SETTINGS } from "../services/notificationTemplates";
 import { parseDateToYYYYMMDD } from "../utils/playerHelper";
 import { AvatarUploader } from "./AvatarUploader";
+import { UserNotificationAccordion } from "./profile/UserNotificationAccordion";
 
 
 interface ProfileModalProps {
@@ -55,6 +58,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   const [showAiAssistant, setShowAiAssistant] = useState(
     currentUser.showAiAssistant !== false
   );
+  const [notificationSettings, setNotificationSettings] = useState<UserNotificationSettings>(() => {
+    return (
+      currentUser.notification_settings ||
+      currentUser.notificationSettings ||
+      currentUser.notificationPreferences ||
+      DEFAULT_USER_NOTIFICATION_SETTINGS
+    );
+  });
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser.avatarUrl || null);
   const [avatarIcon, setAvatarIcon] = useState<string | null>(currentUser.avatarIcon || "initials");
 
@@ -239,6 +250,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
         showAiAssistant,
         avatarUrl: avatarUrl || null,
         avatarIcon: avatarIcon || "initials",
+        notification_settings: notificationSettings,
+        notificationSettings: notificationSettings,
+        notificationPreferences: notificationSettings,
         ...(newPassword ? { password: newPassword } : {}),
       };
 
@@ -557,6 +571,16 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                     <span className="text-xs font-bold text-slate-800 block">E-Mail und Telefonnummer für andere Spieler anzeigen</span>
                   </div>
                 </label>
+              </div>
+
+              {/* Section 4: Persönliche Benachrichtigungen (Einklappbares Accordion) */}
+              <div className="pt-1">
+                <UserNotificationAccordion
+                  settings={notificationSettings}
+                  onChange={setNotificationSettings}
+                  clubId={(settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen").toLowerCase().trim()}
+                  primaryColor={primaryColor}
+                />
               </div>
             </div>
           </div>

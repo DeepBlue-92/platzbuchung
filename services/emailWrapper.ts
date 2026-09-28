@@ -45,7 +45,7 @@ export function getEmailLayoutWrapper(options: EmailWrapperOptions = {}): string
     body { margin: 0 !important; padding: 0 !important; width: 100% !important; min-width: 100%; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     @media only screen and (max-width: 620px) {
       .email-container { width: 100% !important; max-width: 100% !important; }
-      .content-padding { padding: 24px 16px !important; }
+      .content-padding { padding: 0 !important; }
       .header-padding { padding: 20px 16px !important; }
     }
   </style>
@@ -90,32 +90,10 @@ export function getEmailLayoutWrapper(options: EmailWrapperOptions = {}): string
             </td>
           </tr>
 
-          <!-- Main Content Body -->
+          <!-- Main Content Body (Padding completely controlled by template sections) -->
           <tr>
-            <td style="padding: 36px 32px; background-color: #ffffff; color: #334155; font-size: 15px; line-height: 24px;" class="content-padding">
+            <td style="padding: 0; background-color: #ffffff; color: #334155; font-size: 15px; line-height: 24px;" class="content-padding">
               {{{content}}}
-            </td>
-          </tr>
-
-          <!-- Divider -->
-          <tr>
-            <td style="padding: 0 32px;">
-              <div style="border-top: 1px solid #f1f5f9; height: 1px; width: 100%;"></div>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 24px 32px; background-color: #f8fafc; text-align: center; color: #64748b; font-size: 12px; line-height: 18px;">
-              <p style="margin: 0 0 8px 0; font-weight: 600; color: #475569;">
-                ${clubName} &bull; Online-Buchungssystem
-              </p>
-              <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 11px;">
-                Diese E-Mail wurde automatisch aus dem Buchungsportal versendet. Bitte antworte nicht direkt auf diese Nachricht.
-              </p>
-              <p style="margin: 0; color: #94a3b8; font-size: 11px;">
-                &copy; ${currentYear} ${clubName}. Alle Rechte vorbehalten.
-              </p>
             </td>
           </tr>
 

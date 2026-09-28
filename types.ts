@@ -63,6 +63,7 @@ export interface Person {
   has_seen_ace_welcome?: boolean; // Whether the user has seen the Ace welcome callout bubble
   notification_settings?: UserNotificationSettings; // Notification event subscriptions
   notificationSettings?: UserNotificationSettings; // CamelCase alias
+  notificationPreferences?: UserNotificationSettings; // Preference alias
 }
 
 export type OnboardingFieldPermission = "HIDDEN" | "READ_ONLY" | "EDITABLE";

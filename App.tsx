@@ -73,6 +73,7 @@ import {
 } from "./services/db";
 import { getVereinsIdByPublicToken } from "./services/db";
 import { checkPlayerCollisionAsync } from "./services/collisionService";
+import { notifyBookingModifiedApi } from "./services/notificationClient";
 
 const generateTestData = (): Booking[] => {
   return []; // We don't generate test data for Firebase automatically to avoid spamming
@@ -1606,6 +1607,7 @@ const App: React.FC = () => {
     guestCount?: number,
     deleteId?: string,
     comment?: string,
+    sendEditNotification = true,
   ): Promise<string | null> => {
     const startIndex = TIME_SLOTS.indexOf(startTime);
     const endIndex = TIME_SLOTS.indexOf(endTime);
@@ -1978,6 +1980,31 @@ const App: React.FC = () => {
         } else {
           await deleteBooking(currentVereinsId, deleteId);
         }
+      }
+
+      // 4. Benachrichtigung über Buchungsänderung (RESERVATION_MODIFIED) versenden
+      if (deleteId && editingBooking && sendEditNotification) {
+        const cancellationBase = typeof window !== "undefined" ? window.location.origin : "https://tennis-club.app";
+        notifyBookingModifiedApi({
+          bookingId: newBookings[0]?.id || deleteId,
+          userId: bookingUser?.id,
+          userName: bookingUser?.klarname || bookingUser?.name,
+          userEmail: bookingUser?.email,
+          courtName: court,
+          date,
+          time: `${startTime} - ${endTime}`,
+          oldCourtName: editingBooking.court,
+          oldDate: editingBooking.date,
+          oldTime: editingBooking.time,
+          players,
+          cancellationLink: `${cancellationBase}/?tab=reservation`,
+          comment,
+          vereinsId: currentVereinsId,
+          clubName: settings.clubName || currentVereinsId,
+          users: users,
+        }).catch((notifErr) => {
+          console.warn("Buchungsänderungs-Benachrichtigung konnte nicht versendet werden (soft-catch):", notifErr);
+        });
       }
     } catch (err: any) {
       // Rollback neu gespeicherter Buchungsslots im Fehlerfall

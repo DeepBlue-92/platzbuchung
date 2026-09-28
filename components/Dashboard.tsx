@@ -282,6 +282,7 @@ interface DashboardProps {
     guestCount?: number,
     deleteId?: string,
     comment?: string,
+    sendEditNotification?: boolean,
   ) => Promise<string | null> | string | null;
   onCancel: (id: string) => Promise<string | null> | string | null;
   onLockRange: (
@@ -772,6 +773,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [comment, setComment] = useState("");
   const [hasBallMachine, setHasBallMachine] = useState(false);
   const [guestCount, setGuestCount] = useState<number>(0);
+  const [sendEditNotification, setSendEditNotification] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [modalStartTime, setModalStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -2270,6 +2272,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             guestCount,
             selectedSlot.editingId,
             comment,
+            sendEditNotification,
           );
           if (result) {
             setError(result);
@@ -3718,6 +3721,21 @@ const Dashboard: React.FC<DashboardProps> = ({
                   )}
                 </div>
                 <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-col gap-2 shrink-0">
+                  {selectedSlot?.editingId && isUserAuthorizedToEdit && (
+                    <div className="flex items-center gap-2 px-1 py-0.5 text-slate-700">
+                      <input
+                        type="checkbox"
+                        id="sendEditNotificationMobile"
+                        checked={sendEditNotification}
+                        onChange={(e) => setSendEditNotification(e.target.checked)}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                      />
+                      <label htmlFor="sendEditNotificationMobile" className="text-xs font-semibold text-slate-700 cursor-pointer select-none flex items-center gap-1.5">
+                        <i className="fa-solid fa-envelope text-[11px] text-emerald-700"></i>
+                        E-Mail über Änderung an Mitspieler versenden
+                      </label>
+                    </div>
+                  )}
                   {!isUserAuthorizedToEdit && (
                     <p className="text-center text-xs text-slate-500 font-semibold font-sans py-1">
                       <i className="fa-solid fa-circle-info mr-1.5 text-slate-400"></i>
@@ -5051,6 +5069,21 @@ const Dashboard: React.FC<DashboardProps> = ({
 
               {/* Sticky Footer for Action Buttons */}
               <div className="px-5 py-4 border-t-2 border-slate-200 bg-slate-50 shrink-0 space-y-3 shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.05)] z-10">
+                {selectedSlot?.editingId && isUserAuthorizedToEdit && (
+                  <div className="flex items-center gap-2 px-1 text-slate-700">
+                    <input
+                      type="checkbox"
+                      id="sendEditNotificationDesktop"
+                      checked={sendEditNotification}
+                      onChange={(e) => setSendEditNotification(e.target.checked)}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                    />
+                    <label htmlFor="sendEditNotificationDesktop" className="text-xs font-semibold text-slate-700 cursor-pointer select-none flex items-center gap-1.5">
+                      <i className="fa-solid fa-envelope text-[11px] text-emerald-700"></i>
+                      E-Mail über Änderung an Mitspieler versenden
+                    </label>
+                  </div>
+                )}
                 {isUserAuthorizedToEdit ? (
                 <div className="flex gap-2 w-full">
                   <button

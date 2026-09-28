@@ -1,6 +1,7 @@
 import { EmailTemplate, NotificationEventKey, SendMailResult } from "../types/notifications";
-import { DEFAULT_EMAIL_TEMPLATES, DEFAULT_MOCK_PAYLOAD } from "./notificationTemplates";
+import { DEFAULT_EMAIL_TEMPLATES } from "./notificationTemplates";
 import { renderEmail, RenderResult } from "./templateEngine";
+import { getDynamicTestPayload } from "./blockTemplateCompiler";
 
 const LOCAL_STORAGE_KEY_TEMPLATES = "tennis_app_custom_email_templates";
 
@@ -41,13 +42,15 @@ export function saveClientEmailTemplates(
  */
 export function getLiveEmailPreview(
   template: EmailTemplate,
-  payload: Record<string, any> = DEFAULT_MOCK_PAYLOAD,
+  payload?: Record<string, any>,
   clubName?: string
 ): RenderResult {
   return renderEmail({
     subjectTemplate: template.subject,
     bodyTemplate: template.bodyHtml,
-    payload,
+    blocks: template.blocks,
+    globalSettings: template.globalSettings,
+    payload: payload || getDynamicTestPayload(clubName),
     wrapperOptions: {
       clubName: clubName || "Tennis-Club e.V.",
     },
@@ -64,7 +67,8 @@ export async function sendTestEmailApi(options: {
   customTemplate?: Partial<EmailTemplate>;
   clubName?: string;
 }): Promise<SendMailResult> {
-  const { eventKey, recipientEmail, payload = DEFAULT_MOCK_PAYLOAD, customTemplate, clubName } = options;
+  const { eventKey, recipientEmail, payload, customTemplate, clubName } = options;
+  const effectivePayload = payload || getDynamicTestPayload(clubName);
 
   try {
     const response = await fetch("/api/send-email", {
@@ -75,7 +79,7 @@ export async function sendTestEmailApi(options: {
       body: JSON.stringify({
         eventKey,
         recipientEmail,
-        payload,
+        payload: effectivePayload,
         customTemplate,
         clubName,
       }),
@@ -234,6 +238,68 @@ export async function notifyMatchResultApi(options: {
         matchDate: options.matchDate,
         leagueName: options.leagueName,
         courtName: options.courtName,
+      },
+      options.users || {},
+      options.clubName
+    );
+  }
+}
+
+/**
+ * Notifies booking owner and partner players of an edited / rebooked reservation.
+ */
+export async function notifyBookingModifiedApi(options: {
+  bookingId: string;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  recipientEmail?: string;
+  courtName: string;
+  date: string;
+  time: string;
+  oldCourtName?: string;
+  oldDate?: string;
+  oldTime?: string;
+  players?: string[];
+  cancellationLink?: string;
+  comment?: string;
+  vereinsId?: string;
+  clubName?: string;
+  users?: Record<string, any>;
+}): Promise<any> {
+  try {
+    const response = await fetch("/api/notifications/booking-modified", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.message || `Status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err: any) {
+    console.warn("API booking-modified notify failed, executing client-side dispatcher fallback:", err);
+    const { notifyBookingModified } = await import("./notificationDispatcher");
+    return await notifyBookingModified(
+      {
+        bookingId: options.bookingId,
+        userId: options.userId,
+        userName: options.userName,
+        userEmail: options.userEmail,
+        recipientEmail: options.recipientEmail,
+        courtName: options.courtName,
+        date: options.date,
+        time: options.time,
+        oldCourtName: options.oldCourtName,
+        oldDate: options.oldDate,
+        oldTime: options.oldTime,
+        players: options.players,
+        cancellationLink: options.cancellationLink,
+        comment: options.comment,
+        vereinsId: options.vereinsId,
       },
       options.users || {},
       options.clubName

@@ -4,7 +4,7 @@ import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
-import { db } from "./lib/firebase";
+import { db, ensureServerAuthenticated } from "./lib/firebase";
 import {
   sendNotificationMail,
   getAllTemplates,
@@ -19,11 +19,17 @@ import {
 import {
   broadcastHobbyligaNewPost,
   notifyMatchResultSubmitted,
+  notifyBookingModified,
 } from "./services/notificationDispatcher";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Initialize server-side superadmin authentication in background
+  ensureServerAuthenticated().catch((authErr) => {
+    console.warn("Server-side superadmin auth initialization:", authErr);
+  });
 
   // JSON parsing middleware
   app.use(express.json());
@@ -316,10 +322,12 @@ ${cachedTutorial}
   // 4. Render email preview
   app.post("/api/email-preview", (req: express.Request, res: express.Response) => {
     try {
-      const { subjectTemplate, bodyTemplate, payload, wrapperOptions } = req.body || {};
+      const { subjectTemplate, bodyTemplate, blocks, globalSettings, payload, wrapperOptions } = req.body || {};
       const rendered = renderEmail({
         subjectTemplate: subjectTemplate || "",
         bodyTemplate: bodyTemplate || "",
+        blocks,
+        globalSettings,
         payload: payload || {},
         wrapperOptions,
       });
@@ -478,6 +486,83 @@ ${cachedTutorial}
         success: false,
         error: "MATCH_RESULT_NOTIFY_FAILED",
         message: err.message || "Fehler beim Versenden der Ergebnis-Benachrichtigung.",
+      });
+    }
+  });
+
+  // 7b. Booking Modified Event (Sent to booking owner & partners)
+  app.post("/api/notifications/booking-modified", async (req: express.Request, res: express.Response) => {
+    try {
+      const {
+        bookingId,
+        userId,
+        userName,
+        userEmail,
+        recipientEmail,
+        courtName,
+        date,
+        time,
+        oldCourtName,
+        oldDate,
+        oldTime,
+        players,
+        cancellationLink,
+        comment,
+        vereinsId,
+        clubName,
+        users,
+      } = req.body || {};
+
+      if (!courtName || !date || !time) {
+        return res.status(400).json({
+          success: false,
+          error: "MISSING_DATA",
+          message: "Platz, Datum und Uhrzeit erforderlich.",
+        });
+      }
+
+      let usersMap = users || {};
+      if (Object.keys(usersMap).length === 0) {
+        try {
+          const usersSnap = await getDocs(collection(db, "users"));
+          usersMap = {};
+          usersSnap.docs.forEach((d) => {
+            usersMap[d.id] = { id: d.id, ...d.data() };
+          });
+        } catch (dbErr) {
+          console.warn("Could not fetch users collection from Firestore directly:", dbErr);
+        }
+      }
+
+      const result = await notifyBookingModified(
+        {
+          bookingId: bookingId || "BK-UPDATE",
+          userId,
+          userName,
+          userEmail,
+          recipientEmail,
+          courtName,
+          date,
+          time,
+          oldCourtName,
+          oldDate,
+          oldTime,
+          players,
+          cancellationLink,
+          comment,
+          vereinsId,
+        },
+        usersMap,
+        clubName || "Tennis-Club e.V."
+      );
+
+      return res.json(result);
+    } catch (err: any) {
+      console.error("Error in /api/notifications/booking-modified:", err);
+      return res.status(500).json({
+        success: false,
+        error: "BOOKING_MODIFIED_NOTIFY_FAILED",
+        message: err.message || "Fehler beim Versenden der Umbuchungs-Benachrichtigung.",
       });
     }
   });

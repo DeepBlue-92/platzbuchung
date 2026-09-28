@@ -14,6 +14,8 @@
         "lastName": { "type": "string" },
         "email": { "type": "string" },
         "isSuspended": { "type": "boolean" },
+        "notification_settings": { "type": "object" },
+        "notificationSettings": { "type": "object" },
         "createdAt": { "type": "string" }
       },
       "required": ["id", "username", "role", "tenantId", "password"]
@@ -93,6 +95,7 @@
         "collectPhone": { "type": "boolean" },
         "courts": { "type": "array" },
         "news": { "type": "string" },
+        "default_notification_settings": { "type": "object" },
         "feeSettings": {
           "type": "object",
           "description": "2-tier guest fee settings (Simple flat fee or Advanced Workday-style condition rule builder)"

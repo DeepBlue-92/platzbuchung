@@ -2,9 +2,11 @@ import { User } from "../types";
 import {
   HobbyligaBroadcastPayload,
   MatchResultNotificationPayload,
+  BookingModifiedNotificationPayload,
   SendMailResult,
 } from "../types/notifications";
 import { sendNotificationMail } from "./resendService";
+import { isEventGloballyActive, isGlobalEmailPaused } from "./emailTemplateStorage";
 
 export interface BroadcastResult {
   success: boolean;
@@ -43,6 +45,35 @@ export async function broadcastHobbyligaNewPost(
   users: Record<string, User> | User[],
   clubName = "Tennis-Club e.V."
 ): Promise<BroadcastResult> {
+  // Master-Kill-Switch check
+  const vereinsId = payload.vereinsId || "sv-neuhausen";
+  if (await isGlobalEmailPaused(vereinsId)) {
+    console.info(`[NotificationDispatcher] E-Mail-Versand ist im Verein '${vereinsId}' global pausiert (Not-Aus).`);
+    return {
+      success: true,
+      totalCandidates: 0,
+      sentCount: 0,
+      skippedAuthor: 0,
+      skippedOptOut: 0,
+      skippedNoEmail: 0,
+      recipients: [],
+    };
+  }
+
+  const isGloballyActive = await isEventGloballyActive(vereinsId, "HOBBYLIGA_NEW_POST");
+  if (!isGloballyActive) {
+    console.info(`[NotificationDispatcher] 'HOBBYLIGA_NEW_POST' ist im Verein '${vereinsId}' global deaktiviert. Keine E-Mails versendet.`);
+    return {
+      success: true,
+      totalCandidates: 0,
+      sentCount: 0,
+      skippedAuthor: 0,
+      skippedOptOut: 0,
+      skippedNoEmail: 0,
+      recipients: [],
+    };
+  }
+
   const usersList: User[] = Array.isArray(users) ? users : Object.values(users);
 
   let skippedAuthor = 0;
@@ -164,6 +195,29 @@ export async function notifyMatchResultSubmitted(
   users: Record<string, User> | User[],
   clubName = "Tennis-Club e.V."
 ): Promise<MatchResultNotificationResult> {
+  // Master-Kill-Switch check
+  const vereinsId = payload.vereinsId || "sv-neuhausen";
+  if (await isGlobalEmailPaused(vereinsId)) {
+    console.info(`[NotificationDispatcher] E-Mail-Versand ist im Verein '${vereinsId}' global pausiert (Not-Aus).`);
+    return {
+      success: true,
+      sent: false,
+      opponentId: payload.opponentId,
+      reason: "Gesamter E-Mail-Versand des Vereins ist global pausiert (Not-Aus aktiv).",
+    };
+  }
+
+  const isGloballyActive = await isEventGloballyActive(vereinsId, "MATCH_RESULT_SUBMITTED");
+  if (!isGloballyActive) {
+    console.info(`[NotificationDispatcher] 'MATCH_RESULT_SUBMITTED' ist im Verein '${vereinsId}' global deaktiviert. Keine E-Mail versendet.`);
+    return {
+      success: true,
+      sent: false,
+      opponentId: payload.opponentId,
+      reason: "Event MATCH_RESULT_SUBMITTED systemweit vom Verein deaktiviert.",
+    };
+  }
+
   const usersList: User[] = Array.isArray(users) ? users : Object.values(users);
 
   // 1. Strict filter: Opponent must not be the submitter
@@ -267,3 +321,187 @@ export async function notifyMatchResultSubmitted(
     };
   }
 }
+
+export interface BookingModifiedNotificationResult {
+  success: boolean;
+  totalRecipients: number;
+  sentCount: number;
+  skippedOptOut: number;
+  skippedNoEmail: number;
+  recipients: Array<{
+    name: string;
+    email: string;
+    status: string;
+    simulated?: boolean;
+    error?: string;
+  }>;
+}
+
+/**
+ * Event 'RESERVATION_MODIFIED':
+ * Versendet eine E-Mail über eine geänderte bzw. umgebuchte Platzreservierung.
+ * Informiert das buchende Mitglied und optional Mitspieler.
+ * Respektiert individuelle Opt-out-Einstellungen (RESERVATION_MODIFIED: false).
+ */
+export async function notifyBookingModified(
+  payload: BookingModifiedNotificationPayload,
+  users: Record<string, User> | User[],
+  clubName = "Tennis-Club e.V."
+): Promise<BookingModifiedNotificationResult> {
+  // Master-Kill-Switch check
+  const vereinsId = payload.vereinsId || "sv-neuhausen";
+  if (await isGlobalEmailPaused(vereinsId)) {
+    console.info(`[NotificationDispatcher] E-Mail-Versand ist im Verein '${vereinsId}' global pausiert (Not-Aus).`);
+    return {
+      success: true,
+      totalRecipients: 0,
+      sentCount: 0,
+      skippedOptOut: 0,
+      skippedNoEmail: 0,
+      recipients: [],
+    };
+  }
+
+  const isGloballyActive = await isEventGloballyActive(vereinsId, "RESERVATION_MODIFIED");
+  if (!isGloballyActive) {
+    console.info(`[NotificationDispatcher] 'RESERVATION_MODIFIED' ist im Verein '${vereinsId}' global deaktiviert. Keine E-Mails versendet.`);
+    return {
+      success: true,
+      totalRecipients: 0,
+      sentCount: 0,
+      skippedOptOut: 0,
+      skippedNoEmail: 0,
+      recipients: [],
+    };
+  }
+
+  const usersList: User[] = Array.isArray(users) ? users : Object.values(users);
+
+  // Collect potential recipient user records
+  const targetMap = new Map<string, { name: string; email: string; settings?: any }>();
+
+  // 1. Direct recipient if specified
+  if (payload.recipientEmail && payload.recipientEmail.includes("@")) {
+    targetMap.set(payload.recipientEmail.toLowerCase(), {
+      name: payload.userName || "Vereinsmitglied",
+      email: payload.recipientEmail,
+    });
+  }
+
+  // 2. Booking owner by userId / userName / userEmail
+  const owner = usersList.find(
+    (u) =>
+      (payload.userId && (u.id === payload.userId || u.name === payload.userId)) ||
+      (payload.userName && (u.name === payload.userName || u.klarname === payload.userName)) ||
+      (payload.userEmail && u.email?.toLowerCase() === payload.userEmail.toLowerCase())
+  );
+  if (owner && owner.email && owner.email.includes("@") && !owner.is_placeholder_email) {
+    const ownerName = owner.klarname || (owner.firstName && owner.lastName ? `${owner.firstName} ${owner.lastName}` : owner.name);
+    targetMap.set(owner.email.toLowerCase(), {
+      name: ownerName || "Vereinsmitglied",
+      email: owner.email,
+      settings: owner.notification_settings || owner.notificationSettings,
+    });
+  }
+
+  // 3. Players listed on the booking
+  if (Array.isArray(payload.players)) {
+    for (const pName of payload.players) {
+      if (!pName || typeof pName !== "string") continue;
+      const cleanP = pName.trim().toLowerCase();
+      const matched = usersList.find(
+        (u) =>
+          u.name?.toLowerCase() === cleanP ||
+          u.username?.toLowerCase() === cleanP ||
+          u.klarname?.toLowerCase() === cleanP ||
+          `${u.firstName} ${u.lastName}`.toLowerCase() === cleanP
+      );
+      if (matched && matched.email && matched.email.includes("@") && !matched.is_placeholder_email) {
+        const pDisp = matched.klarname || (matched.firstName && matched.lastName ? `${matched.firstName} ${matched.lastName}` : matched.name);
+        targetMap.set(matched.email.toLowerCase(), {
+          name: pDisp || pName,
+          email: matched.email,
+          settings: matched.notification_settings || matched.notificationSettings,
+        });
+      }
+    }
+  }
+
+  let sentCount = 0;
+  let skippedOptOut = 0;
+  let skippedNoEmail = 0;
+  const recipientsStatus: BookingModifiedNotificationResult["recipients"] = [];
+
+  const playersString = Array.isArray(payload.players) && payload.players.length > 0
+    ? payload.players.join(", ")
+    : payload.userName || "Einzelspiel";
+
+  for (const recipient of targetMap.values()) {
+    if (!recipient.email || !recipient.email.includes("@")) {
+      skippedNoEmail++;
+      continue;
+    }
+
+    if (recipient.settings?.RESERVATION_MODIFIED === false) {
+      skippedOptOut++;
+      continue;
+    }
+
+    try {
+      const sendRes = await sendNotificationMail({
+        eventKey: "RESERVATION_MODIFIED",
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        payload: {
+          user_name: recipient.name,
+          court_name: payload.courtName,
+          date: payload.date,
+          time: payload.time,
+          old_court_name: payload.oldCourtName || payload.courtName,
+          old_date: payload.oldDate || payload.date,
+          old_time: payload.oldTime || payload.time,
+          players: playersString,
+          cancellation_link: payload.cancellationLink || "https://tennis-club.app/meine-buchungen",
+          booking_id: payload.bookingId || "BK-AKTUELL",
+          club_name: clubName,
+        },
+        clubName,
+      });
+
+      if (sendRes.success) {
+        sentCount++;
+        recipientsStatus.push({
+          name: recipient.name,
+          email: recipient.email,
+          status: sendRes.status,
+          simulated: sendRes.simulated,
+        });
+      } else {
+        recipientsStatus.push({
+          name: recipient.name,
+          email: recipient.email,
+          status: "failed",
+          error: sendRes.message,
+        });
+      }
+    } catch (err: any) {
+      console.error(`Failed to send RESERVATION_MODIFIED mail to ${recipient.email}:`, err);
+      recipientsStatus.push({
+        name: recipient.name,
+        email: recipient.email,
+        status: "failed",
+        error: err.message,
+      });
+    }
+  }
+
+  return {
+    success: true,
+    totalRecipients: targetMap.size,
+    sentCount,
+    skippedOptOut,
+    skippedNoEmail,
+    recipients: recipientsStatus,
+  };
+}
+

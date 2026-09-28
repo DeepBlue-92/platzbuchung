@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { DEFAULT_EMAIL_TEMPLATES } from "./notificationTemplates";
 import { renderEmail } from "./templateEngine";
+import { isEventGloballyActiveSync, isGlobalEmailPausedSync } from "./emailTemplateStorage";
 import {
   NotificationEventKey,
   SendMailOptions,
@@ -65,7 +66,27 @@ function getResendClient(): Resend | null {
 export async function sendNotificationMail(
   options: SendMailOptions
 ): Promise<SendMailResult> {
-  const { eventKey, recipientEmail, payload, customTemplate, clubName, clubLogoUrl } = options;
+  const { eventKey, recipientEmail, payload, customTemplate, clubName, clubLogoUrl, vereinsId } = options;
+
+  if (vereinsId && isGlobalEmailPausedSync(vereinsId)) {
+    console.info(`[sendNotificationMail] Gesamter E-Mail-Versand ist für Verein ${vereinsId} global pausiert (Not-Aus aktiv).`);
+    return {
+      success: true,
+      status: "simulated",
+      simulated: true,
+      message: `Der gesamte E-Mail-Versand des Vereins ist derzeit global pausiert (Not-Aus aktiv). Keine E-Mail versendet.`,
+    };
+  }
+
+  if (vereinsId && !isEventGloballyActiveSync(vereinsId, eventKey)) {
+    console.info(`[sendNotificationMail] Event ${eventKey} ist systemweit für Verein ${vereinsId} deaktiviert. Versand wird übersprungen.`);
+    return {
+      success: true,
+      status: "simulated",
+      simulated: true,
+      message: `Event '${eventKey}' ist im Verein global deaktiviert (Master-Kill-Switch). Keine E-Mail versendet.`,
+    };
+  }
 
   if (!recipientEmail || !recipientEmail.includes("@")) {
     return {
@@ -85,6 +106,8 @@ export async function sendNotificationMail(
   const { renderedSubject, renderedBody, fullHtml } = renderEmail({
     subjectTemplate: template.subject,
     bodyTemplate: template.bodyHtml,
+    blocks: template.blocks,
+    globalSettings: template.globalSettings,
     payload: {
       ...payload,
       club_name: clubName || payload.club_name || "Tennis-Club e.V.",
