@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { User, Person } from "../types";
-import { UserAvatar, TennisBallSvg, TennisRacketSvg } from "./UserAvatar";
+import { UserAvatar, TennisBallSvg, TennisRacketSvg, hexToRgba } from "./UserAvatar";
 import { AvatarCropModal } from "./AvatarCropModal";
 import {
   validateAvatarFile,
   AVATAR_ICON_OPTIONS,
+  AVATAR_COLOR_PRESETS,
   deleteAvatarFromStorage,
 } from "../services/avatarStorage";
 import {
@@ -29,6 +30,10 @@ import {
   Rocket,
   Heart,
   ShieldCheck,
+  Palette,
+  Pipette,
+  Check,
+  RotateCcw,
 } from "lucide-react";
 
 interface AvatarUploaderProps {
@@ -36,7 +41,8 @@ interface AvatarUploaderProps {
   userId: string;
   avatarUrl?: string | null;
   avatarIcon?: string | null;
-  onChange: (data: { avatarUrl?: string | null; avatarIcon?: string | null }) => void;
+  avatarColor?: string | null;
+  onChange: (data: { avatarUrl?: string | null; avatarIcon?: string | null; avatarColor?: string | null }) => void;
   primaryColor?: string;
   hideTitle?: boolean;
   compact?: boolean;
@@ -47,6 +53,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
   userId,
   avatarUrl: explicitUrl,
   avatarIcon: explicitIcon,
+  avatarColor: explicitColor,
   onChange,
   primaryColor = "var(--color-primary)",
   hideTitle = false,
@@ -59,6 +66,9 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
     explicitIcon !== undefined && explicitIcon !== null
       ? explicitIcon
       : user?.avatarIcon || "initials"
+  );
+  const [internalAvatarColor, setInternalAvatarColor] = useState<string | null | undefined>(
+    explicitColor !== undefined ? explicitColor : (user as any)?.avatarColor || null
   );
 
   useEffect(() => {
@@ -77,14 +87,23 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
     }
   }, [explicitIcon, user?.avatarIcon]);
 
+  useEffect(() => {
+    if (explicitColor !== undefined) {
+      setInternalAvatarColor(explicitColor);
+    } else if ((user as any)?.avatarColor !== undefined) {
+      setInternalAvatarColor((user as any).avatarColor);
+    }
+  }, [explicitColor, (user as any)?.avatarColor]);
+
   const activeAvatarUrl = internalAvatarUrl !== undefined ? internalAvatarUrl : user?.avatarUrl;
   const activeAvatarIcon = internalAvatarIcon || user?.avatarIcon || "initials";
+  const activeAvatarColor = internalAvatarColor !== undefined ? internalAvatarColor : ((user as any)?.avatarColor || null);
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [selectedImageSrc, setSelectedImageSrc] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<string | null>(null);
-  const [showIconSelector, setShowIconSelector] = useState(false);
+  const [showIconSelector, setShowIconSelector] = useState(!explicitUrl && !user?.avatarUrl);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -124,13 +143,13 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
       setInternalAvatarUrl(result.avatarUrl);
       setInternalAvatarIcon("initials");
       setShowIconSelector(false);
-      onChange({ avatarUrl: result.avatarUrl, avatarIcon: null });
+      onChange({ avatarUrl: result.avatarUrl, avatarIcon: null, avatarColor: activeAvatarColor });
       setSuccessInfo("Foto erfolgreich gespeichert.");
     } else {
       // Foto wurde entfernt
       setInternalAvatarUrl(null);
       setInternalAvatarIcon(activeAvatarIcon || "initials");
-      onChange({ avatarUrl: null, avatarIcon: activeAvatarIcon || "initials" });
+      onChange({ avatarUrl: null, avatarIcon: activeAvatarIcon || "initials", avatarColor: activeAvatarColor });
       setSuccessInfo("Profilbild erfolgreich entfernt.");
     }
   };
@@ -143,7 +162,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
       }
       setInternalAvatarUrl(null);
       setInternalAvatarIcon(activeAvatarIcon || "initials");
-      onChange({ avatarUrl: null, avatarIcon: activeAvatarIcon || "initials" });
+      onChange({ avatarUrl: null, avatarIcon: activeAvatarIcon || "initials", avatarColor: activeAvatarColor });
       setSuccessInfo("Profilbild erfolgreich entfernt.");
     } catch (err) {
       console.warn("Fehler beim Entfernen:", err);
@@ -153,9 +172,22 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
   const handleSelectIcon = (iconId: string) => {
     setInternalAvatarUrl(null);
     setInternalAvatarIcon(iconId);
-    onChange({ avatarUrl: null, avatarIcon: iconId });
-    setSuccessInfo("Icon erfolgreich ausgewählt.");
+    onChange({ avatarUrl: null, avatarIcon: iconId, avatarColor: activeAvatarColor });
   };
+
+  const handleSelectColor = (color: string | null) => {
+    setSuccessInfo(null);
+    setInternalAvatarColor(color);
+    onChange({ avatarUrl: activeAvatarUrl, avatarIcon: activeAvatarIcon, avatarColor: color });
+  };
+
+  const isPresetColor = Boolean(
+    activeAvatarColor &&
+    AVATAR_COLOR_PRESETS.some(
+      (p) => p.value.toLowerCase() === activeAvatarColor.toLowerCase()
+    )
+  );
+  const isCustomColor = Boolean(activeAvatarColor && !isPresetColor);
 
   return (
     <div
@@ -170,6 +202,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
             user={user}
             avatarUrl={activeAvatarUrl}
             avatarIcon={activeAvatarIcon}
+            avatarColor={activeAvatarColor}
             size={compact ? "lg" : "xl"}
             showBorder
             borderColor="border-white shadow-md"
@@ -235,10 +268,14 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
             <button
               type="button"
               onClick={() => setShowIconSelector(!showIconSelector)}
-              className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-slate-600 text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+                showIconSelector
+                  ? "bg-amber-50 border-amber-300 text-amber-900 ring-2 ring-amber-400/20"
+                  : "bg-white border-slate-200 hover:border-slate-300 text-slate-600"
+              }`}
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              Icon wählen
+              Icon &amp; Farbe wählen
             </button>
 
             {activeAvatarUrl && (
@@ -279,20 +316,31 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase() 
                 : displayName.slice(0, 2).toUpperCase();
 
+              // If a custom color is active and this icon is selected, preview it in the custom color
+              const buttonCustomStyle = isSelected && activeAvatarColor
+                ? {
+                    backgroundColor: hexToRgba(activeAvatarColor, 0.18),
+                    color: activeAvatarColor,
+                  }
+                : {};
+
               return (
                 <button
                   key={opt.id}
                   type="button"
                   onClick={() => handleSelectIcon(opt.id)}
                   title={opt.name}
-                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center ${opt.bgClass} ${opt.colorClass} shadow-2xs transition-all duration-150 cursor-pointer outline-none ${
+                  style={buttonCustomStyle}
+                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center ${
+                    isSelected && activeAvatarColor ? "" : `${opt.bgClass} ${opt.colorClass}`
+                  } shadow-2xs transition-all duration-150 cursor-pointer outline-none ${
                     isSelected
-                      ? "ring-2 ring-[var(--color-primary)] ring-offset-2 ring-offset-white scale-105"
+                      ? "ring-2 ring-slate-800 ring-offset-2 ring-offset-white scale-105"
                       : "hover:scale-105 active:scale-95"
                   }`}
                 >
                   {opt.id === "initials" && <span className="font-black text-sm sm:text-base tracking-wider">{initials}</span>}
-                  {opt.id === "tennis-ball" && <TennisBallSvg className="w-5 h-5" />}
+                  {opt.id === "tennis-ball" && <TennisBallSvg className="w-5 h-5" color={isSelected && activeAvatarColor ? activeAvatarColor : undefined} />}
                   {opt.id === "racket" && <TennisRacketSvg className="w-5 h-5" />}
                   {opt.id === "trophy" && <Trophy className="w-5 h-5" strokeWidth={2.2} />}
                   {opt.id === "medal" && <Medal className="w-5 h-5" strokeWidth={2.2} />}
@@ -312,6 +360,75 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 </button>
               );
             })}
+          </div>
+
+          {/* Kompakte Regenbogen-Farbzeile (Lösung B) */}
+          <div className="pt-2.5 border-t border-slate-200/70 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <Palette className="w-3 h-3 text-indigo-500" />
+                Farbe
+              </span>
+              {activeAvatarColor && (
+                <button
+                  type="button"
+                  onClick={() => handleSelectColor(null)}
+                  className="text-[10px] font-bold text-slate-400 hover:text-slate-700 flex items-center gap-1 hover:underline transition-colors cursor-pointer"
+                  title="Auf Standard zurücksetzen"
+                >
+                  <RotateCcw className="w-2.5 h-2.5" />
+                  Zurücksetzen
+                </button>
+              )}
+            </div>
+
+            {/* 1 einzige Zeile mit 10 Regenbogen-Punkten + 1 Pipette */}
+            <div className="flex items-center justify-between gap-1 sm:gap-1.5 py-0.5">
+              {AVATAR_COLOR_PRESETS.map((preset) => {
+                const isSelected = activeAvatarColor?.toLowerCase() === preset.value.toLowerCase();
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => handleSelectColor(preset.value)}
+                    title={preset.name}
+                    className={`flex-1 aspect-square max-w-[32px] min-w-[22px] rounded-full transition-all duration-150 cursor-pointer relative flex items-center justify-center shadow-2xs outline-none ${
+                      isSelected
+                        ? "ring-2 ring-slate-800 ring-offset-2 ring-offset-white scale-110 z-10"
+                        : "hover:scale-115 active:scale-95 hover:z-10"
+                    }`}
+                    style={{ backgroundColor: preset.value }}
+                  >
+                    {isSelected && (
+                      <Check className="w-3 h-3 text-white drop-shadow-xs" strokeWidth={3} />
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* 11. Punkt: Pipette / Regenbogen-Knopf für freie Farbwahl */}
+              <label
+                title={isCustomColor ? `Eigene Farbe: ${activeAvatarColor}` : "Beliebige eigene Farbe wählen (Farbrad)"}
+                className={`flex-1 aspect-square max-w-[32px] min-w-[22px] rounded-full transition-all duration-150 relative flex items-center justify-center cursor-pointer shadow-2xs outline-none ${
+                  isCustomColor
+                    ? "ring-2 ring-slate-800 ring-offset-2 ring-offset-white scale-110 z-10"
+                    : "border border-slate-300 hover:border-slate-500 hover:scale-115 active:scale-95 bg-linear-to-tr from-rose-400 via-amber-300 via-emerald-400 to-indigo-500"
+                }`}
+                style={isCustomColor ? { backgroundColor: activeAvatarColor } : {}}
+              >
+                <input
+                  type="color"
+                  value={activeAvatarColor || "#1b4332"}
+                  onChange={(e) => handleSelectColor(e.target.value)}
+                  className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                />
+                {isCustomColor ? (
+                  <Check className="w-3 h-3 text-white drop-shadow-xs" strokeWidth={3} />
+                ) : (
+                  <Pipette className="w-3 h-3 text-white drop-shadow-xs" />
+                )}
+              </label>
+            </div>
           </div>
         </div>
       )}
@@ -348,3 +465,4 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
     </div>
   );
 };
+

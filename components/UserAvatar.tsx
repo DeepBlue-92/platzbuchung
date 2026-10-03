@@ -44,6 +44,7 @@ export interface UserAvatarProps {
   user?: Partial<User | Person> | null;
   avatarUrl?: string | null;
   avatarIcon?: string | null;
+  avatarColor?: string | null;
   name?: string;
   initials?: string;
   size?: AvatarSize;
@@ -53,6 +54,44 @@ export interface UserAvatarProps {
   fallbackMode?: "initials" | "icon";
   variant?: "green" | "dark" | "neutral" | "default";
 }
+
+export function hexToRgba(hex: string, alpha = 0.15): string {
+  const cleanHex = hex.replace("#", "").trim();
+  if (cleanHex.length === 3) {
+    const r = parseInt(cleanHex[0] + cleanHex[0], 16);
+    const g = parseInt(cleanHex[1] + cleanHex[1], 16);
+    const b = parseInt(cleanHex[2] + cleanHex[2], 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  if (cleanHex.length === 6) {
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return hex;
+}
+
+const ICON_DEFAULT_STYLES: Record<string, string> = {
+  "tennis-ball": "bg-lime-100 text-lime-800",
+  "racket": "bg-emerald-100 text-emerald-800",
+  "trophy": "bg-yellow-100 text-amber-700",
+  "medal": "bg-amber-100 text-amber-800",
+  "flame": "bg-rose-100 text-rose-600",
+  "shield": "bg-blue-100 text-blue-700",
+  "crown": "bg-purple-100 text-purple-700",
+  "star": "bg-indigo-100 text-indigo-700",
+  "coffee": "bg-amber-100 text-amber-800",
+  "beer": "bg-orange-100 text-orange-700",
+  "sunglasses": "bg-amber-100 text-amber-700",
+  "dumbbell": "bg-slate-200 text-slate-700",
+  "zap": "bg-amber-100 text-amber-600",
+  "target": "bg-red-100 text-red-600",
+  "rocket": "bg-violet-100 text-violet-700",
+  "heart": "bg-pink-100 text-pink-600",
+  "user": "bg-slate-100 text-slate-700",
+  "initials": "bg-slate-100 text-slate-700",
+};
 
 export type PlayerAvatarProps = UserAvatarProps;
 
@@ -68,14 +107,14 @@ const sizeClasses: Record<string, { box: string; icon: string; text: string }> =
 /**
  * 0-Byte Bandwidth Tennisball Vektor SVG
  */
-export const TennisBallSvg: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+export const TennisBallSvg: React.FC<{ className?: string; color?: string }> = ({ className = "w-5 h-5", color }) => (
   <svg
     viewBox="0 0 24 24"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className={className}
   >
-    <circle cx="12" cy="12" r="10" fill="#c3d928" stroke="#a3b817" strokeWidth="1.5" />
+    <circle cx="12" cy="12" r="10" fill={color ? `${color}30` : "#c3d928"} stroke={color || "#a3b817"} strokeWidth="1.5" />
     <path
       d="M4.5 5.5C8 8.5 8 15.5 4.5 18.5"
       stroke="#ffffff"
@@ -117,6 +156,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   user,
   avatarUrl: explicitUrl,
   avatarIcon: explicitIcon,
+  avatarColor: explicitColor,
   name: explicitName,
   initials: explicitInitials,
   size = "md",
@@ -128,6 +168,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 }) => {
   const url = explicitUrl !== undefined ? explicitUrl : user?.avatarUrl;
   const rawIconId = explicitIcon !== undefined ? explicitIcon : user?.avatarIcon;
+  const rawColor = explicitColor !== undefined ? explicitColor : (user as any)?.avatarColor;
 
   const [imageError, setImageError] = useState(false);
 
@@ -219,22 +260,28 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 
   // Wenn explizit variant="green" oder "neutral" gesetzt ist, immer das einheitliche Schema verwenden
   let iconBg = defaultBg;
-  if (variant === "green") {
+  let customStyle: React.CSSProperties = { ...dynamicStyle };
+
+  if (rawColor) {
+    // Freie Farbwahl: Sanfter Pastel-Hintergrund + Akzentfarbe für Icon/Text
+    iconBg = "";
+    customStyle = {
+      ...dynamicStyle,
+      backgroundColor: hexToRgba(rawColor, 0.16),
+      color: rawColor,
+      borderColor: showBorder ? hexToRgba(rawColor, 0.35) : undefined,
+    };
+  } else if (variant === "green") {
     iconBg = "bg-emerald-100 text-emerald-800 font-semibold";
+  } else if (variant === "dark") {
+    iconBg = "bg-slate-700 text-slate-100 font-medium";
   } else if (variant === "neutral") {
     iconBg = "bg-slate-100 text-slate-700 font-medium";
   } else if (iconId === "user" || iconId === "initials") {
     iconBg = defaultBg;
   } else {
-    // Harmonische, dezente Icons ohne grelle Pastell-Mischungen
-    iconBg =
-      iconId === "tennis-ball"
-        ? "bg-slate-100 text-amber-700"
-        : iconId === "racket"
-        ? "bg-slate-100 text-emerald-700"
-        : iconId === "trophy" || iconId === "medal"
-        ? "bg-amber-50 text-amber-800"
-        : "bg-slate-100 text-slate-700 font-medium";
+    // Harmonische, lebendige Icons statt tristem Grau
+    iconBg = ICON_DEFAULT_STYLES[iconId] || defaultBg;
   }
 
   return (
@@ -242,11 +289,11 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
       className={`relative inline-flex items-center justify-center rounded-full shrink-0 select-none transition-colors shadow-xs ${
         sizeConfig ? sizeConfig.box : ""
       } ${borderClass} ${hasCustomBg ? "" : iconBg} ${className}`}
-      style={dynamicStyle}
+      style={customStyle}
       title={displayName}
     >
       {iconId === "tennis-ball" && (
-        <TennisBallSvg className={sizeConfig ? sizeConfig.icon : "w-1/2 h-1/2"} />
+        <TennisBallSvg className={sizeConfig ? sizeConfig.icon : "w-1/2 h-1/2"} color={rawColor || undefined} />
       )}
       {iconId === "racket" && (
         <TennisRacketSvg className={sizeConfig ? sizeConfig.icon : "w-1/2 h-1/2"} />

@@ -372,6 +372,12 @@ service cloud.firestore {
         allow delete: if isClubAdmin(vereinsId);
       }
 
+      // Club settings & landing page nested configuration
+      match /settings/{settingId} {
+        allow read: if true;
+        allow write: if isClubAdmin(vereinsId) || isSuperAdmin();
+      }
+
       // Championship Templates
       match /championship_templates/{templateId} {
         allow read: if true;

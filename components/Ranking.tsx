@@ -284,7 +284,7 @@ const RankingView: React.FC<RankingProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full lg:animate-in lg:fade-in lg:duration-500 overflow-hidden">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow lg:animate-in lg:fade-in lg:duration-500 min-h-0 overflow-hidden">
       
       {/* 1. TOP HEADER & CATEGORY TABS (LIGHT MODE) */}
       <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm space-y-4">

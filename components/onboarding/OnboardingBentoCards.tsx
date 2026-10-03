@@ -30,6 +30,8 @@ interface OnboardingBentoCardsProps {
   setAvatarUrl: (val: string | null) => void;
   avatarIcon: string | null;
   setAvatarIcon: (val: string | null) => void;
+  avatarColor?: string | null;
+  setAvatarColor?: (val: string | null) => void;
   newPassword: string;
   setNewPassword: (val: string) => void;
   confirmPassword: string;
@@ -57,6 +59,8 @@ export const OnboardingBentoCards: React.FC<OnboardingBentoCardsProps> = ({
   setAvatarUrl,
   avatarIcon,
   setAvatarIcon,
+  avatarColor,
+  setAvatarColor,
   newPassword,
   setNewPassword,
   confirmPassword,
@@ -303,13 +307,15 @@ export const OnboardingBentoCards: React.FC<OnboardingBentoCardsProps> = ({
                 ...currentUser,
                 avatarUrl,
                 avatarIcon,
+                avatarColor,
               }}
               userId={currentUser.id || currentUser.name}
               avatarUrl={avatarUrl}
               avatarIcon={avatarIcon}
+              avatarColor={avatarColor}
               hideTitle={true}
               compact={true}
-              onChange={({ avatarUrl: newUrl, avatarIcon: newIcon }) => {
+              onChange={({ avatarUrl: newUrl, avatarIcon: newIcon, avatarColor: newColor }) => {
                 if (newUrl !== undefined) {
                   setAvatarUrl(newUrl);
                   if (newUrl) setAvatarIcon(null);
@@ -317,6 +323,9 @@ export const OnboardingBentoCards: React.FC<OnboardingBentoCardsProps> = ({
                 if (newIcon !== undefined) {
                   setAvatarIcon(newIcon);
                   if (newIcon) setAvatarUrl(null);
+                }
+                if (newColor !== undefined && setAvatarColor) {
+                  setAvatarColor(newColor);
                 }
               }}
               primaryColor={primaryColor}

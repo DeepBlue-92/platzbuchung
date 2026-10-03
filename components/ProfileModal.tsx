@@ -68,11 +68,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
   });
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser.avatarUrl || null);
   const [avatarIcon, setAvatarIcon] = useState<string | null>(currentUser.avatarIcon || "initials");
+  const [avatarColor, setAvatarColor] = useState<string | null>(currentUser.avatarColor || null);
 
   useEffect(() => {
     setAvatarUrl(currentUser.avatarUrl || null);
     setAvatarIcon(currentUser.avatarIcon || "initials");
-  }, [currentUser.avatarUrl, currentUser.avatarIcon]);
+    setAvatarColor(currentUser.avatarColor || null);
+  }, [currentUser.avatarUrl, currentUser.avatarIcon, currentUser.avatarColor]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -250,6 +252,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
         showAiAssistant,
         avatarUrl: avatarUrl || null,
         avatarIcon: avatarIcon || "initials",
+        avatarColor: avatarColor || null,
         notification_settings: notificationSettings,
         notificationSettings: notificationSettings,
         notificationPreferences: notificationSettings,
@@ -344,7 +347,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                 userId={currentUser.id || currentUser.name}
                 avatarUrl={avatarUrl}
                 avatarIcon={avatarIcon}
-                onChange={({ avatarUrl: newUrl, avatarIcon: newIcon }) => {
+                avatarColor={avatarColor}
+                onChange={({ avatarUrl: newUrl, avatarIcon: newIcon, avatarColor: newColor }) => {
                   if (newUrl !== undefined) {
                     setAvatarUrl(newUrl);
                     if (newUrl) setAvatarIcon(null);
@@ -352,6 +356,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                   if (newIcon !== undefined) {
                     setAvatarIcon(newIcon);
                     if (newIcon) setAvatarUrl(null);
+                  }
+                  if (newColor !== undefined) {
+                    setAvatarColor(newColor);
                   }
                 }}
                 primaryColor={primaryColor}

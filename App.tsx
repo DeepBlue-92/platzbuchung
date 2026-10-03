@@ -18,9 +18,12 @@ import {
   CalendarRange,
   ArrowLeft,
   UserCog,
+  Home,
+  LogIn,
 } from "lucide-react";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
+import { LandingPage } from "./components/LandingPage";
 import AdminReports from "./components/AdminReports";
 import AdminNews from "./components/AdminNews";
 import AdminSettings from "./components/AdminSettings";
@@ -36,10 +39,12 @@ import MemberOnboardingModal from "./components/MemberOnboardingModal";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import { UserAvatar } from "./components/UserAvatar";
 import ErrorBoundary from "./components/ErrorBoundary";
+import TokenPasswordSetupModal from "./components/TokenPasswordSetupModal";
 import { LeagueDashboard } from "./components/LeagueDashboard";
 import { ChampionshipHub } from "./features/championship/ChampionshipHub";
 import { RichTextRenderer } from "./components/RichText";
-import { User, Booking, Role, Tournament, RankingState, UserClub } from "./types";
+import { User, Booking, Role, Tournament, RankingState, UserClub, LandingPageConfig } from "./types";
+import { getLandingPageConfig, DEFAULT_LANDING_PAGE } from "./services/landingPageService";
 import { getUserClubs, isClubAdmin, isSuperAdmin } from "./lib/userUtils";
 import { calculateBookingFee, buildBookingFeeContext } from "./utils/guestFeeCalculator";
 import { TIME_SLOTS } from "./constants";
@@ -144,6 +149,88 @@ const App: React.FC = () => {
       localStorage.removeItem("v2_current_user");
     }
   }, [currentUser]);
+
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tenant") ? params.get("tenant")!.toLowerCase().replace(/\s/g, "") : null;
+  });
+
+  const [superAdminContext, setSuperAdminContext] = useState<User | null>(() => {
+    try {
+      const saved = localStorage.getItem("v2_superadmin_context");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const currentVereinsId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tenantParam = selectedTenantId || params.get("tenant");
+
+    // If a regular user is logged in (not in SuperAdmin proxy session), ensure tenant matches user's clubs
+    if (currentUser && currentUser.vereinsId && currentUser.vereinsId !== "super-admin" && !superAdminContext) {
+      const userClubIds = (currentUser.clubs || []).map((c: any) => (c.vereinsId || c.id || "").toLowerCase().replace(/\s/g, ""));
+      if (currentUser.vereinsId) {
+        userClubIds.push(currentUser.vereinsId.toLowerCase().replace(/\s/g, ""));
+      }
+      if (tenantParam) {
+        const cleanParam = tenantParam.toLowerCase().replace(/\s/g, "");
+        if (userClubIds.includes(cleanParam)) {
+          return cleanParam;
+        }
+      }
+      return currentUser.vereinsId.toLowerCase().replace(/\s/g, "");
+    }
+
+    if (tenantParam) {
+      return tenantParam.toLowerCase().replace(/\s/g, "");
+    }
+
+    if (publicWochenplanToken && publicTokenVereinsId) {
+      return publicTokenVereinsId;
+    }
+    if (isPublicWochenplanRoute && !publicTokenVereinsId) {
+      return ""; // Wait for token resolution
+    }
+
+    if (
+      currentUser &&
+      currentUser.vereinsId &&
+      currentUser.vereinsId !== "super-admin"
+    ) {
+      return currentUser.vereinsId.toLowerCase().replace(/\s/g, "");
+    }
+    const segments = window.location.pathname.split("/").filter(Boolean);
+    const rawPath = segments[0] || "";
+    const path = decodeURIComponent(rawPath).toLowerCase().trim();
+    if (
+      path &&
+      ![
+        "api",
+        "admin",
+        "superadmin",
+        "reservation",
+        "reports",
+        "tournaments",
+        "ranking",
+        "help",
+        "guests",
+        "adminsettings",
+        "undefined",
+        "null",
+        "public",
+        "assets",
+        "static",
+        "vite",
+        "system",
+        "super-admin",
+      ].includes(path)
+    ) {
+      return path.replace(/\s/g, "");
+    }
+    return "sv-neuhausen";
+  }, [currentUser, superAdminContext, publicWochenplanToken, publicTokenVereinsId, selectedTenantId]);
 
   const [users, setUsers] = useState<Record<string, User>>({});
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -298,6 +385,9 @@ const App: React.FC = () => {
     if (hash.startsWith("/events/") || hash.startsWith("events/") || hash.includes("events/")) {
       return "tournaments";
     }
+    if (hash.includes("startseite") || hash.includes("landing") || hash.includes("home")) {
+      return "landing_page";
+    }
     if (hash.includes("hobbyliga") || hash.includes("league") || hash.includes("punkte-system") || hash.includes("rules")) {
       return "league";
     }
@@ -305,6 +395,7 @@ const App: React.FC = () => {
       return "championship";
     }
     const allowedViews = [
+      "landing_page",
       "reservation",
       "reports",
       "tournaments",
@@ -322,7 +413,17 @@ const App: React.FC = () => {
     if (matched) {
       return matched as any;
     }
-    return "reservation";
+    // If no explicit hash or hash is startseite/landing/home, check landing page status
+    try {
+      const cachedLandingStr = sessionStorage.getItem(`v2_landing_page_${targetId}`);
+      if (cachedLandingStr) {
+        const parsed = JSON.parse(cachedLandingStr);
+        if (parsed?.is_enabled === false) {
+          return "reservation";
+        }
+      }
+    } catch {}
+    return "landing_page";
   };
 
   const [highlightEventId, setHighlightEventId] = useState<string | null>(() => {
@@ -333,6 +434,7 @@ const App: React.FC = () => {
   const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
   const [view, setView] = useState<
+    | "landing_page"
     | "reservation"
     | "reports"
     | "tournaments"
@@ -345,6 +447,20 @@ const App: React.FC = () => {
     | "championship"
     | "arbeitseinsaetze"
   >(getInitialView);
+  const [landingPageConfig, setLandingPageConfig] = useState<LandingPageConfig | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tenantParam = params.get("tenant");
+      const targetId = tenantParam ? tenantParam.toLowerCase().replace(/\s/g, "") : "sv-neuhausen";
+      const cached = sessionStorage.getItem(`v2_landing_page_${targetId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch {}
+    return null;
+  });
+  const [isStartPageLoginModalOpen, setIsStartPageLoginModalOpen] = useState(false);
   const [adminInitialTab, setAdminInitialTab] = useState<string>("allgemein");
   const [mobileViewType, setMobileViewType] = useState<"day" | "week">("day");
   const [desktopViewType, setDesktopViewType] = useState<"day" | "week">("week");
@@ -456,6 +572,12 @@ const App: React.FC = () => {
   const [isWelcomeExpanded, setIsWelcomeExpanded] = useState(false);
 
   const handleSetView = (newView: typeof view) => {
+    // For unauthenticated visitors on the start page, accessing restricted tabs prompts for login
+    if (!currentUser && newView !== "landing_page" && newView !== "reservation" && newView !== "help" && newView !== "impressum") {
+      setIsStartPageLoginModalOpen(true);
+      return;
+    }
+
     if (
       view === "adminSettings" &&
       adminSettingsDirty &&
@@ -466,6 +588,29 @@ const App: React.FC = () => {
       setView(newView);
     }
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    getLandingPageConfig(currentVereinsId)
+      .then((cfg) => {
+        if (!isMounted) return;
+        setLandingPageConfig(cfg);
+        const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+        const isStartActive = (settings.modules?.landing_page !== false) && (cfg.is_enabled !== false);
+        if (isStartActive && (!hash || hash === "startseite" || hash === "landing" || hash === "home")) {
+          setView("landing_page");
+        } else if (!isStartActive && view === "landing_page") {
+          setView("reservation");
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading landing page config:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentVereinsId]);
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
   const [isMehrDropdownOpen, setIsMehrDropdownOpen] = useState(false);
   const mehrDropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -534,19 +679,23 @@ const App: React.FC = () => {
     if (!currentUser?.id || !users) return;
     const key = (currentUser.id || currentUser.name).toLowerCase().replace(/\s/g, "");
     const dbUser = users[key] || users[currentUser.id];
-    if (dbUser && dbUser.onboarding_pending !== undefined && dbUser.onboarding_pending !== currentUser.onboarding_pending) {
-      setCurrentUser((prev) => (prev ? { ...prev, onboarding_pending: dbUser.onboarding_pending } : null));
+    if (dbUser) {
+      const hasChanges =
+        (dbUser.avatarUrl !== undefined && dbUser.avatarUrl !== currentUser.avatarUrl) ||
+        (dbUser.avatarIcon !== undefined && dbUser.avatarIcon !== currentUser.avatarIcon) ||
+        (dbUser.avatarColor !== undefined && dbUser.avatarColor !== currentUser.avatarColor) ||
+        (dbUser.onboarding_pending !== undefined && dbUser.onboarding_pending !== currentUser.onboarding_pending);
+      if (hasChanges) {
+        setCurrentUser((prev) => (prev ? {
+          ...prev,
+          ...(dbUser.avatarUrl !== undefined ? { avatarUrl: dbUser.avatarUrl } : {}),
+          ...(dbUser.avatarIcon !== undefined ? { avatarIcon: dbUser.avatarIcon } : {}),
+          ...(dbUser.avatarColor !== undefined ? { avatarColor: dbUser.avatarColor } : {}),
+          ...(dbUser.onboarding_pending !== undefined ? { onboarding_pending: dbUser.onboarding_pending } : {})
+        } : null));
+      }
     }
   }, [users, currentUser?.id, currentUser?.onboarding_pending]);
-
-  const [superAdminContext, setSuperAdminContext] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem("v2_superadmin_context");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
 
   const [proxyUser, setProxyUser] = useState<User | null>(() => {
     try {
@@ -556,6 +705,8 @@ const App: React.FC = () => {
       return null;
     }
   });
+
+  const [initialBookingSlot, setInitialBookingSlot] = useState<{ date: string; time: string; court: string } | null>(null);
 
   useEffect(() => {
     if (superAdminContext) {
@@ -862,10 +1013,46 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
-  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("tenant") ? params.get("tenant")!.toLowerCase().replace(/\s/g, "") : null;
-  });
+
+  // Token-based initial account activation / password reset modal
+  const [tokenAuthModal, setTokenAuthModal] = useState<{
+    token: string;
+    userId: string;
+    type: "activation" | "reset";
+  } | null>(null);
+
+  useEffect(() => {
+    const checkTokenAuthInUrl = () => {
+      const hash = window.location.hash || "";
+      const isActivate = hash.includes("activate");
+      const isReset = hash.includes("reset-password") || hash.includes("password-reset");
+
+      if (isActivate || isReset) {
+        let paramsString = "";
+        if (hash.includes("?")) {
+          paramsString = hash.substring(hash.indexOf("?") + 1);
+        } else if (window.location.search) {
+          paramsString = window.location.search.substring(1);
+        }
+
+        const params = new URLSearchParams(paramsString);
+        const token = params.get("token");
+        const userId = params.get("userId") || params.get("user") || params.get("uid");
+
+        if (token && userId) {
+          setTokenAuthModal({
+            token,
+            userId,
+            type: isReset ? "reset" : "activation",
+          });
+        }
+      }
+    };
+
+    checkTokenAuthInUrl();
+    window.addEventListener("hashchange", checkTokenAuthInUrl);
+    return () => window.removeEventListener("hashchange", checkTokenAuthInUrl);
+  }, []);
 
   const isSuperadminRoute = useMemo(() => {
     const segments = window.location.pathname.split("/").filter(Boolean);
@@ -948,74 +1135,6 @@ const App: React.FC = () => {
 
     return days;
   }, [calendarMonth]);
-
-  const currentVereinsId = useMemo(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tenantParam = selectedTenantId || params.get("tenant");
-
-    // If a regular user is logged in (not in SuperAdmin proxy session), ensure tenant matches user's clubs
-    if (currentUser && currentUser.vereinsId && currentUser.vereinsId !== "super-admin" && !superAdminContext) {
-      const userClubIds = (currentUser.clubs || []).map((c: any) => (c.vereinsId || c.id || "").toLowerCase().replace(/\s/g, ""));
-      if (currentUser.vereinsId) {
-        userClubIds.push(currentUser.vereinsId.toLowerCase().replace(/\s/g, ""));
-      }
-      if (tenantParam) {
-        const cleanParam = tenantParam.toLowerCase().replace(/\s/g, "");
-        if (userClubIds.includes(cleanParam)) {
-          return cleanParam;
-        }
-      }
-      return currentUser.vereinsId.toLowerCase().replace(/\s/g, "");
-    }
-
-    if (tenantParam) {
-      return tenantParam.toLowerCase().replace(/\s/g, "");
-    }
-
-    if (publicWochenplanToken && publicTokenVereinsId) {
-      return publicTokenVereinsId;
-    }
-    if (isPublicWochenplanRoute && !publicTokenVereinsId) {
-      return ""; // Wait for token resolution
-    }
-
-    if (
-      currentUser &&
-      currentUser.vereinsId &&
-      currentUser.vereinsId !== "super-admin"
-    ) {
-      return currentUser.vereinsId.toLowerCase().replace(/\s/g, "");
-    }
-    const segments = window.location.pathname.split("/").filter(Boolean);
-    const rawPath = segments[0] || "";
-    const path = decodeURIComponent(rawPath).toLowerCase().trim();
-    if (
-      path &&
-      ![
-        "api",
-        "admin",
-        "superadmin",
-        "reservation",
-        "reports",
-        "tournaments",
-        "ranking",
-        "help",
-        "guests",
-        "adminsettings",
-        "undefined",
-        "null",
-        "public",
-        "assets",
-        "static",
-        "vite",
-        "system",
-        "super-admin",
-      ].includes(path)
-    ) {
-      return path.replace(/\s/g, "");
-    }
-    return "sv-neuhausen";
-  }, [currentUser, superAdminContext, publicWochenplanToken, publicTokenVereinsId, window.location.search]);
 
   const miniCalClubsList = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
@@ -1392,57 +1511,63 @@ const App: React.FC = () => {
     };
   }, [currentUser]);
 
+  const performLogin = async (userParam: string, passParam: string): Promise<User> => {
+    const u = await loginWithUsername(
+      userParam,
+      passParam,
+      currentVereinsId,
+    );
+    setCurrentUser(u);
+    setOnboardingDismissedForSession(false);
+    setError("");
+    setShowPublicHelp(false);
+    setIsStartPageLoginModalOpen(false);
+
+    // Synchronize tenant URL param with logged in user's club
+    if (u.vereinsId && u.role !== Role.SUPER_ADMIN) {
+      const params = new URLSearchParams(window.location.search);
+      const currentParam = params.get("tenant");
+      const userClubIds = (u.clubs || []).map((c: any) => (c.vereinsId || c.id || '').toLowerCase().replace(/\s/g, ""));
+      const targetTenant = (currentParam && userClubIds.includes(currentParam.toLowerCase().replace(/\s/g, "")))
+        ? currentParam.toLowerCase().replace(/\s/g, "")
+        : u.vereinsId.toLowerCase().replace(/\s/g, "");
+      
+      if (params.get("tenant") !== targetTenant) {
+        params.set("tenant", targetTenant);
+        window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+      }
+    }
+
+    // Deep Link Redirection
+    const hash = window.location.hash;
+    let targetPath = redirectTo;
+    if (!targetPath) {
+      const match = hash.match(/redirectTo=([^&]+)/);
+      if (match) {
+        targetPath = decodeURIComponent(match[1]);
+      }
+    }
+
+    if (targetPath && (targetPath.startsWith("/events/") || targetPath.startsWith("events/") || targetPath.includes("events/"))) {
+      const eventId = targetPath.replace(/^\/?events\//, "");
+      setHighlightEventId(eventId);
+      setView("tournaments");
+      window.location.hash = `#/events/${eventId}`;
+    } else if (!landingPageConfig?.is_enabled) {
+      setView("reservation");
+      if (window.location.hash.includes("redirectTo=") || window.location.hash.includes("login")) {
+        window.location.hash = "";
+      }
+    }
+    return u;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
 
     try {
-      const u = await loginWithUsername(
-        loginForm.username,
-        loginForm.password,
-        currentVereinsId,
-      );
-      setCurrentUser(u);
-      setOnboardingDismissedForSession(false);
-      setError("");
-      setShowPublicHelp(false);
-
-      // Synchronize tenant URL param with logged in user's club
-      if (u.vereinsId && u.role !== Role.SUPER_ADMIN) {
-        const params = new URLSearchParams(window.location.search);
-        const currentParam = params.get("tenant");
-        const userClubIds = (u.clubs || []).map((c: any) => (c.vereinsId || c.id || '').toLowerCase().replace(/\s/g, ""));
-        const targetTenant = (currentParam && userClubIds.includes(currentParam.toLowerCase().replace(/\s/g, "")))
-          ? currentParam.toLowerCase().replace(/\s/g, "")
-          : u.vereinsId.toLowerCase().replace(/\s/g, "");
-        
-        if (params.get("tenant") !== targetTenant) {
-          params.set("tenant", targetTenant);
-          window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
-        }
-      }
-
-      // Deep Link Redirection
-      const hash = window.location.hash;
-      let targetPath = redirectTo;
-      if (!targetPath) {
-        const match = hash.match(/redirectTo=([^&]+)/);
-        if (match) {
-          targetPath = decodeURIComponent(match[1]);
-        }
-      }
-
-      if (targetPath && (targetPath.startsWith("/events/") || targetPath.startsWith("events/") || targetPath.includes("events/"))) {
-        const eventId = targetPath.replace(/^\/?events\//, "");
-        setHighlightEventId(eventId);
-        setView("tournaments");
-        window.location.hash = `#/events/${eventId}`;
-      } else {
-        setView("reservation");
-        if (window.location.hash.includes("redirectTo=") || window.location.hash.includes("login")) {
-          window.location.hash = "";
-        }
-      }
+      await performLogin(loginForm.username, loginForm.password);
     } catch (err: any) {
       setError(err.message || "Benutzername oder Passwort falsch.");
     } finally {
@@ -2259,6 +2384,140 @@ const App: React.FC = () => {
 
   const splashPrimaryColor = settings.primaryColor || "#1b4332";
 
+  const memberNavItems: Array<{
+    id: string;
+    label: string;
+    IconComponent: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+    show: boolean;
+    barClass: string;
+    dropdownClass: string;
+  }> = [
+    {
+      id: "landing_page",
+      label: "Startseite",
+      IconComponent: Home,
+      show: (settings.modules?.landing_page !== false) && (landingPageConfig?.is_enabled !== false),
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "reservation",
+      label: "Plätze",
+      IconComponent: Calendar,
+      show: true,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "tournaments",
+      label: "Veranstaltungen",
+      IconComponent: PartyPopper,
+      show: settings.modules?.events !== false,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "ranking",
+      label: "Rangliste",
+      IconComponent: Medal,
+      show: settings.modules?.ranking !== false,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "championship",
+      label: "Meisterschaft",
+      IconComponent: Trophy,
+      show: settings.modules?.championship === true,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "league",
+      label: "Liga",
+      IconComponent: Shield,
+      show: isLeagueEnabled,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
+      id: "guests",
+      label: "Gastspiele",
+      IconComponent: UserPlus,
+      show: isAdmin || (settings.modules?.guests !== false && !!currentUser),
+      barClass: "hidden xl:flex",
+      dropdownClass: "block xl:hidden",
+    },
+    {
+      id: "arbeitseinsaetze",
+      label: "Arbeitseinsätze",
+      IconComponent: Briefcase,
+      show: settings.modules?.arbeitseinsaetze === true,
+      barClass: "hidden 2xl:flex",
+      dropdownClass: "block 2xl:hidden",
+    },
+  ];
+
+  const adminNavItems: Array<{
+    id: string;
+    label: string;
+    IconComponent: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+    show: boolean;
+    barClass: string;
+    dropdownClass: string;
+  }> = [
+    {
+      id: "reports",
+      label: "Statistik",
+      IconComponent: BarChart3,
+      show: isAdmin,
+      barClass: "hidden 2xl:flex",
+      dropdownClass: "block 2xl:hidden",
+    },
+    {
+      id: "adminSettings",
+      label: "System",
+      IconComponent: Settings,
+      show: isAdmin,
+      barClass: "hidden 2xl:flex",
+      dropdownClass: "block 2xl:hidden",
+    },
+  ];
+
+  const clubNavOrder = landingPageConfig?.nav_order || settings.navigationOrder;
+
+  const sortedMemberNavItems = useMemo(() => {
+    if (!clubNavOrder || !Array.isArray(clubNavOrder) || clubNavOrder.length === 0) {
+      return memberNavItems;
+    }
+    const map = new Map(memberNavItems.map((item) => [item.id, item]));
+    const result: typeof memberNavItems = [];
+    for (const id of clubNavOrder) {
+      const item = map.get(id);
+      if (item) {
+        result.push(item);
+        map.delete(id);
+      }
+    }
+    for (const item of map.values()) {
+      result.push(item);
+    }
+    return result;
+  }, [clubNavOrder, memberNavItems]);
+
+  const desktopNavItems = [
+    ...sortedMemberNavItems,
+    ...adminNavItems,
+  ];
+
+  const hasDropdownItems = desktopNavItems.some(
+    (item) => item.show && item.dropdownClass !== "hidden"
+  );
+
+  const isDropdownActive = desktopNavItems.some(
+    (item) => item.show && item.dropdownClass !== "hidden" && view === item.id
+  );
+
   if (
     !isLoading &&
     settings.geloescht === true &&
@@ -2364,7 +2623,16 @@ const App: React.FC = () => {
   }
 
   if (!currentUser && !isPublicWochenplanRoute) {
-    if (showPublicHelp) {
+    if (landingPageConfig === null) {
+      return (
+        <div className="fixed inset-0 bg-[#0f172a] flex items-center justify-center p-6 z-[9999]">
+          <div className="w-8 h-8 border-2 border-white/20 border-t-emerald-500 rounded-full animate-spin"></div>
+        </div>
+      );
+    }
+
+    if (!landingPageConfig.is_enabled) {
+      if (showPublicHelp) {
       return (
         <>
           <style>{`
@@ -2666,6 +2934,7 @@ const App: React.FC = () => {
         </div>
       </>
     );
+    }
   }
 
   if (
@@ -2746,96 +3015,6 @@ const App: React.FC = () => {
       </div>
     );
   }
-
-  const desktopNavItems: Array<{
-    id: string;
-    label: string;
-    IconComponent: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-    show: boolean;
-    barClass: string;
-    dropdownClass: string;
-  }> = [
-    {
-      id: "reservation",
-      label: "Plätze",
-      IconComponent: Calendar,
-      show: true,
-      barClass: "flex",
-      dropdownClass: "hidden",
-    },
-    {
-      id: "tournaments",
-      label: "Veranstaltungen",
-      IconComponent: PartyPopper,
-      show: settings.modules?.events !== false,
-      barClass: "flex",
-      dropdownClass: "hidden",
-    },
-    {
-      id: "ranking",
-      label: "Rangliste",
-      IconComponent: Medal,
-      show: settings.modules?.ranking !== false,
-      barClass: "flex",
-      dropdownClass: "hidden",
-    },
-    {
-      id: "championship",
-      label: "Meisterschaft",
-      IconComponent: Trophy,
-      show: settings.modules?.championship === true,
-      barClass: "flex",
-      dropdownClass: "hidden",
-    },
-    {
-      id: "league",
-      label: "Liga",
-      IconComponent: Shield,
-      show: isLeagueEnabled,
-      barClass: "flex",
-      dropdownClass: "hidden",
-    },
-    {
-      id: "guests",
-      label: "Gastspiele",
-      IconComponent: UserPlus,
-      show: isAdmin || (settings.modules?.guests !== false && !!currentUser),
-      barClass: "hidden xl:flex",
-      dropdownClass: "block xl:hidden",
-    },
-    {
-      id: "arbeitseinsaetze",
-      label: "Arbeitseinsätze",
-      IconComponent: Briefcase,
-      show: settings.modules?.arbeitseinsaetze === true,
-      barClass: "hidden 2xl:flex",
-      dropdownClass: "block 2xl:hidden",
-    },
-    {
-      id: "reports",
-      label: "Statistik",
-      IconComponent: BarChart3,
-      show: isAdmin,
-      barClass: "hidden 2xl:flex",
-      dropdownClass: "block 2xl:hidden",
-    },
-    {
-      id: "adminSettings",
-      label: "System",
-      IconComponent: Settings,
-      show: isAdmin,
-      barClass: "hidden 2xl:flex",
-      dropdownClass: "block 2xl:hidden",
-    },
-  ];
-
-  const hasDropdownItems = desktopNavItems.some(
-    (item) => item.show && item.dropdownClass !== "hidden"
-  );
-
-  const isDropdownActive = desktopNavItems.some(
-    (item) => item.show && item.dropdownClass !== "hidden" && view === item.id
-  );
 
   const desktopNav = (
     <motion.nav 
@@ -2983,7 +3162,11 @@ const App: React.FC = () => {
 
   let mobileHeaderTitle = "";
   let MobileHeaderIconComp: React.ComponentType<{ className?: string; strokeWidth?: number }> | null = null;
-  if (view === "tournaments") { 
+  if (view === "landing_page") {
+    mobileHeaderTitle = "Startseite";
+    MobileHeaderIconComp = Home;
+  }
+  else if (view === "tournaments") { 
     mobileHeaderTitle = "Veranstaltungen"; 
     MobileHeaderIconComp = PartyPopper; 
   }
@@ -3043,6 +3226,7 @@ const App: React.FC = () => {
         user={currentUser}
         isPublicWochenplanRoute={isPublicWochenplanRoute && !currentUser}
         onLogout={handleLogout}
+        onOpenLogin={() => setIsStartPageLoginModalOpen(true)}
         onShowHelp={() => handleSetView("help")}
         onShowImpressum={() => handleSetView("impressum")}
         onShowProfile={() => setShowProfile(true)}
@@ -3056,14 +3240,14 @@ const App: React.FC = () => {
         hideWebsiteLink={settings.hideWebsiteLink}
         impressum={settings.impressum}
         desktopNav={desktopNav}
-        onLogoClick={() => handleSetView("reservation")}
+        onLogoClick={() => handleSetView((settings.modules?.landing_page !== false && landingPageConfig?.is_enabled !== false) ? "landing_page" : "reservation")}
         userClubs={uniqueUserClubs}
         currentVereinsId={currentVereinsId}
         onSwitchClub={handleSwitchClub}
       >
         <div className="w-full flex-grow flex flex-col min-h-0">
           {superAdminContext && !proxyUser && (
-            <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 pt-3">
+            <div className="max-w-[1600px] w-full mx-auto px-3 sm:px-4 pt-3">
               <div className="bg-rose-50 border-2 border-rose-200 text-rose-900 px-5 py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in slide-in-from-top-3 duration-300 select-none">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center text-white shadow-md shrink-0">
@@ -3077,8 +3261,8 @@ const App: React.FC = () => {
                     Du agierst aktuell als Proxy für:{" "}
                     <span className="font-black text-rose-600 underline">
                       {currentUser?.firstName || currentUser?.lastName
-                        ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim()
-                        : currentUser?.klarname || currentUser?.name}
+                        ? `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim()
+                        : currentUser?.klarname || currentUser?.name || "Benutzer"}
                     </span>{" "}
                     im Verein{" "}
                     <span className="font-black text-slate-900">
@@ -3120,7 +3304,7 @@ const App: React.FC = () => {
           </div>
           )}
           {proxyUser && (
-            <div className="max-w-7xl w-full mx-auto px-3 sm:px-4 pt-3">
+            <div className="max-w-[1600px] w-full mx-auto px-3 sm:px-4 pt-3">
               <div className="bg-amber-50 border-2 border-amber-200 text-amber-900 px-5 py-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-in slide-in-from-top-3 duration-300 select-none">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white shadow-md shrink-0">
@@ -3426,6 +3610,45 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </div>
+              ) : view === "landing_page" ? (
+                <div className="w-full flex-grow flex flex-col min-h-0">
+                  <LandingPage
+                    config={landingPageConfig || DEFAULT_LANDING_PAGE}
+                    currentUser={proxyUser || currentUser}
+                    onOpenLogin={() => setIsStartPageLoginModalOpen(true)}
+                    onNavigateToBooking={() => handleSetView("reservation")}
+                    onNavigateToWeekPlan={() => {
+                      setMobileViewType("week");
+                      setDesktopViewType("week");
+                      handleSetView("reservation");
+                    }}
+                    onSelectSlot={(court, time, date) => {
+                      setInitialBookingSlot({ court, time, date });
+                      setMobileSelectedDate(date);
+                      handleSetView("reservation");
+                    }}
+                    onNavigateToEvents={() => handleSetView("tournaments")}
+                    onNavigateToChampionship={() => handleSetView("championship")}
+                    clubName={settings.clubName}
+                    logoUrl={settings.customHeaderLogoUrl || settings.headerLogoUrl || settings.customLogoUrl || settings.logoUrl}
+                    onLogin={async (u, p) => {
+                      await performLogin(u, p);
+                    }}
+                    loginError={error}
+                    isLoggingIn={isLoggingIn}
+                    onOpenTokenSetup={() => {
+                      setTokenAuthModal({ token: "", userId: "", type: "initial" });
+                    }}
+                    onOpenHelp={() => handleSetView("help")}
+                    currentVereinsId={currentVereinsId}
+                    courts={settings.courts}
+                    bookings={anonymizedBookings}
+                    tournaments={tournaments}
+                    users={users}
+                    onToggleEventRegistration={handleToggleRegistration}
+                    primaryColor={settings.primaryColor}
+                  />
+                </div>
               ) : view === "reports" && isAdmin ? (
                 <div className="w-full flex-grow flex flex-col min-h-0">
                   <AdminReports
@@ -3711,6 +3934,24 @@ const App: React.FC = () => {
                   {/* Content area */}
                   <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm w-full flex flex-col overflow-hidden select-none p-3.5 mb-24">
                     <div className="grid grid-cols-2 gap-2">
+                      {landingPageConfig?.is_enabled && (
+                        <button
+                          onClick={() => {
+                            setView("landing_page");
+                            setIsMoreMenuOpen(false);
+                          }}
+                          className={`flex flex-col items-center justify-center gap-1 p-1 rounded-xl border-2 text-center transition-all active:scale-[0.97] duration-150 h-16 w-full ${
+                            view === "landing_page"
+                              ? "border-[var(--color-primary)] bg-slate-50 text-[var(--color-primary)] font-black"
+                              : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50 text-slate-700"
+                          }`}
+                        >
+                          <Home className="w-5 h-5 text-[var(--color-primary)] shrink-0" strokeWidth={1.8} />
+                          <span className="text-[10px] font-black uppercase tracking-wider truncate w-full px-1">
+                            Startseite
+                          </span>
+                        </button>
+                      )}
                       {settings.modules?.events !== false && (
                         <button
                           onClick={() => {
@@ -4001,33 +4242,62 @@ const App: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Fixed bottom Profile Card / Logout Area */}
-                  <div className="fixed bottom-16 left-0 right-0 z-[1900] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-6 flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none">
-                    <div className="flex items-center gap-3 text-left min-w-0">
-                      <UserAvatar user={currentUser} size="sm" />
-                      <div className="min-w-0">
-                        <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">
-                          Angemeldet als
-                        </span>
-                        <span className="block text-xs font-bold text-slate-800 truncate max-w-[150px]">
-                          {(currentUser.firstName || currentUser.lastName)
-                            ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim()
-                            : (currentUser.klarname || currentUser.name)}
-                        </span>
+                  {/* Fixed bottom Profile Card / Login or Logout Area */}
+                  {currentUser ? (
+                    <div className="fixed bottom-16 left-0 right-0 z-[1900] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-6 flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none">
+                      <div className="flex items-center gap-3 text-left min-w-0">
+                        <UserAvatar user={currentUser} size="sm" />
+                        <div className="min-w-0">
+                          <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">
+                            Angemeldet als
+                          </span>
+                          <span className="block text-xs font-bold text-slate-800 truncate max-w-[150px]">
+                            {(currentUser?.firstName || currentUser?.lastName)
+                              ? `${currentUser?.firstName || ""} ${currentUser?.lastName || ""}`.trim()
+                              : (currentUser?.klarname || currentUser?.name || "Benutzer")}
+                          </span>
+                        </div>
                       </div>
+                      <button
+                        onClick={() => {
+                          handleLogout();
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="px-4 h-10 bg-red-600 hover:bg-black text-white font-medium rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer !text-sm"
+                        style={{ fontSize: "14px" }}
+                      >
+                        Abmelden
+                        <i className="fa-solid fa-right-from-bracket text-[14px]"></i>
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        handleLogout();
-                        setIsMoreMenuOpen(false);
-                      }}
-                      className="px-4 h-10 bg-red-600 hover:bg-black text-white font-medium rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer !text-sm"
-                      style={{ fontSize: "14px" }}
-                    >
-                      Abmelden
-                      <i className="fa-solid fa-right-from-bracket text-[14px]"></i>
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="fixed bottom-16 left-0 right-0 z-[1900] bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 px-6 flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.03)] select-none">
+                      <div className="flex items-center gap-3 text-left min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                          <i className="fa-solid fa-user text-xs"></i>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400">
+                            Status
+                          </span>
+                          <span className="block text-xs font-bold text-slate-600 truncate max-w-[150px]">
+                            Nicht angemeldet
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsStartPageLoginModalOpen(true);
+                          setIsMoreMenuOpen(false);
+                        }}
+                        className="px-4 h-10 bg-[var(--color-primary)] hover:brightness-95 text-white font-medium rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer !text-sm"
+                        style={{ fontSize: "14px" }}
+                      >
+                        Anmelden
+                        <i className="fa-solid fa-right-to-bracket text-[14px]"></i>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <Dashboard
@@ -4051,11 +4321,13 @@ const App: React.FC = () => {
                     setMobileSelectedDate(d);
                     handleSetView("reservation");
                   }}
-                  isPublicWochenplan={isPublicWochenplanRoute && !currentUser}
+                  isPublicWochenplan={!currentUser}
                   onPublicLoginSuccess={(loggedInUser) => {
                     setCurrentUser(loggedInUser);
                     setOnboardingDismissedForSession(false);
                   }}
+                  initialBookingSlot={initialBookingSlot}
+                  onClearInitialBookingSlot={() => setInitialBookingSlot(null)}
                 />
               )}
             </motion.div>
@@ -4288,6 +4560,149 @@ const App: React.FC = () => {
         </div>
         )}
       </Layout>
+
+      {isStartPageLoginModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 sm:p-7 animate-in zoom-in-95 duration-200 relative select-text">
+            <button
+              type="button"
+              onClick={() => {
+                setIsStartPageLoginModalOpen(false);
+                setError("");
+              }}
+              className="absolute right-4 top-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+              title="Schließen"
+            >
+              <i className="fa-solid fa-xmark text-sm"></i>
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-100 shadow-2xs">
+                <LogIn className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 tracking-tight">
+                  Mitglieder-Login erforderlich
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Bitte melde dich an, um auf diesen Bereich zugreifen zu können.
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-4 bg-rose-50 text-rose-800 border border-rose-200 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <i className="fa-solid fa-circle-exclamation text-rose-600"></i>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1">
+                  Benutzername
+                </label>
+                <div className="relative">
+                  <i className="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                  <input
+                    type="text"
+                    value={loginForm.username}
+                    onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                    className="w-full h-10 pl-9 pr-3 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] outline-none transition-all"
+                    placeholder="Benutzername"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1">
+                  Passwort
+                </label>
+                <div className="relative">
+                  <i className="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    className="w-full h-10 pl-9 pr-10 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] outline-none transition-all"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"} text-xs`}></i>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className="w-full h-10 rounded-xl bg-[var(--color-primary)] hover:brightness-95 text-white text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isLoggingIn ? (
+                    <>
+                      <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                      <span>Wird angemeldet...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Anmelden</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center justify-between text-[11px] pt-1 text-slate-500">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsStartPageLoginModalOpen(false);
+                      setTokenAuthModal({ token: "", userId: "", type: "initial" });
+                    }}
+                    className="hover:underline text-[var(--color-primary)] font-bold cursor-pointer"
+                  >
+                    Token einlösen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsStartPageLoginModalOpen(false);
+                      setShowPublicHelp(true);
+                    }}
+                    className="hover:underline cursor-pointer"
+                  >
+                    Hilfe benötigt?
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {tokenAuthModal && (
+        <TokenPasswordSetupModal
+          token={tokenAuthModal.token}
+          userId={tokenAuthModal.userId}
+          initialType={tokenAuthModal.type}
+          onSuccess={(username) => {
+            setLoginForm((prev) => ({ ...prev, username }));
+            setTokenAuthModal(null);
+            window.location.hash = "";
+            setError("");
+          }}
+          onClose={() => {
+            setTokenAuthModal(null);
+            window.location.hash = "";
+          }}
+        />
+      )}
     </>
   );
 };

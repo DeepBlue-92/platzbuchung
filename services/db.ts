@@ -163,7 +163,9 @@ export interface ClubSettings {
     arbeitseinsaetze?: boolean;
     league?: boolean;
     championship?: boolean;
+    landing_page?: boolean;
   };
+  navigationOrder?: string[];
   rankingViewMode?: "pyramid" | "list";
   leagueSettings?: {
     enabled: boolean;
@@ -300,6 +302,7 @@ Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz a
 - Keine App-Installation nötig
 - Echtzeit-Synchronisierung`,
   modules: {
+    landing_page: true,
     events: true,
     ranking: true,
     guests: true,
@@ -307,6 +310,16 @@ Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz a
     league: false,
     championship: false,
   },
+  navigationOrder: [
+    "landing_page",
+    "reservation",
+    "tournaments",
+    "ranking",
+    "championship",
+    "league",
+    "guests",
+    "arbeitseinsaetze",
+  ],
   rankingViewMode: "pyramid",
   leagueSettings: {
     enabled: false,
@@ -693,6 +706,9 @@ export function listenToUsers(vereinsId: string, callback: (u: Record<string, Us
         showAiAssistant: docData.showAiAssistant !== false,
         onboarding_pending: !!docData.onboarding_pending,
         birthDate: docData.birthDate || null,
+        avatarUrl: docData.avatarUrl || null,
+        avatarIcon: docData.avatarIcon || null,
+        avatarColor: docData.avatarColor || null,
         is_placeholder_email: docData.is_placeholder_email !== undefined 
           ? !!docData.is_placeholder_email 
           : (!!docData.email && docData.email.startsWith('no-email.') && docData.email.endsWith('@internal.app'))
@@ -1023,6 +1039,11 @@ export async function saveUser(vereinsId: string, user: User) {
     finalDoc.avatarIcon = user.avatarIcon || null;
   } else if (existingData.avatarIcon !== undefined) {
     finalDoc.avatarIcon = existingData.avatarIcon;
+  }
+  if (user.avatarColor !== undefined) {
+    finalDoc.avatarColor = user.avatarColor || null;
+  } else if (existingData.avatarColor !== undefined) {
+    finalDoc.avatarColor = existingData.avatarColor;
   }
 
   // Preserve & safely merge multi-club memberships

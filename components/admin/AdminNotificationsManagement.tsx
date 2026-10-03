@@ -34,6 +34,7 @@ interface AdminNotificationsManagementProps {
   currentClubId?: string;
   clubName?: string;
   onUpdateUsers?: (updated: Record<string, User>) => void;
+  tenantColors?: string[];
 }
 
 export const AdminNotificationsManagement: React.FC<AdminNotificationsManagementProps> = ({
@@ -42,6 +43,7 @@ export const AdminNotificationsManagement: React.FC<AdminNotificationsManagement
   currentClubId = "sv-neuhausen",
   clubName = "Tennis-Club e.V.",
   onUpdateUsers,
+  tenantColors,
 }) => {
   // Tab-Reihenfolge: 1. E-Mail-Einstellungen (standardmäßig aktiv), 2. Nachrichtenvorlagen
   const [activeSubTab, setActiveSubTab] = useState<"settings" | "templates">("settings");
@@ -343,6 +345,7 @@ export const AdminNotificationsManagement: React.FC<AdminNotificationsManagement
           setActiveEditingId={setActiveEditingTemplateId}
           onUpdateTemplates={handleUpdateTemplates}
           onUpdateAssignments={handleUpdateAssignments}
+          tenantColors={tenantColors}
         />
       )}
     </div>

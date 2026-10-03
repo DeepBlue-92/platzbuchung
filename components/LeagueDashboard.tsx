@@ -689,7 +689,7 @@ export function LeagueDashboard({ currentUser, clubId, users, settings, bookings
   const currentUserRank = getUserRank(currentUser.id);
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow min-h-0 lg:animate-in lg:fade-in lg:duration-500">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow min-h-0 lg:animate-in lg:fade-in lg:duration-500">
       
       {/* 1. BANNER-HERO-HEADER */}
       <HobbyligaBanner

@@ -8,6 +8,7 @@ import {
   LogOut,
   ArrowLeftRight,
   Check,
+  LogIn,
 } from "lucide-react";
 import { RichTextRenderer } from "./RichText";
 import { UserClub } from "../types";
@@ -36,12 +37,14 @@ interface LayoutProps {
   userClubs?: UserClub[];
   currentVereinsId?: string;
   onSwitchClub?: (vereinsId: string) => void;
+  onOpenLogin?: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({
   children,
   user,
   onLogout,
+  onOpenLogin,
   onShowHelp,
   onShowImpressum,
   onShowProfile,
@@ -377,98 +380,120 @@ const Layout: React.FC<LayoutProps> = ({
 
             {/* Compact Greeting & Control Buttons inside the Banner */}
             <div className="flex items-center justify-end drop-shadow-lg text-white select-none shrink-0 gap-3 ml-auto transition-all duration-300 ease-in-out">
-              {/* Desktop: Unified Pill Container for Account, Profile and Help - identical to left Nav Bar styling */}
-              {(() => {
-                const headerDisplayName = (user.firstName && user.lastName)
-                  ? `${user.firstName} ${user.lastName}`
-                  : (user.firstName || user.lastName)
-                    ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                    : (user.displayName || user.username || user.klarname || user.name);
+              {user ? (
+                (() => {
+                  const headerDisplayName = (user.firstName && user.lastName)
+                    ? `${user.firstName} ${user.lastName}`
+                    : (user.firstName || user.lastName)
+                      ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
+                      : (user.displayName || user.username || user.klarname || user.name);
 
-                return (
-                  <>
-                    <div className="hidden lg:flex bg-white/10 py-0.5 pl-1 pr-1.5 rounded-full shadow-sm gap-1 w-auto backdrop-blur-sm border border-white/10 relative items-center h-8 transition-all duration-300 ease-in-out">
-                      {/* Interactive Profile Button (Avatar + Name) */}
-                      {onShowProfile ? (
-                        <button
-                          type="button"
-                          onClick={onShowProfile}
-                          className="flex items-center gap-2 pl-1 pr-2.5 h-[26px] text-[10px] font-medium tracking-wide rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-all duration-200 cursor-pointer outline-none select-none group"
-                          title="Mein Profil bearbeiten"
-                        >
-                          <UserAvatar user={user} size="xs" showBorder borderColor="border-white/40" />
-                          <span className="truncate max-w-[120px] group-hover:text-white">
-                            {headerDisplayName}
-                          </span>
-                        </button>
-                      ) : (
-                        <div 
-                          className="flex items-center gap-2 pl-1 pr-2.5 h-[26px] text-[10px] font-medium tracking-wide rounded-full text-white/90"
-                          title={headerDisplayName}
-                        >
-                          <UserAvatar user={user} size="xs" showBorder borderColor="border-white/40" />
-                          <span className="truncate max-w-[120px]">
+                  return (
+                    <>
+                      <div className="hidden lg:flex bg-white/10 py-0.5 pl-1 pr-1.5 rounded-full shadow-sm gap-1 w-auto backdrop-blur-sm border border-white/10 relative items-center h-8 transition-all duration-300 ease-in-out">
+                        {/* Interactive Profile Button (Avatar + Name) */}
+                        {onShowProfile ? (
+                          <button
+                            type="button"
+                            onClick={onShowProfile}
+                            className="flex items-center gap-2 pl-1 pr-2.5 h-[26px] text-[10px] font-medium tracking-wide rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-all duration-200 cursor-pointer outline-none select-none group"
+                            title="Mein Profil bearbeiten"
+                          >
+                            <UserAvatar user={user} size="xs" showBorder borderColor="border-white/40" />
+                            <span className="truncate max-w-[120px] group-hover:text-white">
+                              {headerDisplayName}
+                            </span>
+                          </button>
+                        ) : (
+                          <div 
+                            className="flex items-center gap-2 pl-1 pr-2.5 h-[26px] text-[10px] font-medium tracking-wide rounded-full text-white/90"
+                            title={headerDisplayName}
+                          >
+                            <UserAvatar user={user} size="xs" showBorder borderColor="border-white/40" />
+                            <span className="truncate max-w-[120px]">
+                              {headerDisplayName}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Vertical Divider */}
+                        {onShowHelp && <div className="w-[1px] h-3.5 bg-white/20 mx-0.5 shrink-0" />}
+
+                        {/* Help Action */}
+                        {onShowHelp && (
+                          <button
+                            type="button"
+                            onClick={onShowHelp}
+                            className="w-[26px] h-[26px] rounded-full flex items-center justify-center transition-colors cursor-pointer outline-none text-white/70 hover:text-white hover:bg-white/10 shrink-0"
+                            title="Hilfe & Funktionen"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Mobile Fallback for Account/Profile/Help */}
+                      <div className="flex lg:hidden items-center gap-1">
+                        <div className="text-[9px] font-medium tracking-wide flex items-center gap-1.5 text-white/95 bg-white/10 px-2.5 py-1 rounded-md border border-white/10 backdrop-blur-sm w-auto">
+                          <UserAvatar user={user} size="xs" />
+                          <span className="truncate max-w-[100px]">
                             {headerDisplayName}
                           </span>
                         </div>
-                      )}
-
-                      {/* Vertical Divider */}
-                      {onShowHelp && <div className="w-[1px] h-3.5 bg-white/20 mx-0.5 shrink-0" />}
-
-                      {/* Help Action */}
-                      {onShowHelp && (
-                        <button
-                          type="button"
-                          onClick={onShowHelp}
-                          className="w-[26px] h-[26px] rounded-full flex items-center justify-center transition-colors cursor-pointer outline-none text-white/70 hover:text-white hover:bg-white/10 shrink-0"
-                          title="Hilfe & Funktionen"
-                        >
-                          <HelpCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Mobile Fallback for Account/Profile/Help */}
-                    <div className="flex lg:hidden items-center gap-1">
-                      <div className="text-[9px] font-medium tracking-wide flex items-center gap-1.5 text-white/95 bg-white/10 px-2.5 py-1 rounded-md border border-white/10 backdrop-blur-sm w-auto">
-                        <UserAvatar user={user} size="xs" />
-                        <span className="truncate max-w-[100px]">
-                          {headerDisplayName}
-                        </span>
+                        {onShowProfile && (
+                          <button
+                            onClick={onShowProfile}
+                            className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
+                            title="Mein Profil"
+                          >
+                            <UserCog className="w-3.5 h-3.5" strokeWidth={1.8} />
+                          </button>
+                        )}
+                        {onShowHelp && (
+                          <button
+                            onClick={onShowHelp}
+                            className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
+                            title="Hilfe & Funktionen"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
+                          </button>
+                        )}
                       </div>
-                      {onShowProfile && (
-                        <button
-                          onClick={onShowProfile}
-                          className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
-                          title="Mein Profil"
-                        >
-                          <UserCog className="w-3.5 h-3.5" strokeWidth={1.8} />
-                        </button>
-                      )}
-                      {onShowHelp && (
-                        <button
-                          onClick={onShowHelp}
-                          className="bg-white/10 hover:bg-white/20 transition-all p-1 rounded-lg text-white border border-white/15 active:scale-95 shadow-sm flex items-center justify-center backdrop-blur-sm text-xs font-medium h-7 w-7"
-                          title="Hilfe & Funktionen"
-                        >
-                          <HelpCircle className="w-3.5 h-3.5" strokeWidth={1.8} />
-                        </button>
-                      )}
-                    </div>
-                  </>
-                );
-              })()}
 
-              {/* Logout Button */}
-              <button
-                onClick={onLogout}
-                className="bg-[var(--color-accent)] hover:bg-[color-mix(in srgb, var(--color-accent) 80%, black)] transition-all px-4 h-7 lg:h-8 rounded-lg lg:rounded-full text-white border border-white/20 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-[10px] font-medium tracking-wide shrink-0"
-                title="Abmelden"
-              >
-                <span className="hidden xl:inline">Abmelden</span>
-                <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.8} />
-              </button>
+                      {/* Logout Button */}
+                      <button
+                        onClick={onLogout}
+                        className="bg-[var(--color-accent)] hover:bg-[color-mix(in srgb, var(--color-accent) 80%, black)] transition-all px-4 h-7 lg:h-8 rounded-lg lg:rounded-full text-white border border-white/20 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-[10px] font-medium tracking-wide shrink-0 cursor-pointer"
+                        title="Abmelden"
+                      >
+                        <span className="hidden xl:inline">Abmelden</span>
+                        <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={1.8} />
+                      </button>
+                    </>
+                  );
+                })()
+              ) : (
+                <div className="flex items-center gap-2">
+                  {onShowHelp && (
+                    <button
+                      type="button"
+                      onClick={onShowHelp}
+                      className="w-7 h-7 lg:w-8 lg:h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer outline-none text-white/80 hover:text-white bg-white/10 hover:bg-white/20 shrink-0 border border-white/10"
+                      title="Hilfe & Anleitungen"
+                    >
+                      <HelpCircle className="w-4 h-4" strokeWidth={1.8} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onOpenLogin || onLogout}
+                    className="bg-white/20 hover:bg-white/30 text-white transition-all px-3.5 sm:px-4 h-7 lg:h-8 rounded-full border border-white/25 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider shrink-0 cursor-pointer"
+                  >
+                    <LogIn className="w-3.5 h-3.5 shrink-0" strokeWidth={2.2} />
+                    <span>Anmelden</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

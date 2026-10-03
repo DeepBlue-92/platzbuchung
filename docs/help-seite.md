@@ -98,6 +98,30 @@ Administratoren können im Menübereich **Einstellungen** unter dem Reiter **Ben
     - Über die Schaltfläche *„Papierkorb anzeigen“* lassen sich gelöschte Vorlagen einsehen, wiederherstellen oder endgültig löschen.
     - Vorlagen, die länger als 30 Tage im Papierkorb liegen, werden automatisch bereinigt.
   - *Strikter Vereinsbezug:* Vorlagen werden für den jeweiligen Verein in der Datenbank gespeichert – alle Administratoren desselben Vereins sehen denselben Stand, ohne dass Daten vereinsübergreifend vermischt werden.
+  - *Visueller Block-Editor & Spalten-Layout:*
+    - **Betreffzeile im Canvas-Kopf mit direkter Badge-Darstellung:** Direkt über der visuellen E-Mail-Vorschau befindet sich das Feld *„Posteingang Betreffzeile“*. Platzhalter wie `[Platz-Bezeichnung]`, `[Datum]` oder `[Uhrzeit]` werden direkt im Eingabekasten als konsistente Badges mit Rahmen und Kursivschrift dargestellt – exakt so wie im Mail-Template.
+    - **Direkte Inline-Bearbeitung per Klick:** Ein Klick in das Feld öffnet die Texteingabe zum Tippen. Bei Klick außerhalb oder Drücken der Eingabetaste werden die Badges wieder direkt gerendert.
+    - **Variablen per Klick einfügen:** Wählt man in der rechten Seitenleiste unter *„Verfügbare dynamische Variablen“* einen Chip (z. B. `+[Platz-Bezeichnung]`), wird dieser direkt in den Betreff eingefügt.
+    - **Kopfzeile (Wappen/Logo & 2 getrennte Textfelder):**
+      - Über das „+“-Menü kann der Baustein *„Kopfzeile“* eingefügt werden (im Canvas mit der klaren Plakette *„KOPFZEILE“* gekennzeichnet).
+      - **Feste 2-Spalten-Struktur:**
+        - *Links (Wappen/Logo):* Ein dezentes Platzhalterfeld für das Vereins-Wappen bzw. Logo mit der Aufschrift *„Wappen/Logo – Klicken zum Hochladen“*. Das Logo ist innerhalb seines Blockabschnitts immer horizontal und vertikal zentriert.
+        - *Rechts (2 getrennte Eingabefelder):*
+          1. *Vereinsname:* Oben platziertes Eingabefeld (groß & fett formatiert) mit Platzhalter *„Vereinsname“*.
+          2. *Untertitel:* Darunter platziertes Eingabefeld (dezenter formatiert) mit Platzhalter *„Untertitel“*.
+      - **Klare, ruhige Gestaltung:** Sämtliche Hilfstexte wie *„Spalte 1“* oder *„Spalte 2“* sowie störende gestrichelte Umrandungen wurden entfernt. Der eingegebene Text erscheint direkt im Eingabefeld ohne doppelte Anzeige darunter.
+      - **Fester Spaltenabstand (0 px):** Der Abstand zwischen Wappen und Text ist fest auf 0 px definiert, um einen nahtlosen, bündigen Übergang zu gewährleisten.
+      - **Geschützte Struktur:** Die Option zum Hinzufügen weiterer Unterelemente oder 3. Spalten wurde entfernt, sodass das Kopfzeilen-Layout auf allen Geräten dauerhaft stabil und professionell bleibt.
+      - **Seitenleiste (Inspector):**
+        - *Spaltenbreite / Verteilung:* Über einen stufenlosen Schieberegler kann das Breitenverhältnis direkt justiert werden (z. B. *„Wappen/Logo (25%) • Text (75%)“* im Bereich von 15% bis 85%).
+        - *Hintergrundbild:* Über den Button *„Hintergrundbild hochladen“* kann ein eigenes Banner bzw. Motiv eingebunden werden (`cover`-Füllung). Die Hintergrundfarbe bleibt darunter als Tönung/Fallback wählbar.
+        - *Feste Zentrierung:* Wappen/Logo und Textzeilen sind immer fest vertikal zentriert – ein manueller Auswahlschalter ist nicht mehr erforderlich.
+        - *Getrennte Text-Formatierung (Vereinsname & Untertitel):* Für beide Zeilen stehen separate Werkzeuge zur Verfügung:
+          - *Schriftart:* System Sans, Arial, Trebuchet MS, Georgia, Times New Roman, Courier New, Verdana.
+          - *Schriftgröße:* Feine Justierung per Stepper (+ / -).
+          - *Textfarbe:* Color-Picker, Hex-Eingabe sowie dynamische Farbfelder direkt aus den im Admin-Bereich hinterlegten Vereinsfarben.
+        - *Innenabstand:* Schieberegler für den oberen und unteren Abstand der Kopfzeile.
+    - **Aufgeräumte Seitenleiste (Inspector):** Die rechte Leiste konzentriert sich bei Vorlageneinstellungen auf globale Schriftarten und Event-Ziele bzw. auf die Eigenschaften des jeweils ausgewählten Blocks, ohne redundante Betreffeingabefelder.
 
 ### Persönliche Benachrichtigungs-Einstellungen (Spieler-Profil)
 Jedes Vereinsmitglied kann seine Benachrichtigungen im persönlichen Profil selbstständig verwalten:

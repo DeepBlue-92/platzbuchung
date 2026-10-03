@@ -76,6 +76,15 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
 
   // Handle soft delete with active check
   const handleAttemptDelete = (template: EmailTemplate) => {
+    // Check if system template
+    if (template.is_system_template) {
+      setDeleteWarning(
+        `Die Vorlage „${template.name}“ ist eine System-Standardvorlage und schreibgeschützt gegen Löschen.`
+      );
+      setTimeout(() => setDeleteWarning(null), 6000);
+      return;
+    }
+
     // Check if actively assigned to an event
     if (assignments[template.eventType] === template.id) {
       setDeleteWarning(
@@ -215,10 +224,10 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
       </div>
 
       {/* Table Container */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto min-h-[440px]">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-100/80 text-[11px] font-extrabold uppercase tracking-wider text-slate-700 border-b border-slate-200">
+            <tr className="bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <th className="py-3 px-4 sm:px-5">Name der Vorlage</th>
               <th className="py-3 px-4">Event-Typ</th>
               <th className="py-3 px-4">Status</th>
@@ -228,7 +237,7 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
           <tbody className="divide-y divide-slate-100 text-xs">
             {displayedList.length === 0 ? (
               <tr>
-                <td colSpan={4} className="py-12 text-center text-slate-600">
+                <td colSpan={4} className="py-24 text-center text-slate-600">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Inbox className="w-8 h-8 text-slate-400" />
                     <p className="font-bold text-slate-800">
@@ -239,8 +248,19 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
                     <p className="text-[11px] text-slate-500">
                       {showTrash
                         ? "Gelöschte Vorlagen werden hier 30 Tage aufbewahrt."
+                        : searchTerm
+                        ? `Keine Vorlage passend zu „${searchTerm}“ vorhanden.`
                         : "Lege mit „Neue Vorlage anlegen“ ein neues Design an."}
                     </p>
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTerm("")}
+                        className="mt-2 px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-bold text-[11px] cursor-pointer"
+                      >
+                        Suche leeren
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -253,76 +273,76 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
                 return (
                   <tr
                     key={tmpl.id}
-                    className={`transition-colors ${
+                    className={`transition-colors border-b border-slate-100 ${
                       isCurrentlyEditing
-                        ? "bg-emerald-50/70 border-l-4 border-l-emerald-600"
-                        : "hover:bg-slate-50/70"
+                        ? "bg-emerald-50/60"
+                        : "hover:bg-slate-50/60"
                     }`}
                   >
-                    {/* 1. Name & Betreff Preview */}
+                    {/* 1. Name der Vorlage */}
                     <td className="py-3.5 px-4 sm:px-5">
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                            isActiveAssigned
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-slate-100 text-slate-600"
+                        <Layers
+                          className={`w-4 h-4 shrink-0 ${
+                            isActiveAssigned ? "text-emerald-600" : "text-slate-400"
                           }`}
-                        >
-                          <Layers className="w-3.5 h-3.5" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-900 flex items-center gap-2">
-                            <span>{tmpl.name}</span>
-                            {isCurrentlyEditing && (
-                              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-600 text-white">
-                                Im Editor geöffnet
-                              </span>
-                            )}
-                          </div>
+                        />
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-sm text-slate-900 truncate">
+                            {tmpl.name}
+                          </span>
+                          {tmpl.is_system_template && (
+                            <span className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 rounded shrink-0">
+                              System
+                            </span>
+                          )}
+                          {isCurrentlyEditing && (
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded shrink-0">
+                              Im Editor geöffnet
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
 
                     {/* 2. Event-Typ */}
-                    <td className="py-3.5 px-4">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                        {eventDef?.label || tmpl.eventType}
-                      </span>
+                    <td className="py-3.5 px-4 text-sm font-normal text-slate-600">
+                      {eventDef?.label || tmpl.eventType}
                     </td>
 
                     {/* 3. Status */}
                     <td className="py-3.5 px-4">
                       {tmpl.deletedAt ? (
                         <div className="space-y-0.5">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-900 border border-rose-200">
-                            <Trash2 className="w-3 h-3" />
+                          <div className="inline-flex items-center gap-2 text-xs font-medium text-rose-700">
+                            <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
                             <span>Im Papierkorb</span>
-                          </span>
-                          <div className="text-[10px] text-slate-500 font-medium">
+                          </div>
+                          <div className="text-[11px] text-slate-400 pl-4 font-normal">
                             Noch {getRemainingDays(tmpl.deletedAt)} Tage
                           </div>
                         </div>
                       ) : isActiveAssigned ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-950 border border-emerald-300">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                        <div className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                           <span>Aktiv zugewiesen</span>
-                        </span>
+                        </div>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
-                          Bereit
-                        </span>
+                        <div className="inline-flex items-center gap-2 text-xs font-normal text-slate-500">
+                          <span className="w-2 h-2 rounded-full bg-slate-300 shrink-0" />
+                          <span>Nicht zugewiesen</span>
+                        </div>
                       )}
                     </td>
 
                     {/* 4. Aktionen */}
                     <td className="py-3.5 px-4 text-right">
                       {tmpl.deletedAt ? (
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => onRestore(tmpl.id)}
-                            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                            className="px-2.5 py-1.5 rounded-lg text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                             title="Vorlage wiederherstellen"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
@@ -331,7 +351,7 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
                           <button
                             type="button"
                             onClick={() => onPermanentDelete(tmpl.id)}
-                            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                            className="px-2.5 py-1.5 rounded-lg text-rose-600 hover:text-rose-800 hover:bg-rose-50 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                             title="Endgültig löschen"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -343,31 +363,33 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
                           <button
                             type="button"
                             onClick={() => onSelectEdit(tmpl.id)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
                               isCurrentlyEditing
-                                ? "bg-emerald-700 text-white font-extrabold"
-                                : "bg-white border border-slate-300 text-slate-800 hover:bg-slate-100 hover:border-slate-400"
+                                ? "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold"
+                                : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                             }`}
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                             <span>{isCurrentlyEditing ? "Wird bearbeitet" : "Bearbeiten"}</span>
                           </button>
 
-                          {isActiveAssigned ? (
-                            <button
-                              type="button"
-                              onClick={() => handleAttemptDelete(tmpl)}
-                              title="Aktive Vorlage kann nicht gelöscht werden"
-                              className="p-2 rounded-xl text-slate-400 bg-slate-100 hover:bg-slate-200/80 cursor-pointer"
+                          {tmpl.is_system_template || isActiveAssigned ? (
+                            <span
+                              title={
+                                tmpl.is_system_template
+                                  ? "System-Standardvorlage (schreibgeschützt gegen Löschen)"
+                                  : "Aktive Vorlage kann nicht gelöscht werden"
+                              }
+                              className="p-1.5 text-slate-400 flex items-center justify-center cursor-default"
                             >
-                              <Lock className="w-3.5 h-3.5 text-slate-500" />
-                            </button>
+                              <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            </span>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleAttemptDelete(tmpl)}
                               title="In den Papierkorb verschieben"
-                              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>

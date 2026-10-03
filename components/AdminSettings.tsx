@@ -48,8 +48,22 @@ import { UserAvatar } from "./UserAvatar";
 import { AvatarUploader } from "./AvatarUploader";
 import AdminOnboardingTab from "./AdminOnboardingTab";
 import { ChampionshipAdminTab } from "../features/championship/ChampionshipAdminTab";
+import { LandingPageEditor } from "./admin/LandingPageEditor";
+import { saveLandingPageConfig } from "../services/landingPageService";
 import { EmailTemplateManager } from "./admin/EmailTemplateManager";
 import { AdminNotificationsManagement } from "./admin/AdminNotificationsManagement";
+import {
+  sendUserActivationApi,
+  sendUserPasswordResetApi,
+  bulkSendUserActivationApi,
+  getLiveEmailPreview,
+} from "../services/notificationClient";
+import {
+  loadClubEmailTemplatesData,
+  getActiveTemplateForEvent,
+} from "../services/emailTemplateStorage";
+import { DEFAULT_EMAIL_TEMPLATES } from "../services/notificationTemplates";
+import { EmailTemplate } from "../types/notifications";
 
 interface AdminSettingsProps {
   users: Record<string, User>;
@@ -79,6 +93,7 @@ interface AdminSettingsProps {
 
 const TABS = [
   { id: "allgemein", label: "Allgemein", icon: "fa-cubes" },
+  { id: "landing_page", label: "Startseite bearbeiten", icon: "fa-table-cells-large" },
   { id: "rules", label: "Buchungs-Regeln", icon: "fa-clipboard-check" },
   { id: "sperren", label: "Sperren", icon: "fa-ban" },
   { id: "layout", label: "Layout", icon: "fa-paint-roller" },
@@ -91,6 +106,17 @@ const TABS = [
   { id: "arbeitseinsaetze", label: "Arbeitseinsätze", icon: "fa-briefcase" },
   { id: "updates", label: "Updates", icon: "fa-clock-rotate-left" },
   { id: "handbuch", label: "Handbuch", icon: "fa-book-open" },
+];
+
+const DEFAULT_NAV_ORDER = [
+  "landing_page",
+  "reservation",
+  "tournaments",
+  "ranking",
+  "championship",
+  "league",
+  "guests",
+  "arbeitseinsaetze",
 ];
 
 const AdminSettings: React.FC<AdminSettingsProps> = ({
@@ -119,6 +145,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const currentClubId = settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen";
   const [currentTab, setCurrentTab] = useState<
     | "allgemein"
+    | "navigation"
+    | "landing_page"
     | "rules"
     | "tournaments"
     | "sperren"
@@ -302,6 +330,227 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const impressumTextRef = useRef<HTMLTextAreaElement | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [userPage, setUserPage] = useState(1);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [activeActionMenuUserId, setActiveActionMenuUserId] = useState<string | null>(null);
+
+  // Authentication Mail Confirmation Modal State
+  const [authMailModal, setAuthMailModal] = useState<{
+    isOpen: boolean;
+    mode: "single" | "bulk";
+    type: "activation" | "reset";
+    user?: User;
+    userIds?: string[];
+    usersList?: User[];
+    loading?: boolean;
+    previewOpen?: boolean;
+    activeTemplate?: EmailTemplate | null;
+  } | null>(null);
+
+  // Open Single Activation Modal
+  const openSendActivationModal = async (u: User) => {
+    setActiveActionMenuUserId(null);
+    let tmpl: EmailTemplate | null = null;
+    try {
+      const clubData = await loadClubEmailTemplatesData(settings.vereinsId || "sv-neuhausen");
+      tmpl = getActiveTemplateForEvent("USER_ACTIVATION", clubData.templates, clubData.assignments);
+    } catch {}
+    if (!tmpl) tmpl = DEFAULT_EMAIL_TEMPLATES.USER_ACTIVATION;
+
+    setAuthMailModal({
+      isOpen: true,
+      mode: "single",
+      type: "activation",
+      user: u,
+      activeTemplate: tmpl,
+      previewOpen: false,
+    });
+  };
+
+  // Open Single Reset Modal
+  const openSendResetModal = async (u: User) => {
+    setActiveActionMenuUserId(null);
+    let tmpl: EmailTemplate | null = null;
+    try {
+      const clubData = await loadClubEmailTemplatesData(settings.vereinsId || "sv-neuhausen");
+      tmpl = getActiveTemplateForEvent("PASSWORD_RESET", clubData.templates, clubData.assignments);
+    } catch {}
+    if (!tmpl) tmpl = DEFAULT_EMAIL_TEMPLATES.PASSWORD_RESET;
+
+    setAuthMailModal({
+      isOpen: true,
+      mode: "single",
+      type: "reset",
+      user: u,
+      activeTemplate: tmpl,
+      previewOpen: false,
+    });
+  };
+
+  // Open Bulk Activation Modal
+  const openBulkActivationModal = async () => {
+    if (selectedUserIds.size === 0) return;
+    const targetUsers = Array.from(selectedUserIds)
+      .map((id) => users[id])
+      .filter(Boolean);
+
+    let tmpl: EmailTemplate | null = null;
+    try {
+      const clubData = await loadClubEmailTemplatesData(settings.vereinsId || "sv-neuhausen");
+      tmpl = getActiveTemplateForEvent("USER_ACTIVATION", clubData.templates, clubData.assignments);
+    } catch {}
+    if (!tmpl) tmpl = DEFAULT_EMAIL_TEMPLATES.USER_ACTIVATION;
+
+    setAuthMailModal({
+      isOpen: true,
+      mode: "bulk",
+      type: "activation",
+      userIds: Array.from(selectedUserIds),
+      usersList: targetUsers,
+      activeTemplate: tmpl,
+      previewOpen: false,
+    });
+  };
+
+  // Live preview for Auth Mail Confirmation Modal
+  const authMailPreview = useMemo(() => {
+    if (!authMailModal?.isOpen || !authMailModal?.activeTemplate) return null;
+    const targetUser = authMailModal.user || (authMailModal.usersList && authMailModal.usersList[0]);
+    const memberName = targetUser?.lastName || targetUser?.firstName
+      ? `${targetUser.firstName || ""} ${targetUser.lastName || ""}`.trim()
+      : (targetUser?.name || "Alexander Becker");
+    const payload = {
+      user_name: memberName,
+      club_name: settings.clubName || "Tennis-Club e.V.",
+      activation_link: `${window.location.origin}/#activate?token=act_sample_token&userId=${encodeURIComponent(targetUser?.id || targetUser?.name || "user123")}`,
+      password_reset_link: `${window.location.origin}/#reset-password?token=rst_sample_token&userId=${encodeURIComponent(targetUser?.id || targetUser?.name || "user123")}`,
+      link_validity_hours: authMailModal.type === "activation" ? "24" : "1",
+    };
+    try {
+      return getLiveEmailPreview(authMailModal.activeTemplate, payload, settings.clubName || "Tennis-Club e.V.");
+    } catch (e) {
+      return {
+        subject: authMailModal.activeTemplate.subject,
+        html: authMailModal.activeTemplate.bodyHtml,
+        text: authMailModal.activeTemplate.subject,
+      };
+    }
+  }, [authMailModal?.isOpen, authMailModal?.activeTemplate, authMailModal?.user, authMailModal?.usersList, authMailModal?.type, settings.clubName]);
+
+  // Execute Sending from Confirmation Modal
+  const handleConfirmSendAuthMail = async () => {
+    if (!authMailModal) return;
+    setAuthMailModal((prev) => (prev ? { ...prev, loading: true } : null));
+
+    try {
+      if (authMailModal.mode === "single" && authMailModal.user) {
+        const u = authMailModal.user;
+        const uid = u.id || u.name;
+
+        if (authMailModal.type === "activation") {
+          const res = await sendUserActivationApi(uid, {
+            vereinsId: settings.vereinsId || "sv-neuhausen",
+            clubName: settings.clubName || "Tennis-Club e.V.",
+            user: u,
+          });
+
+          if (!res.success) {
+            setNotification({
+              type: "error",
+              text: res.message || "Fehler beim Versenden der Aktivierungs-E-Mail.",
+            });
+            return;
+          }
+
+          // Update local user state
+          const updatedUser: User = {
+            ...u,
+            activationSentAt: res.sentAt || new Date().toISOString(),
+          };
+          const nextUsers = { ...users, [u.name]: updatedUser };
+          onUpdateUsers(nextUsers);
+          if (editingUser && (editingUser.id === u.id || editingUser.name === u.name)) {
+            setEditingUser(updatedUser);
+          }
+
+          setNotification({
+            type: "success",
+            text: `Aktivierungs-E-Mail erfolgreich an ${u.email} versendet!`,
+          });
+        } else {
+          // Password reset
+          const res = await sendUserPasswordResetApi(uid, {
+            vereinsId: settings.vereinsId || "sv-neuhausen",
+            clubName: settings.clubName || "Tennis-Club e.V.",
+            user: u,
+          });
+
+          if (!res.success) {
+            setNotification({
+              type: "error",
+              text: res.message || "Fehler beim Versenden der Passwort-Reset-E-Mail.",
+            });
+            return;
+          }
+
+          // Update local user state
+          const updatedUser: User = {
+            ...u,
+            passwordResetSentAt: res.sentAt || new Date().toISOString(),
+          };
+          const nextUsers = { ...users, [u.name]: updatedUser };
+          onUpdateUsers(nextUsers);
+          if (editingUser && (editingUser.id === u.id || editingUser.name === u.name)) {
+            setEditingUser(updatedUser);
+          }
+
+          setNotification({
+            type: "success",
+            text: `Passwort-Reset-E-Mail erfolgreich an ${u.email} versendet!`,
+          });
+        }
+      } else if (authMailModal.mode === "bulk" && authMailModal.userIds) {
+        const uids = authMailModal.userIds;
+        const res = await bulkSendUserActivationApi(uids, {
+          vereinsId: settings.vereinsId || "sv-neuhausen",
+          clubName: settings.clubName || "Tennis-Club e.V.",
+          users,
+        });
+
+        // Update timestamps in local state
+        if (res.updatedTimestamps) {
+          const nextUsers = { ...users };
+          for (const [uid, sentAt] of Object.entries(res.updatedTimestamps)) {
+            const foundKey = Object.keys(nextUsers).find(
+              (k) => nextUsers[k].id === uid || nextUsers[k].name === uid
+            );
+            if (foundKey) {
+              nextUsers[foundKey] = {
+                ...nextUsers[foundKey],
+                activationSentAt: sentAt,
+              };
+            }
+          }
+          onUpdateUsers(nextUsers);
+        }
+
+        setSelectedUserIds(new Set());
+        setNotification({
+          type: res.success ? "success" : "error",
+          text: res.message,
+        });
+      }
+
+      setAuthMailModal(null);
+    } catch (err: any) {
+      console.error("handleConfirmSendAuthMail error:", err);
+      setNotification({
+        type: "error",
+        text: err.message || "Ausnahmefehler beim E-Mail-Versand.",
+      });
+    } finally {
+      setAuthMailModal((prev) => (prev ? { ...prev, loading: false } : null));
+    }
+  };
 
   // Import States
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -919,6 +1168,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const isLeagueEnabled = settings.modules?.league === true;
 
   const [modules, setModules] = useState({
+    landing_page: settings.modules?.landing_page !== false,
     events: settings.modules?.events !== false,
     ranking: settings.modules?.ranking !== false,
     guests: settings.modules?.guests !== false,
@@ -926,6 +1176,28 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     league: settings.modules?.league === true,
     championship: settings.modules?.championship === true,
   });
+
+  const [navOrder, setNavOrder] = useState<string[]>(() => {
+    const existing = settings.navigationOrder;
+    if (Array.isArray(existing) && existing.length > 0) {
+      const list = existing.filter((id) => DEFAULT_NAV_ORDER.includes(id));
+      for (const id of DEFAULT_NAV_ORDER) {
+        if (!list.includes(id)) list.push(id);
+      }
+      return list;
+    }
+    return DEFAULT_NAV_ORDER;
+  });
+
+  const handleMoveNavModule = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= navOrder.length) return;
+    const updated = [...navOrder];
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
+    setNavOrder(updated);
+  };
   const [reservationRules, setReservationRules] = useState({
     maxAdvanceDays: 14,
     maxActiveBookings: 3,
@@ -1525,11 +1797,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         customFacilityPhotoUrl: customFacilityPhotoUrl,
         modules: {
           ...modules,
+          landing_page: modules.landing_page !== false,
           league: isSuperAdmin ? modules.league === true : settings.modules?.league === true,
         },
+        navigationOrder: navOrder,
       });
+      saveLandingPageConfig(currentClubId, {
+        is_enabled: modules.landing_page !== false,
+        nav_order: navOrder,
+      }, currentUser.name || currentUser.id).catch(console.warn);
       setMessage({
-        text: "Allgemeine Einstellungen erfolgreich gespeichert.",
+        text: "Allgemeine Einstellungen & Modul-Reihenfolge erfolgreich gespeichert.",
         type: "success",
       });
     } else if (tab === "arbeitseinsaetze") {
@@ -1650,6 +1928,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       setZip(settings.zip || "");
       setCity(settings.city || "");
       setModules({
+        landing_page: settings.modules?.landing_page !== false,
         events: settings.modules?.events !== false,
         ranking: settings.modules?.ranking !== false,
         guests: settings.modules?.guests !== false,
@@ -1657,6 +1936,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         league: settings.modules?.league === true,
         championship: settings.modules?.championship === true,
       });
+      if (settings.navigationOrder && Array.isArray(settings.navigationOrder)) {
+        setNavOrder(settings.navigationOrder);
+      } else {
+        setNavOrder(DEFAULT_NAV_ORDER);
+      }
     } else if (tab === "arbeitseinsaetze") {
       setSollStunden(settings.arbeitseinsaetzeSettings?.sollStunden ?? 10);
       setAeCategories((settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheim-Reinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de")));
@@ -2413,6 +2697,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       birthDate: editingUser.birthDate ? editingUser.birthDate.trim() : null,
       avatarUrl: editingUser.avatarUrl !== undefined ? (editingUser.avatarUrl || null) : (existingUser?.avatarUrl || null),
       avatarIcon: editingUser.avatarIcon !== undefined ? (editingUser.avatarIcon || "initials") : (existingUser?.avatarIcon || "initials"),
+      avatarColor: editingUser.avatarColor !== undefined ? (editingUser.avatarColor || null) : (existingUser?.avatarColor || null),
     };
 
     try {
@@ -3101,7 +3386,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   }, [sortedAndFilteredUsers, userPage]);
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full lg:animate-in lg:fade-in lg:duration-500">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow lg:animate-in lg:fade-in lg:duration-500 min-h-0">
       <div className="transition-all duration-300 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80">
         {/* Upper Dashboard header area */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-0 md:gap-4 mb-3 pb-3 md:mb-6 md:pb-6 border-b border-slate-100">
@@ -3198,125 +3483,123 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
                       <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
                         <i className="fa-solid fa-toggle-on"></i> Module
-                        Aktivieren
                       </h3>
+
                       <div className="space-y-4">
-                        {/* 1. Veranstaltungen */}
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Veranstaltungen
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Veranstaltungsmodul für alle sichtbar.
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={!!modules.events}
-                            onChange={(e) =>
-                              setModules({
-                                ...modules,
-                                events: e.target.checked,
-                              })
-                            }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </label>
+                        {navOrder.map((id, index) => {
+                          const isStartPage = id === "landing_page";
+                          const isReservation = id === "reservation";
+                          const isEvents = id === "tournaments";
+                          const isRanking = id === "ranking";
+                          const isChampionship = id === "championship";
+                          const isLeague = id === "league";
+                          const isGuests = id === "guests";
+                          const isArbeit = id === "arbeitseinsaetze";
 
-                        {/* 2. Rangliste */}
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Rangliste
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Zeigt Reihenfolge der Spieler in Form eines
-                              Dreiecks
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={!!modules.ranking}
-                            onChange={(e) =>
-                              setModules({
-                                ...modules,
-                                ranking: e.target.checked,
-                              })
-                            }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </label>
+                          let isChecked = true;
+                          let onToggle: ((val: boolean) => void) | null = null;
+                          let label = "";
+                          let desc = "";
 
-                        {/* 3. Meisterschaft */}
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Meisterschaft
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Aktiviert die offizielle Vereinsmeisterschaft (Vorlagen, Gruppenphasen & K.-o.-Endrunden)
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={!!modules.championship}
-                            onChange={(e) =>
-                              setModules({
-                                ...modules,
-                                championship: e.target.checked,
-                              })
-                            }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </label>
+                          if (isStartPage) {
+                            label = "Startseite";
+                            desc = "Öffentliche Startseite mit Vereins-News & Schnellzugriff.";
+                            isChecked = modules.landing_page !== false;
+                            onToggle = (val) => setModules({ ...modules, landing_page: val });
+                          } else if (isReservation) {
+                            label = "Plätze";
+                            desc = "Platzreservierung für Mitglieder.";
+                            isChecked = true;
+                          } else if (isEvents) {
+                            label = "Veranstaltungen";
+                            desc = "Veranstaltungsmodul für alle sichtbar.";
+                            isChecked = !!modules.events;
+                            onToggle = (val) => setModules({ ...modules, events: val });
+                          } else if (isRanking) {
+                            label = "Rangliste";
+                            desc = "Zeigt Reihenfolge der Spieler in Form eines Dreiecks.";
+                            isChecked = !!modules.ranking;
+                            onToggle = (val) => setModules({ ...modules, ranking: val });
+                          } else if (isChampionship) {
+                            label = "Meisterschaft";
+                            desc = "Aktiviert die offizielle Vereinsmeisterschaft (Vorlagen, Gruppenphasen & K.-o.-Endrunden).";
+                            isChecked = !!modules.championship;
+                            onToggle = (val) => setModules({ ...modules, championship: val });
+                          } else if (isLeague) {
+                            label = "Liga";
+                            desc = "Hobbyliga mit dynamischem Punkte- und Ligensystem.";
+                            isChecked = !!modules.league;
+                            onToggle = isSuperAdmin ? ((val) => setModules({ ...modules, league: val })) : null;
+                          } else if (isGuests) {
+                            label = "Gastspiele";
+                            desc = "Ermöglicht Abrechnung und Erfassung von Gastspielen.";
+                            isChecked = modules.guests !== false;
+                            onToggle = (val) => setModules({ ...modules, guests: val });
+                          } else if (isArbeit) {
+                            label = "Arbeitseinsätze";
+                            desc = "Ermöglicht Erfassung und Übersicht von geleisteten Arbeitsstunden.";
+                            isChecked = !!modules.arbeitseinsaetze;
+                            onToggle = (val) => setModules({ ...modules, arbeitseinsaetze: val });
+                          }
 
-                        {/* 4. Gastspiele */}
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Gastspiele
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Ermöglicht Abrechnung und Erfassung von
-                              Gastspielen
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={modules.guests !== false}
-                            onChange={(e) =>
-                              setModules({
-                                ...modules,
-                                guests: e.target.checked,
-                              })
-                            }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </label>
+                          return (
+                            <div
+                              key={id}
+                              className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 hover:border-[var(--color-primary)] transition-colors shadow-2xs"
+                            >
+                              <div className="flex-1 min-w-0 pr-4">
+                                <div className="font-black text-xs text-slate-800 uppercase">
+                                  {label}
+                                </div>
+                                <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
+                                  {desc}
+                                </div>
+                              </div>
 
-                        {/* 5. Arbeitseinsätze */}
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors">
-                          <div className="flex-1 min-w-0 pr-4">
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Arbeitseinsätze
+                              <div className="flex items-center gap-2.5 shrink-0">
+                                {/* Up / Down arrows for ordering */}
+                                <div className="flex items-center gap-1 border-r border-slate-200 pr-2">
+                                  <button
+                                    type="button"
+                                    disabled={index === 0}
+                                    onClick={() => handleMoveNavModule(index, "up")}
+                                    className="w-6 h-6 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-[10px]"
+                                    title="Nach oben verschieben"
+                                  >
+                                    <i className="fa-solid fa-arrow-up"></i>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={index === navOrder.length - 1}
+                                    onClick={() => handleMoveNavModule(index, "down")}
+                                    className="w-6 h-6 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-[10px]"
+                                    title="Nach unten verschieben"
+                                  >
+                                    <i className="fa-solid fa-arrow-down"></i>
+                                  </button>
+                                </div>
+
+                                {/* Checkbox */}
+                                {isReservation ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={true}
+                                    disabled
+                                    className="w-5 h-5 accent-[var(--color-primary)] opacity-70 cursor-not-allowed shrink-0"
+                                  />
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    disabled={isLeague && !isSuperAdmin}
+                                    onChange={(e) => onToggle && onToggle(e.target.checked)}
+                                    className="w-5 h-5 accent-[var(--color-primary)] shrink-0 cursor-pointer"
+                                  />
+                                )}
+                              </div>
                             </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Ermöglicht Erfassung und Übersicht von geleisteten Arbeitsstunden
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={!!modules.arbeitseinsaetze}
-                            onChange={(e) =>
-                              setModules({
-                                ...modules,
-                                arbeitseinsaetze: e.target.checked,
-                              })
-                            }
-                            className="w-5 h-5 accent-[var(--color-primary)] shrink-0 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </label>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -3451,6 +3734,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       <i className="fa-solid fa-floppy-disk"></i> Speichern
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* TAB: STARTSEITE BEARBEITEN */}
+              {currentTab === "landing_page" && (
+                <div className="animate-in fade-in duration-300">
+                  <LandingPageEditor
+                    vereinsId={currentClubId}
+                    authorName={currentUser.name || currentUser.id}
+                  />
                 </div>
               )}
 
@@ -6277,11 +6570,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           userId={editingUser.id || editingUser.name || "new_user"}
                           avatarUrl={editingUser.avatarUrl}
                           avatarIcon={editingUser.avatarIcon}
-                          onChange={({ avatarUrl, avatarIcon }) => {
+                          avatarColor={editingUser.avatarColor}
+                          onChange={({ avatarUrl, avatarIcon, avatarColor }) => {
                             setEditingUser((prev) => ({
                               ...prev,
                               ...(avatarUrl !== undefined ? { avatarUrl } : {}),
                               ...(avatarIcon !== undefined ? { avatarIcon } : {}),
+                              ...(avatarColor !== undefined ? { avatarColor } : {}),
                             }));
                           }}
                         />
@@ -6798,13 +7093,68 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </button>
                     </div>
 
+                    {/* Bulk Action Bar */}
+                    {selectedUserIds.size > 0 && (
+                      <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md animate-in slide-in-from-top-2 duration-200">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-8 h-8 rounded-xl bg-emerald-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
+                            {selectedUserIds.size}
+                          </span>
+                          <div>
+                            <h4 className="text-xs font-black uppercase text-emerald-900 tracking-wider">
+                              {selectedUserIds.size} {selectedUserIds.size === 1 ? "Benutzer markiert" : "Benutzer markiert"}
+                            </h4>
+                            <p className="text-[10px] text-emerald-700 font-medium">
+                              Massen-Aktion für die ausgewählten Mitglieder ausführen.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={openBulkActivationModal}
+                            className="flex-1 sm:flex-none px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                          >
+                            <i className="fa-solid fa-paper-plane text-xs"></i>
+                            <span>Aktivierungs-Mails an {selectedUserIds.size} ausgewählte Benutzer senden</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedUserIds(new Set())}
+                            className="px-3.5 py-2.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-colors cursor-pointer"
+                          >
+                            Abwählen
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* User List */}
                     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                      <div className="hidden md:grid grid-cols-12 gap-4 p-4 bg-slate-100 border-b border-slate-200 font-black text-[10px] uppercase tracking-widest text-[var(--color-primary)]">
-                        <div className="col-span-2">Rolle</div>
-                        <div className="col-span-7">
-                          Vollständiger Name / Login
+                      <div className="hidden md:grid grid-cols-12 gap-3 p-4 bg-slate-100 border-b border-slate-200 font-black text-[10px] uppercase tracking-widest text-[var(--color-primary)] items-center">
+                        <div className="col-span-1 flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={
+                              paginatedUsers.length > 0 &&
+                              paginatedUsers.every((u) => selectedUserIds.has(u.name))
+                            }
+                            onChange={(e) => {
+                              const next = new Set(selectedUserIds);
+                              if (e.target.checked) {
+                                paginatedUsers.forEach((u) => next.add(u.name));
+                              } else {
+                                paginatedUsers.forEach((u) => next.delete(u.name));
+                              }
+                              setSelectedUserIds(next);
+                            }}
+                            className="w-4 h-4 text-emerald-600 bg-white border-slate-300 rounded focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                            title="Alle auf dieser Seite auswählen"
+                          />
                         </div>
+                        <div className="col-span-2">Rolle &amp; Status</div>
+                        <div className="col-span-6">Vollständiger Name / Login</div>
                         <div className="col-span-3 text-right">Aktionen</div>
                       </div>
 
@@ -6848,11 +7198,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   userId={editingUser.id || editingUser.name || u.name}
                                   avatarUrl={editingUser.avatarUrl}
                                   avatarIcon={editingUser.avatarIcon}
-                                  onChange={({ avatarUrl, avatarIcon }) => {
+                                  avatarColor={editingUser.avatarColor}
+                                  onChange={({ avatarUrl, avatarIcon, avatarColor }) => {
                                     setEditingUser((prev) => ({
                                       ...prev,
                                       ...(avatarUrl !== undefined ? { avatarUrl } : {}),
                                       ...(avatarIcon !== undefined ? { avatarIcon } : {}),
+                                      ...(avatarColor !== undefined ? { avatarColor } : {}),
                                     }));
                                   }}
                                 />
@@ -7185,8 +7537,61 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 <div className="space-y-3">
                                   <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
                                     <i className="fa-solid fa-shield-halved text-[11px]"></i>
-                                    5. System & Konto-Status
+                                    5. System &amp; Konto-Status
                                   </h4>
+
+                                  {/* Timestamps & Auth Info */}
+                                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 text-xs">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                      <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Konto-Status</span>
+                                        <span className="font-bold text-slate-800">
+                                          {editingUser.isSuspended
+                                            ? "Gesperrt"
+                                            : editingUser.lastLogin || editingUser.last_login || editingUser.lastLoginAt
+                                            ? "Aktiv"
+                                            : "Eingeladen (Noch nie eingeloggt)"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Aktivierungs-Mail gesendet</span>
+                                        <span className="font-bold text-slate-800">
+                                          {editingUser.activationSentAt
+                                            ? `${new Date(editingUser.activationSentAt).toLocaleDateString("de-DE")} ${new Date(editingUser.activationSentAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
+                                            : "Noch nicht versendet"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Passwort-Reset gesendet</span>
+                                        <span className="font-bold text-slate-800">
+                                          {editingUser.passwordResetSentAt
+                                            ? `${new Date(editingUser.passwordResetSentAt).toLocaleDateString("de-DE")} ${new Date(editingUser.passwordResetSentAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
+                                            : "Keine Anfrage"}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Direct Action Triggers inside detail view */}
+                                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">
+                                      <button
+                                        type="button"
+                                        onClick={() => openSendActivationModal(editingUser as User)}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                      >
+                                        <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                                        <span>Aktivierungs-Mail {editingUser.activationSentAt ? "erneut senden" : "jetzt senden"}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openSendResetModal(editingUser as User)}
+                                        className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                      >
+                                        <i className="fa-solid fa-key text-[10px]"></i>
+                                        <span>Passwort-Reset-Mail senden</span>
+                                      </button>
+                                    </div>
+                                  </div>
+
                                   <div className="bg-red-50/80 p-3.5 rounded-xl border border-red-200/80">
                                     <label className="flex items-center gap-3 cursor-pointer select-none">
                                       <input
@@ -7232,146 +7637,204 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               </div>
                             );
                           }
+                          const isInvitedOrNeverLoggedIn = !(u.lastLogin || u.last_login || u.lastLoginAt);
+
                           return (
                             <div
                               key={u.id || u.name + "-" + idx}
-                              className="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 items-center hover:bg-slate-50 transition-colors"
+                              className={`grid grid-cols-1 md:grid-cols-12 gap-3 p-4 items-center transition-colors border-b border-slate-100 ${
+                                selectedUserIds.has(u.name) ? "bg-emerald-50/50" : "hover:bg-slate-50"
+                              }`}
                             >
-                              <div className="md:col-span-2 flex flex-col gap-1 items-start">
+                              {/* 1. Checkbox */}
+                              <div className="col-span-1 flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedUserIds.has(u.name)}
+                                  onChange={(e) => {
+                                    const next = new Set(selectedUserIds);
+                                    if (e.target.checked) next.add(u.name);
+                                    else next.delete(u.name);
+                                    setSelectedUserIds(next);
+                                  }}
+                                  className="w-4 h-4 text-emerald-600 bg-white border-slate-300 rounded focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                                />
+                              </div>
+
+                              {/* 2. Rolle & Status */}
+                              <div className="md:col-span-2 flex flex-col gap-1.5 items-start">
                                 <span
-                                  className={`px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest text-white ${u.role === Role.ADMIN ? "bg-[var(--color-accent)]" : "bg-slate-400"}`}
+                                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-white ${
+                                    u.role === Role.ADMIN ? "bg-[var(--color-accent)]" : "bg-slate-500"
+                                  }`}
                                 >
                                   {u.role === Role.ADMIN ? "Admin" : "Mitglied"}
                                 </span>
-                                {u.isSuspended && (
-                                  <span className="px-2.5 py-1 rounded-md text-[8px] font-black uppercase tracking-widest text-white bg-red-600">
-                                    <i className="fa-solid fa-lock mr-1"></i>{" "}
+                                {u.isSuspended ? (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest text-white bg-red-600 flex items-center gap-1">
+                                    <i className="fa-solid fa-lock text-[8px]"></i>
                                     Gesperrt
+                                  </span>
+                                ) : isInvitedOrNeverLoggedIn ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-200"
+                                    title={
+                                      u.activationSentAt
+                                        ? `Aktivierungs-Mail gesendet am ${new Date(u.activationSentAt).toLocaleDateString("de-DE")}`
+                                        : "Noch nie eingeloggt / Eingeladen"
+                                    }
+                                  >
+                                    <i className="fa-solid fa-clock text-[8px] text-amber-600"></i>
+                                    <span>Eingeladen</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-200">
+                                    <i className="fa-solid fa-check text-[8px] text-emerald-600"></i>
+                                    <span>Aktiv</span>
                                   </span>
                                 )}
                               </div>
+
+                              {/* 3. Name / Login / Email */}
                               <div
-                                className={`md:col-span-7 text-base font-semibold break-words flex items-center gap-3 ${u.isSuspended ? "text-slate-400 line-through" : "text-slate-800"}`}
+                                className={`md:col-span-6 text-base font-semibold break-words flex items-center gap-3 ${
+                                  u.isSuspended ? "text-slate-400 line-through" : "text-slate-800"
+                                }`}
                               >
                                 <UserAvatar user={u} size="md" />
-                                <div className="flex flex-col justify-center min-w-0">
+                                <div className="flex flex-col justify-center min-w-0 flex-1">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <span>
+                                    <span className="font-bold text-sm text-slate-900 truncate">
                                       {u.lastName || u.firstName
                                         ? `${u.lastName || ""}, ${u.firstName || ""}`
                                             .trim()
                                             .replace(/^,|,$/, "")
                                         : u.name}
                                     </span>
-                                  <span
-                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                      u.gender === "w"
-                                        ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                        : "bg-blue-50 text-blue-700 border border-blue-200"
-                                    }`}
-                                  >
-                                    {u.gender === "w" ? "♀ Damen" : "♂ Herren"}
-                                  </span>
-                                  {(() => {
-                                    const age = calculateAge(u.birthDate);
-                                    if (age !== null) {
-                                      return (
-                                        <span
-                                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                            age < 18
-                                              ? "bg-amber-100 text-amber-900 border border-amber-300 font-extrabold"
-                                              : "bg-slate-100 text-slate-700 border border-slate-200"
-                                          }`}
-                                          title={`Geburtsdatum: ${u.birthDate}`}
-                                        >
-                                          <i className="fa-solid fa-cake-candles text-[9px] text-amber-600"></i>
-                                          {age} J. {age < 18 ? `(U${age < 14 ? "14" : "18"})` : ""}
-                                        </span>
-                                      );
-                                    }
-                                    return (
-                                      <span
-                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-50 text-slate-400 border border-slate-200/60"
-                                        title="Kein Geburtsdatum gepflegt. Für U18-Ligen erforderlich."
-                                      >
-                                        <i className="fa-regular fa-calendar text-[8px]"></i>
-                                        Kein Alter
-                                      </span>
-                                    );
-                                  })()}
-                                </div>
-                                <div className="text-xs text-slate-400 font-normal mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                  <span>
-                                    Login:{" "}
-                                    <span className="font-semibold text-slate-700 bg-slate-100 rounded px-1">
-                                      {u.name}
-                                    </span>
-                                  </span>
-                                  {u.is_placeholder_email || (u.email && u.email.startsWith("no-email.") && u.email.endsWith("@internal.app")) ? (
-                                    <span className="text-slate-400 italic">• [Keine E-Mail hinterlegt]</span>
-                                  ) : u.email ? (
-                                    <span>• {u.email}</span>
-                                  ) : (
-                                    <span className="text-slate-400 italic">• [Keine E-Mail hinterlegt]</span>
-                                  )}
-                                  {u.onboarding_pending && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200" title="Onboarding beim nächsten Login erforderlich">
-                                      <i className="fa-solid fa-user-clock text-[9px]"></i>
-                                      Onboarding ausstehend
-                                    </span>
-                                  )}
-                                  <span>•</span>
-                                  <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-md px-1.5 py-0.5 shadow-sm">
-                                    <span className="font-mono text-[9px] font-bold text-slate-500 uppercase tracking-tight">
-                                      Passwort:
-                                    </span>
-                                    <span className="font-mono text-[10px] font-bold text-slate-800">
-                                      {revealedPasswords[u.name]
-                                        ? u.password || "Keins"
-                                        : "••••••••"}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setRevealedPasswords((prev) => ({
-                                          ...prev,
-                                          [u.name]: !prev[u.name],
-                                        }));
-                                      }}
-                                      className="text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer p-0.5 rounded transition-colors"
-                                      title={
-                                        revealedPasswords[u.name]
-                                          ? "Passwort verbergen"
-                                          : "Passwort anzeigen"
-                                      }
+                                    <span
+                                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                        u.gender === "w"
+                                          ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                          : "bg-blue-50 text-blue-700 border border-blue-200"
+                                      }`}
                                     >
-                                      <i
-                                        className={`fa-solid ${revealedPasswords[u.name] ? "fa-eye-slash" : "fa-eye"} text-[10px]`}
-                                      ></i>
-                                    </button>
-                                  </span>
+                                      {u.gender === "w" ? "♀ Damen" : "♂ Herren"}
+                                    </span>
+                                    {(() => {
+                                      const age = calculateAge(u.birthDate);
+                                      if (age !== null) {
+                                        return (
+                                          <span
+                                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                              age < 18
+                                                ? "bg-amber-100 text-amber-900 border border-amber-300 font-extrabold"
+                                                : "bg-slate-100 text-slate-700 border border-slate-200"
+                                            }`}
+                                            title={`Geburtsdatum: ${u.birthDate}`}
+                                          >
+                                            <i className="fa-solid fa-cake-candles text-[9px] text-amber-600"></i>
+                                            {age} J. {age < 18 ? `(U${age < 14 ? "14" : "18"})` : ""}
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
+                                  </div>
+
+                                  <div className="text-xs text-slate-500 font-normal mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span>
+                                      Login:{" "}
+                                      <span className="font-semibold text-slate-700 bg-slate-100 rounded px-1">
+                                        {u.name}
+                                      </span>
+                                    </span>
+                                    {u.is_placeholder_email ||
+                                    (u.email && u.email.startsWith("no-email.") && u.email.endsWith("@internal.app")) ? (
+                                      <span className="text-slate-400 italic">• [Keine E-Mail]</span>
+                                    ) : u.email ? (
+                                      <span className="text-slate-600">• {u.email}</span>
+                                    ) : (
+                                      <span className="text-slate-400 italic">• [Keine E-Mail]</span>
+                                    )}
+
+                                    {/* Activation Sent Timestamp Badge */}
+                                    {u.activationSentAt && isInvitedOrNeverLoggedIn && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                        <i className="fa-solid fa-paper-plane text-[8px] text-amber-600"></i>
+                                        <span>
+                                          Aktivierung gesendet:{" "}
+                                          {new Date(u.activationSentAt).toLocaleDateString("de-DE")}
+                                        </span>
+                                      </span>
+                                    )}
+                                    {u.passwordResetSentAt && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                        <i className="fa-solid fa-key text-[8px] text-blue-600"></i>
+                                        <span>
+                                          Reset: {new Date(u.passwordResetSentAt).toLocaleDateString("de-DE")}
+                                        </span>
+                                      </span>
+                                    )}
+
+                                    <span>•</span>
+                                    <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-md px-1.5 py-0.5 shadow-2xs">
+                                      <span className="font-mono text-[9px] font-bold text-slate-500 uppercase tracking-tight">
+                                        Passwort:
+                                      </span>
+                                      <span className="font-mono text-[10px] font-bold text-slate-800">
+                                        {revealedPasswords[u.name] ? u.password || "Keins" : "••••••••"}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setRevealedPasswords((prev) => ({
+                                            ...prev,
+                                            [u.name]: !prev[u.name],
+                                          }));
+                                        }}
+                                        className="text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer p-0.5 rounded transition-colors"
+                                        title={
+                                          revealedPasswords[u.name]
+                                            ? "Passwort verbergen"
+                                            : "Passwort anzeigen"
+                                        }
+                                      >
+                                        <i
+                                          className={`fa-solid ${revealedPasswords[u.name] ? "fa-eye-slash" : "fa-eye"} text-[10px]`}
+                                        ></i>
+                                      </button>
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
+
+                              {/* 4. Aktionen */}
                               <div className="md:col-span-3 flex justify-end items-center gap-1.5">
-                                {((u.id !== currentUser.id &&
-                                  u.name !== currentUser.name) ||
-                                  (currentUser.id &&
-                                    currentUser.id.startsWith(
-                                      "temp-admin-",
-                                    ))) &&
-                                  onActAsUser && (
-                                    <button
-                                      type="button"
-                                      onClick={() => onActAsUser(u)}
-                                      className="px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1 border border-emerald-200 shadow-sm active:scale-95"
-                                      title={`${u.name} aktivieren`}
-                                    >
-                                      <i className="fa-solid fa-user-secret"></i>{" "}
-                                      Agieren
-                                    </button>
-                                  )}
+                                {isInvitedOrNeverLoggedIn ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openSendActivationModal(u)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                                    title="Aktivierungs-Mail an Mitglied senden"
+                                  >
+                                    <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                                    <span className="hidden xl:inline">
+                                      {u.activationSentAt ? "Erneut senden" : "Aktivieren"}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => openSendResetModal(u)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                                    title="Passwort-Reset-Mail an Mitglied senden"
+                                  >
+                                    <i className="fa-solid fa-key text-[10px]"></i>
+                                    <span className="hidden xl:inline">Reset-Mail</span>
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -7383,19 +7846,94 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     });
                                     setInlineEditingUserId(u.name);
                                   }}
-                                  className="w-8 h-8 rounded-lg bg-slate-100 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center shadow-sm shrink-0"
+                                  className="w-8 h-8 rounded-lg bg-slate-100 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center shadow-2xs shrink-0 cursor-pointer"
                                   title="Bearbeiten"
                                 >
                                   <i className="fa-solid fa-pen-to-square text-xs"></i>
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteUser(u.name)}
-                                  className="w-8 h-8 rounded-lg bg-slate-100 text-red-600 hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center shadow-sm shrink-0"
-                                  title="Löschen"
-                                >
-                                  <i className="fa-solid fa-trash text-xs"></i>
-                                </button>
+
+                                {/* 3-Punkte Menü */}
+                                <div className="relative inline-block text-left">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveActionMenuUserId(
+                                        activeActionMenuUserId === u.name ? null : u.name
+                                      );
+                                    }}
+                                    className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 transition-colors flex items-center justify-center shadow-2xs cursor-pointer shrink-0"
+                                    title="Aktionsmenü öffnen"
+                                  >
+                                    <i className="fa-solid fa-ellipsis-vertical text-xs"></i>
+                                  </button>
+
+                                  {activeActionMenuUserId === u.name && (
+                                    <div
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-40 text-left animate-in fade-in zoom-in-95 duration-150"
+                                    >
+                                      <div className="px-3 py-1.5 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                        E-Mail-Aktionen
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => openSendActivationModal(u)}
+                                        className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 cursor-pointer transition-colors"
+                                      >
+                                        <i className="fa-solid fa-paper-plane text-emerald-600 text-[11px] w-4 text-center"></i>
+                                        <span>
+                                          {u.activationSentAt
+                                            ? "Aktivierungs-Mail erneut senden"
+                                            : "Aktivierungs-Mail senden"}
+                                        </span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => openSendResetModal(u)}
+                                        className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800 flex items-center gap-2 cursor-pointer transition-colors"
+                                      >
+                                        <i className="fa-solid fa-key text-blue-600 text-[11px] w-4 text-center"></i>
+                                        <span>Passwort-Reset-Mail senden</span>
+                                      </button>
+
+                                      <div className="my-1 border-t border-slate-100"></div>
+                                      <div className="px-3 py-1 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                        Verwaltung
+                                      </div>
+
+                                      {((u.id !== currentUser.id && u.name !== currentUser.name) ||
+                                        (currentUser.id && currentUser.id.startsWith("temp-admin-"))) &&
+                                        onActAsUser && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveActionMenuUserId(null);
+                                              onActAsUser(u);
+                                            }}
+                                            className="w-full px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer transition-colors"
+                                          >
+                                            <i className="fa-solid fa-user-secret text-emerald-600 text-[11px] w-4 text-center"></i>
+                                            <span>Als Mitglied agieren</span>
+                                          </button>
+                                        )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveActionMenuUserId(null);
+                                          handleDeleteUser(u.name);
+                                        }}
+                                        className="w-full px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer transition-colors"
+                                      >
+                                        <i className="fa-solid fa-trash text-red-600 text-[11px] w-4 text-center"></i>
+                                        <span>Mitglied löschen</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           );
@@ -7589,6 +8127,12 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     currentClubId={settings?.vereinsId || "sv-neuhausen"}
                     clubName={settings?.clubName || settings?.name || "Tennis-Club e.V."}
                     onUpdateUsers={onUpdateUsers}
+                    tenantColors={[
+                      primaryColor || settings?.primaryColor || "#1b4332",
+                      accentColor || settings?.accentColor || "#c04d2b",
+                      accentColor2 || settings?.accentColor2 || "#0f172a",
+                      accentColor3 || settings?.accentColor3 || "#ccff00",
+                    ].filter(Boolean) as string[]}
                   />
                 </div>
               )}
@@ -9897,6 +10441,351 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                 className="flex-1 py-3 bg-slate-800 hover:bg-black text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-colors border border-slate-800 cursor-pointer"
               >
                 Trotzdem neues Profil anlegen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Authentication Mail Confirmation Modal */}
+      {authMailModal && authMailModal.isOpen && (
+        <div className="fixed inset-0 bg-[#1b4332]/50 backdrop-blur-sm z-[110] flex items-center justify-center p-3 sm:p-5 font-sans overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div
+              className={`p-5 sm:p-6 border-b flex items-start justify-between gap-4 ${
+                authMailModal.type === "activation"
+                  ? "bg-emerald-50/70 border-emerald-100"
+                  : "bg-blue-50/70 border-blue-100"
+              }`}
+            >
+              <div className="flex items-center gap-3.5">
+                <div
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+                    authMailModal.type === "activation"
+                      ? "bg-emerald-600 text-white shadow-emerald-200"
+                      : "bg-blue-600 text-white shadow-blue-200"
+                  }`}
+                >
+                  <i
+                    className={`fa-solid ${
+                      authMailModal.type === "activation" ? "fa-paper-plane" : "fa-key"
+                    } text-lg`}
+                  ></i>
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                    {authMailModal.mode === "bulk"
+                      ? `Massen-Aktivierung: E-Mails an ${authMailModal.userIds?.length || 0} Mitglieder senden`
+                      : authMailModal.type === "activation"
+                      ? "Aktivierungs-Mail senden"
+                      : "Passwort-Reset-Mail senden"}
+                  </h3>
+                  <p className="text-xs text-slate-600 font-medium mt-0.5">
+                    {authMailModal.mode === "bulk"
+                      ? "Einweg-Token generieren und Einladungs-Mails mit Aktivierungs-Link zustellen."
+                      : authMailModal.type === "activation"
+                      ? "Generiert einen sicheren Einweg-Token (24h) zur erstmaligen Passwortvergabe."
+                      : "Generiert einen sicheren Reset-Token (1h) zum Zurücksetzen des Passworts."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuthMailModal(null)}
+                className="w-8 h-8 rounded-xl bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer border border-slate-200/80 shadow-2xs shrink-0"
+              >
+                <i className="fa-solid fa-xmark text-sm"></i>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
+              {/* Empfänger-Bereich Single */}
+              {authMailModal.mode === "single" && authMailModal.user && (() => {
+                const u = authMailModal.user;
+                const memberName =
+                  u.lastName || u.firstName
+                    ? `${u.lastName || ""}, ${u.firstName || ""}`.trim().replace(/^,|,$/, "")
+                    : u.name;
+                const hasValidEmail =
+                  u.email &&
+                  u.email.includes("@") &&
+                  !u.is_placeholder_email &&
+                  !u.email.endsWith("@internal.app") &&
+                  !u.email.startsWith("no-email.");
+                const isInvitedOrNeverLoggedIn = !(u.lastLogin || u.last_login || u.lastLoginAt);
+
+                return (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Empfänger
+                    </label>
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <UserAvatar user={u} size="md" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-900">{memberName}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest text-white ${
+                                u.role === Role.ADMIN ? "bg-[var(--color-accent)]" : "bg-slate-500"
+                              }`}
+                            >
+                              {u.role === Role.ADMIN ? "Admin" : "Mitglied"}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-0.5">
+                            <span>
+                              Login:{" "}
+                              <span className="font-semibold text-slate-700 font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                {u.name}
+                              </span>
+                            </span>
+                            <span>•</span>
+                            <span
+                              className={
+                                hasValidEmail ? "font-medium text-slate-700" : "text-rose-600 font-bold"
+                              }
+                            >
+                              {u.email || "[Keine E-Mail hinterlegt]"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right sm:border-l sm:border-slate-200 sm:pl-4 flex flex-col items-start sm:items-end justify-center">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                            isInvitedOrNeverLoggedIn
+                              ? "text-amber-800 bg-amber-100 border border-amber-200"
+                              : "text-emerald-800 bg-emerald-100 border border-emerald-200"
+                          }`}
+                        >
+                          <i
+                            className={`fa-solid ${
+                              isInvitedOrNeverLoggedIn ? "fa-clock" : "fa-check"
+                            } text-[9px]`}
+                          ></i>
+                          {isInvitedOrNeverLoggedIn ? "Noch nie eingeloggt / Eingeladen" : "Aktiv"}
+                        </span>
+                        {u.activationSentAt && (
+                          <span className="text-[10px] text-slate-400 mt-1 block">
+                            Zuletzt gesendet: {new Date(u.activationSentAt).toLocaleDateString("de-DE")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {!hasValidEmail && (
+                      <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex items-center gap-2.5">
+                        <i className="fa-solid fa-triangle-exclamation text-rose-600 text-sm shrink-0"></i>
+                        <span>
+                          Für dieses Mitglied ist keine gültige E-Mail-Adresse hinterlegt. Bitte pflege die
+                          Adresse vor dem Versand in den Benutzerdaten ein.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Empfänger-Bereich Bulk */}
+              {authMailModal.mode === "bulk" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Empfänger ({authMailModal.userIds?.length || 0} ausgewählt)
+                    </label>
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      Massen-Aktivierung
+                    </span>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto bg-slate-50 border border-slate-200 rounded-2xl p-2 divide-y divide-slate-100">
+                    {(authMailModal.usersList || []).map((u) => {
+                      const memberName =
+                        u.lastName || u.firstName
+                          ? `${u.lastName || ""}, ${u.firstName || ""}`.trim().replace(/^,|,$/, "")
+                          : u.name;
+                      const hasValidEmail =
+                        u.email &&
+                        u.email.includes("@") &&
+                        !u.is_placeholder_email &&
+                        !u.email.endsWith("@internal.app") &&
+                        !u.email.startsWith("no-email.");
+                      return (
+                        <div key={u.id || u.name} className="p-2 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900">{memberName}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">({u.name})</span>
+                          </div>
+                          <span
+                            className={
+                              hasValidEmail ? "text-slate-600 text-[11px]" : "text-rose-600 text-[11px] font-bold"
+                            }
+                          >
+                            {u.email || "[Keine E-Mail]"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Zugewiesene System-Vorlage */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Verwendete Vorlage & Event
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAuthMailModal((prev) =>
+                        prev ? { ...prev, previewOpen: !prev.previewOpen } : null
+                      )
+                    }
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <i
+                      className={`fa-solid ${
+                        authMailModal.previewOpen ? "fa-eye-slash" : "fa-eye"
+                      } text-[10px]`}
+                    ></i>
+                    <span>{authMailModal.previewOpen ? "Vorschau schließen" : "Vorabansicht anzeigen"}</span>
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-slate-200/80 text-slate-700 flex items-center justify-center font-bold text-xs">
+                        <i className="fa-solid fa-envelope"></i>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-slate-900">
+                            {authMailModal.activeTemplate?.name ||
+                              (authMailModal.type === "activation"
+                                ? "Standard Initiale Passwortvergabe"
+                                : "Standard Passwort zurücksetzen")}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-slate-600 bg-white border border-slate-200">
+                            System
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-medium block">
+                          Event:{" "}
+                          {authMailModal.type === "activation"
+                            ? "Initiale Passwortvergabe"
+                            : "Passwort zurücksetzen"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-xl bg-emerald-100/70 border border-emerald-200 text-emerald-900 text-xs font-bold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                      <span>Aktiv zugewiesen</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 text-xs text-slate-700 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Betreffzeile:</span>
+                    <span className="font-semibold text-slate-800 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
+                      {authMailModal.activeTemplate?.subject ||
+                        (authMailModal.type === "activation"
+                          ? `Willkommen bei ${settings.clubName || "Tennis-Club e.V."}! Bitte erstelle dein persönliches Passwort`
+                          : `Passwort zurücksetzen für dein ${settings.clubName || "Tennis-Club e.V."}-Konto`)}
+                    </span>
+                  </div>
+
+                  {/* Dynamic Token notice */}
+                  <div className="flex items-center gap-2 text-[11px] text-slate-600 bg-white p-2 rounded-xl border border-slate-200">
+                    <i className="fa-solid fa-link text-emerald-600 text-xs"></i>
+                    <span>
+                      Dynamischer Token-Link:{" "}
+                      <code className="font-mono text-emerald-800 font-bold bg-emerald-50 px-1 rounded">
+                        {authMailModal.type === "activation"
+                          ? "{{activation_link}}"
+                          : "{{password_reset_link}}"}
+                      </code>{" "}
+                      (Gültigkeit: {authMailModal.type === "activation" ? "24 Stunden" : "1 Stunde"})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Live Preview Display */}
+                {authMailModal.previewOpen && (
+                  <div className="mt-3 bg-white border border-slate-300 rounded-2xl overflow-hidden shadow-inner animate-in fade-in duration-150">
+                    <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600 font-medium">
+                      <span>Vorabansicht der E-Mail (Beispiel-Empfänger)</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">HTML & Text</span>
+                    </div>
+                    <div className="p-4 max-h-72 overflow-y-auto bg-slate-50/50">
+                      {authMailPreview?.html ? (
+                        <div
+                          className="prose prose-sm max-w-none text-slate-800"
+                          dangerouslySetInnerHTML={{ __html: authMailPreview.html }}
+                        />
+                      ) : (
+                        <div className="text-xs text-slate-600 whitespace-pre-wrap font-sans">
+                          {authMailPreview?.text || "Vorschau wird geladen..."}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 sm:p-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setAuthMailModal(null)}
+                disabled={authMailModal.loading}
+                className="w-full sm:w-auto px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-colors cursor-pointer"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSendAuthMail}
+                disabled={
+                  authMailModal.loading ||
+                  (authMailModal.mode === "single" &&
+                    (!authMailModal.user?.email ||
+                      !authMailModal.user.email.includes("@") ||
+                      authMailModal.user.is_placeholder_email ||
+                      authMailModal.user.email.endsWith("@internal.app") ||
+                      authMailModal.user.email.startsWith("no-email.")))
+                }
+                className={`w-full sm:w-auto px-6 py-2.5 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  authMailModal.type === "activation"
+                    ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
+                    : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+                }`}
+              >
+                {authMailModal.loading ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin text-sm"></i>
+                    <span>Wird versendet...</span>
+                  </>
+                ) : (
+                  <>
+                    <i
+                      className={`fa-solid ${
+                        authMailModal.type === "activation" ? "fa-paper-plane" : "fa-key"
+                      } text-sm`}
+                    ></i>
+                    <span>
+                      {authMailModal.mode === "bulk"
+                        ? `Jetzt an ${authMailModal.userIds?.length || 0} Mitglieder senden`
+                        : "Jetzt senden"}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>

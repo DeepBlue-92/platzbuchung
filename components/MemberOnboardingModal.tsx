@@ -40,12 +40,13 @@ export const MemberOnboardingModal: React.FC<MemberOnboardingModalProps> = ({
   };
 
   // Form states initialized with currentUser data
-  const [firstName, setFirstName] = useState(currentUser.firstName || "");
-  const [lastName, setLastName] = useState(currentUser.lastName || "");
-  const [gender, setGender] = useState<Gender>(currentUser.gender || "m");
-  const [birthDate, setBirthDate] = useState(currentUser.birthDate || "");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser.avatarUrl || null);
-  const [avatarIcon, setAvatarIcon] = useState<string | null>(currentUser.avatarIcon || "initials");
+  const [firstName, setFirstName] = useState(currentUser?.firstName || "");
+  const [lastName, setLastName] = useState(currentUser?.lastName || "");
+  const [gender, setGender] = useState<Gender>(currentUser?.gender || "m");
+  const [birthDate, setBirthDate] = useState(currentUser?.birthDate || "");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.avatarUrl || null);
+  const [avatarIcon, setAvatarIcon] = useState<string | null>(currentUser?.avatarIcon || "initials");
+  const [avatarColor, setAvatarColor] = useState<string | null>(currentUser?.avatarColor || null);
 
   // Password fields (only relevant if field_password === 'EDITABLE')
   const [newPassword, setNewPassword] = useState("");
@@ -161,6 +162,7 @@ export const MemberOnboardingModal: React.FC<MemberOnboardingModalProps> = ({
           ? {
               avatarUrl: avatarUrl || null,
               avatarIcon: avatarIcon || "initials",
+              avatarColor: avatarColor || null,
             }
           : {}),
         ...(fieldPassword === "EDITABLE" && newPassword
@@ -254,6 +256,8 @@ export const MemberOnboardingModal: React.FC<MemberOnboardingModalProps> = ({
                 setAvatarUrl={setAvatarUrl}
                 avatarIcon={avatarIcon}
                 setAvatarIcon={setAvatarIcon}
+                avatarColor={avatarColor}
+                setAvatarColor={setAvatarColor}
                 newPassword={newPassword}
                 setNewPassword={setNewPassword}
                 confirmPassword={confirmPassword}

@@ -47,6 +47,7 @@ export function getEmailLayoutWrapper(options: EmailWrapperOptions = {}): string
       .email-container { width: 100% !important; max-width: 100% !important; }
       .content-padding { padding: 0 !important; }
       .header-padding { padding: 20px 16px !important; }
+      .email-column { display: block !important; width: 100% !important; padding-left: 0 !important; padding-right: 0 !important; padding-bottom: 12px !important; box-sizing: border-box !important; }
     }
   </style>
 </head>

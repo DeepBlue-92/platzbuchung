@@ -16,6 +16,12 @@
         "isSuspended": { "type": "boolean" },
         "notification_settings": { "type": "object" },
         "notificationSettings": { "type": "object" },
+        "activationToken": { "type": "string" },
+        "activationTokenExpiresAt": { "type": "string" },
+        "activationSentAt": { "type": "string" },
+        "passwordResetToken": { "type": "string" },
+        "passwordResetTokenExpiresAt": { "type": "string" },
+        "passwordResetSentAt": { "type": "string" },
         "createdAt": { "type": "string" }
       },
       "required": ["id", "username", "role", "tenantId", "password"]
@@ -155,6 +161,19 @@
         "max_bonus": { "type": "number" }
       },
       "required": ["id", "effective_date", "base_points_win", "base_points_loss", "inactivity_deduction_per_week", "logistic_factor", "max_bonus"]
+    },
+    "LandingPageConfig": {
+      "title": "LandingPageConfig",
+      "description": "Club-specific landing page and navigation arrangement settings.",
+      "type": "object",
+      "properties": {
+        "is_enabled": { "type": "boolean" },
+        "nav_order": { "type": "array" },
+        "items": { "type": "array" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["is_enabled", "items"]
     }
   },
   "firestore": {
@@ -225,6 +244,10 @@
     "vereine/{vereinsId}/championships/{championshipId}": {
       "schema": { "title": "ChampionshipInstance", "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" } } },
       "description": "Championship instances and nested subcollections."
+    },
+    "vereine/{vereinsId}/settings/landing_page": {
+      "schema": { "$ref": "#/entities/LandingPageConfig" },
+      "description": "Club-specific Bento-Grid landing page content and navigation layout."
     }
   }
 }

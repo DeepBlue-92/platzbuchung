@@ -4,6 +4,9 @@ import {
   ButtonBlockConfig,
   ImageBlockConfig,
   HeaderBlockConfig,
+  ColumnsBlockConfig,
+  ColumnDefinition,
+  ColumnChildBlock,
   EmailTemplateGlobalSettings,
   EmailFontFamily,
 } from "../types/notifications";
@@ -78,6 +81,9 @@ export const VARIABLE_BADGE_MAP: Record<string, string> = {
   match_date: "Match-Datum",
   match_link: "Match-Link",
   booking_link: "Buchungs-Link",
+  activation_link: "Aktivierungs-Link",
+  password_reset_link: "Passwort-Reset-Link",
+  link_validity_hours: "Gültigkeitsdauer",
 };
 
 /**
@@ -96,6 +102,8 @@ export const BADGE_TO_VARIABLE_MAP: Record<string, string> = Object.entries(
  * Available dynamic link targets for Button blocks
  */
 export const AVAILABLE_DYNAMIC_LINKS = [
+  { key: "activation_link", label: "Aktivierungs-Link (Initiale Passwortvergabe)", description: "Generiert sicheren Token-Link {{activation_link}}" },
+  { key: "password_reset_link", label: "Passwort-Reset-Link", description: "Generiert sicheren Token-Link {{password_reset_link}}" },
   { key: "cancellation_link", label: "Stornierungs-Link", description: "Direktlink zur Stornierung / Buchungsübersicht" },
   { key: "cancellation_link", label: "Umbuchungs-Link", description: "Direktlink zur Umbuchung / Bearbeitung" },
   { key: "league_link", label: "Hobbyliga-Link", description: "Direktlink zur Hobbyliga & Pinnwand" },
@@ -114,8 +122,10 @@ export function convertBadgesToHandlebars(text: string): string {
     const escaped = cleanBadge.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     // Replace bracketed version [Badge] first
     result = result.replace(new RegExp(`\\[\\s*${escaped}\\s*\\]`, "gi"), `{{{${key}}}}`);
+    // Also replace bracketed key [key] e.g. [activation_link]
+    result = result.replace(new RegExp(`\\[\\s*${key}\\s*\\]`, "gi"), `{{{${key}}}}`);
     // Replace standalone badge token if it's hyphenated or distinct
-    if (cleanBadge.includes("-") || ["club_name", "players"].includes(key)) {
+    if (cleanBadge.includes("-") || ["club_name", "players", "link_validity_hours", "activation_link", "password_reset_link"].includes(key)) {
       result = result.replace(new RegExp(`\\b${escaped}\\b`, "gi"), `{{{${key}}}}`);
     }
   }
@@ -340,35 +350,131 @@ export function compileSingleBlockHtml(
 </table>`;
     }
 
+    case "columns": {
+      const cfg = block.config as ColumnsBlockConfig;
+      const columns = cfg.columns || [];
+      const gap = 0; // Fix auf 0px festgesetzt
+      const paddingY = cfg.paddingY !== undefined ? cfg.paddingY : 12;
+      const paddingX = cfg.paddingX !== undefined ? cfg.paddingX : 0;
+      const bgColor = cfg.backgroundColor || "transparent";
+      const vAlign = "middle"; // Immer fest vertikal zentriert
+
+      const count = columns.length;
+      if (count === 0) return "";
+
+      const bgImgAttr = cfg.backgroundImageUrl ? `background="${cfg.backgroundImageUrl}"` : "";
+      const bgImgCss = cfg.backgroundImageUrl
+        ? `background-image: url('${cfg.backgroundImageUrl}'); background-size: cover; background-position: center; background-repeat: no-repeat;`
+        : "";
+
+      const colTds = columns.map((col, idx) => {
+        const childBlocksHtml = (col.blocks || []).map((cb) => {
+          if (cb.type === "image") {
+            const asTBlock: TemplateBlock = {
+              id: cb.id,
+              type: cb.type,
+              config: { ...cb.config, align: "center" },
+            };
+            return compileSingleBlockHtml(asTBlock, globalFont);
+          }
+
+          if (cb.type === "text") {
+            const txt = (cb.config as TextBlockConfig).content || "";
+            const lines = txt.split("\n");
+            let titleLine = lines[0] || "";
+            let subtitleLine = lines.slice(1).join("\n") || "";
+            if (titleLine.trim() === "[Vereinsname]") titleLine = "";
+            if (subtitleLine.trim() === "Offizielle Mitteilung") subtitleLine = "";
+
+            const titleFont = getFontFamilyCss(cfg.titleFontFamily || globalFont);
+            const titleSize = cfg.titleFontSize || 18;
+            const titleColor = cfg.titleColor || "#0f172a";
+
+            const subFont = getFontFamilyCss(cfg.subtitleFontFamily || globalFont);
+            const subSize = cfg.subtitleFontSize || 13;
+            const subColor = cfg.subtitleColor || "#64748b";
+
+            const titlePart = titleLine
+              ? `<div style="font-family: ${titleFont}; font-size: ${titleSize}px; font-weight: 800; color: ${titleColor}; line-height: 1.3; margin: 0; padding: 0;">${convertBadgesToHandlebars(titleLine)}</div>`
+              : "";
+            const subPart = subtitleLine
+              ? `<div style="font-family: ${subFont}; font-size: ${subSize}px; font-weight: 500; color: ${subColor}; line-height: 1.4; margin-top: 4px; padding: 0;">${convertBadgesToHandlebars(subtitleLine)}</div>`
+              : "";
+
+            return `<div style="padding: 0; margin: 0;">${titlePart}${subPart}</div>`;
+          }
+
+          const asTBlock: TemplateBlock = {
+            id: cb.id,
+            type: cb.type,
+            config: cb.config,
+          };
+          return compileSingleBlockHtml(asTBlock, globalFont);
+        }).join("\n");
+
+        return `<td class="email-column" width="${col.widthPercent}%" valign="${vAlign}" align="${idx === 0 ? "center" : "left"}" style="width: ${col.widthPercent}%; padding-left: 0px; padding-right: 0px; vertical-align: ${vAlign}; text-align: ${idx === 0 ? "center" : "left"}; box-sizing: border-box;">
+          ${childBlocksHtml}
+        </td>`;
+      }).join("\n");
+
+      return `<!-- Block: Kopfzeile (Wappen/Logo links, Text rechts, Gap: 0px) -->
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" ${bgImgAttr} style="background-color: ${bgColor}; ${bgImgCss} border-collapse: collapse; box-sizing: border-box;">
+  <tr>
+    <td style="padding: ${paddingY}px ${paddingX}px; box-sizing: border-box;">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; table-layout: fixed; width: 100%; box-sizing: border-box;">
+        <tr>
+          ${colTds}
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+    }
+
     case "header": {
       const cfg = block.config as HeaderBlockConfig;
       const fontCss = getFontFamilyCss(cfg.fontFamily || globalFont);
-      const fontSize = cfg.fontSize || 20;
-      const subtitleFontSize = cfg.subtitleFontSize || 13;
-      const lineHeight = cfg.lineHeight || 1.3;
-      const textAlign = cfg.textAlign || "center";
-      const paddingY = cfg.paddingY !== undefined ? cfg.paddingY : 20;
-      const paddingX = cfg.paddingX !== undefined ? cfg.paddingX : 24;
-      const color = cfg.color || "#0f172a";
-      const subtitleColor = cfg.subtitleColor || "#64748b";
-      const bgColor = cfg.backgroundColor || "#ffffff";
+      const fontSize = cfg.fontSize || 18;
+      const lineHeight = cfg.lineHeight || 1.4;
+      const textAlign = cfg.textAlign || "left";
+      const textColor = cfg.textColor || cfg.color || "#0f172a";
+      const paddingY = cfg.paddingY !== undefined ? cfg.paddingY : 16;
+      const paddingX = cfg.paddingX !== undefined ? cfg.paddingX : 0;
+      const bgColor = cfg.backgroundColor || "transparent";
+      const logoWidth = cfg.logoWidth || 72;
 
-      const titleHtml = convertBadgesToHandlebars(cfg.title || "");
-      const subtitleHtml = cfg.subtitle ? convertBadgesToHandlebars(cfg.subtitle) : "";
+      // Raw text content with fallbacks
+      const rawText =
+        cfg.textContent !== undefined
+          ? cfg.textContent
+          : cfg.title
+          ? cfg.subtitle
+            ? `${cfg.title}\n${cfg.subtitle}`
+            : cfg.title
+          : "";
+
+      const textHtml = convertBadgesToHandlebars(rawText).replace(/\n/g, "<br/>");
 
       const logoImgTag = cfg.logoUrl
-        ? `<div style="margin-bottom: 12px; text-align: ${textAlign};"><img src="${cfg.logoUrl}" alt="${cfg.logoAlt || 'Logo'}" height="${cfg.logoHeight || 44}" border="0" style="display: inline-block; max-height: ${cfg.logoHeight || 44}px; height: auto; max-width: 100%; border: 0; outline: none; text-decoration: none;" /></div>`
+        ? `<img src="${cfg.logoUrl}" alt="${cfg.logoAlt || 'Logo'}" width="${logoWidth}" height="${logoWidth}" border="0" style="display: block; width: ${logoWidth}px; max-width: ${logoWidth}px; height: ${logoWidth}px; max-height: ${logoWidth}px; object-fit: contain; border: 0; outline: none; text-decoration: none;" />`
         : "";
 
-      return `<!-- Block: Kopfleiste / Header -->
-<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${bgColor}; border-collapse: collapse;">
+      return `<!-- Block: Kopfzeile (Quadratisches Logo links, Text rechts - vertikal zentriert) -->
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${bgColor}; border-collapse: collapse; box-sizing: border-box;">
   <tr>
-    <td align="${textAlign}" style="padding: ${paddingY}px ${paddingX}px; font-family: ${fontCss}; text-align: ${textAlign};">
-      ${logoImgTag}
-      <h1 style="margin: 0; padding: 0; font-family: ${fontCss}; font-size: ${fontSize}px; line-height: ${lineHeight}; font-weight: 800; color: ${color}; text-align: ${textAlign};">
-        ${titleHtml}
-      </h1>
-      ${subtitleHtml ? `<p style="margin: 6px 0 0 0; padding: 0; font-family: ${fontCss}; font-size: ${subtitleFontSize}px; line-height: 1.4; color: ${subtitleColor}; text-align: ${textAlign};">${subtitleHtml}</p>` : ""}
+    <td style="padding: ${paddingY}px ${paddingX}px; box-sizing: border-box;">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse: collapse; width: 100%; box-sizing: border-box;">
+        <tr>
+          <td valign="middle" align="left" style="width: ${logoWidth}px; max-width: ${logoWidth}px; vertical-align: middle; padding-right: 16px; box-sizing: border-box;">
+            ${logoImgTag || `<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="${logoWidth}" height="${logoWidth}" style="width: ${logoWidth}px; height: ${logoWidth}px; border: 1px dashed #cbd5e1; border-radius: 6px; box-sizing: border-box;"><tr><td></td></tr></table>`}
+          </td>
+          <td valign="middle" align="${textAlign}" style="vertical-align: middle; font-family: ${fontCss}; font-size: ${fontSize}px; line-height: ${lineHeight}; color: ${textColor}; text-align: ${textAlign}; box-sizing: border-box;">
+            <div style="font-family: ${fontCss}; font-size: ${fontSize}px; line-height: ${lineHeight}; color: ${textColor}; text-align: ${textAlign}; margin: 0; padding: 0;">
+              ${textHtml}
+            </div>
+          </td>
+        </tr>
+      </table>
     </td>
   </tr>
 </table>`;
@@ -395,6 +501,13 @@ export function compileBlocksToEmailHtml(
   let i = 0;
   while (i < blocks.length) {
     const current = blocks[i];
+
+    // Header block is strictly full-width across 100%
+    if (current.type === "header" || current.columnSpan === "full" || !current.columnSpan) {
+      outputParts.push(compileSingleBlockHtml(current, globalFont));
+      i += 1;
+      continue;
+    }
 
     if (current.columnSpan === "third") {
       const next1 = blocks[i + 1];
@@ -491,33 +604,304 @@ export function generateBlockId(): string {
 }
 
 /**
- * Factory for creating a new Header block (Kopfleiste)
+ * Automatically and losslessly converts a legacy "header" block into a modern 2-column block
+ */
+export function migrateHeaderToColumns(block: TemplateBlock): TemplateBlock {
+  if (block.type !== "header") return block;
+  const cfg = block.config as HeaderBlockConfig;
+
+  const leftBlocks: ColumnChildBlock[] = [
+    {
+      id: generateBlockId(),
+      type: "image",
+      config: {
+        imageUrl: cfg.logoUrl || "",
+        altText: cfg.logoAlt || "Vereins-Logo",
+        widthUnit: "%",
+        widthValue: 100,
+        align: (cfg.textAlign === "right" ? "right" : "left") as "left" | "center" | "right",
+        paddingY: 0,
+        paddingX: 0,
+      } as ImageBlockConfig,
+    },
+  ];
+
+  const titleText = (cfg.title || "[Vereinsname]").trim();
+  const subtitleText = (cfg.subtitle || "").trim();
+  const textContent = subtitleText ? `${titleText}\n${subtitleText}` : titleText;
+
+  const rightBlocks: ColumnChildBlock[] = [
+    {
+      id: generateBlockId(),
+      type: "text",
+      config: {
+        content: textContent,
+        fontFamily: cfg.fontFamily || "sans",
+        fontSize: cfg.fontSize || 18,
+        lineHeight: cfg.lineHeight || 1.3,
+        textAlign: cfg.textAlign || "left",
+        paddingY: 0,
+        paddingX: 0,
+        color: cfg.color || "#0f172a",
+        backgroundColor: "transparent",
+      } as TextBlockConfig,
+    },
+  ];
+
+  return {
+    id: block.id,
+    type: "columns",
+    columnSpan: "full",
+    config: {
+      columns: [
+        {
+          id: generateBlockId(),
+          widthPercent: 25,
+          blocks: leftBlocks,
+        },
+        {
+          id: generateBlockId(),
+          widthPercent: 75,
+          blocks: rightBlocks,
+        },
+      ],
+      gap: 16,
+      paddingY: cfg.paddingY !== undefined ? cfg.paddingY : 16,
+      paddingX: cfg.paddingX !== undefined ? cfg.paddingX : 0,
+      backgroundColor: cfg.backgroundColor || "transparent",
+      verticalAlign: "middle",
+    } as ColumnsBlockConfig,
+  };
+}
+
+/**
+ * Factory for creating a new Multi-Column block (Spalten)
+ */
+export function createColumnsBlock(
+  preset: "50-50" | "25-75" | "33-67" | "75-25" | "33-33-33" | "25-50-25" = "25-75"
+): TemplateBlock {
+  let columns: ColumnDefinition[];
+
+  if (preset === "25-75") {
+    columns = [
+      {
+        id: generateBlockId(),
+        widthPercent: 25,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "image",
+            config: {
+              imageUrl: "",
+              altText: "Wappen/Logo",
+              widthUnit: "%",
+              widthValue: 100,
+              align: "center",
+              paddingY: 0,
+              paddingX: 0,
+            } as ImageBlockConfig,
+          },
+        ],
+      },
+      {
+        id: generateBlockId(),
+        widthPercent: 75,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: {
+              content: "",
+              fontFamily: "sans",
+              fontSize: 18,
+              lineHeight: 1.3,
+              textAlign: "left",
+              paddingY: 0,
+              paddingX: 0,
+              color: "#0f172a",
+              backgroundColor: "transparent",
+            } as TextBlockConfig,
+          },
+        ],
+      },
+    ];
+  } else if (preset === "33-33-33") {
+    columns = [
+      {
+        id: generateBlockId(),
+        widthPercent: 33.33,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: {
+              content: "Spalte 1",
+              fontSize: 14,
+              lineHeight: 1.5,
+              paddingY: 8,
+              paddingX: 8,
+              color: "#334155",
+            } as TextBlockConfig,
+          },
+        ],
+      },
+      {
+        id: generateBlockId(),
+        widthPercent: 33.33,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: {
+              content: "Spalte 2",
+              fontSize: 14,
+              lineHeight: 1.5,
+              paddingY: 8,
+              paddingX: 8,
+              color: "#334155",
+            } as TextBlockConfig,
+          },
+        ],
+      },
+      {
+        id: generateBlockId(),
+        widthPercent: 33.34,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: {
+              content: "Spalte 3",
+              fontSize: 14,
+              lineHeight: 1.5,
+              paddingY: 8,
+              paddingX: 8,
+              color: "#334155",
+            } as TextBlockConfig,
+          },
+        ],
+      },
+    ];
+  } else if (preset === "25-50-25") {
+    columns = [
+      {
+        id: generateBlockId(),
+        widthPercent: 25,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: { content: "Spalte 1", fontSize: 14, paddingY: 8, paddingX: 8, color: "#334155" } as TextBlockConfig,
+          },
+        ],
+      },
+      {
+        id: generateBlockId(),
+        widthPercent: 50,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: { content: "Spalte 2", fontSize: 14, paddingY: 8, paddingX: 8, color: "#334155" } as TextBlockConfig,
+          },
+        ],
+      },
+      {
+        id: generateBlockId(),
+        widthPercent: 25,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: { content: "Spalte 3", fontSize: 14, paddingY: 8, paddingX: 8, color: "#334155" } as TextBlockConfig,
+          },
+        ],
+      },
+    ];
+  } else {
+    // 50-50, 33-67, 75-25
+    const w1 = preset === "33-67" ? 33.33 : preset === "75-25" ? 75 : 50;
+    const w2 = preset === "33-67" ? 66.67 : preset === "75-25" ? 25 : 50;
+    columns = [
+      {
+        id: generateBlockId(),
+        widthPercent: w1,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: {
+              content: "Spalte links...",
+              fontSize: 14,
+              lineHeight: 1.5,
+              paddingY: 8,
+              paddingX: 8,
+              color: "#334155",
+            } as TextBlockConfig,
+          },
+        ],
+      },
+      {
+        id: generateBlockId(),
+        widthPercent: w2,
+        blocks: [
+          {
+            id: generateBlockId(),
+            type: "text",
+            config: {
+              content: "Spalte rechts...",
+              fontSize: 14,
+              lineHeight: 1.5,
+              paddingY: 8,
+              paddingX: 8,
+              color: "#334155",
+            } as TextBlockConfig,
+          },
+        ],
+      },
+    ];
+  }
+
+  return {
+    id: generateBlockId(),
+    type: "columns",
+    columnSpan: "full",
+    config: {
+      columns,
+      gap: 0,
+      paddingY: 12,
+      paddingX: 0,
+      backgroundColor: "transparent",
+      verticalAlign: "middle",
+    } as ColumnsBlockConfig,
+  };
+}
+
+/**
+ * Factory for creating a new Header block (Kopfzeile)
+ * 2-Spalten-Layout: Quadratisches Logo links, frei formatierbarer Text rechts (vertikal zentriert, 16px Gap)
  */
 export function createHeaderBlock(
-  title?: string,
-  subtitle?: string,
-  columnSpan: "full" | "half" | "third" = "full"
+  initialText?: string,
+  initialLogoUrl?: string
 ): TemplateBlock {
   return {
     id: generateBlockId(),
     type: "header",
-    columnSpan,
+    columnSpan: "full",
     config: {
-      logoUrl: "",
-      logoAlt: "Vereins-Logo",
-      logoHeight: 44,
-      title: title || "[Vereinsname]",
-      subtitle: subtitle || "Offizielle Benachrichtigung & Reservierung",
-      fontFamily: "sans",
-      fontSize: 20,
-      subtitleFontSize: 13,
-      lineHeight: 1.3,
-      textAlign: "center",
-      paddingY: 20,
-      paddingX: 24,
-      color: "#0f172a",
-      subtitleColor: "#64748b",
-      backgroundColor: "#f8fafc",
+      logoUrl: initialLogoUrl || "",
+      logoAlt: "Wappen/Logo",
+      logoWidth: 72,
+      textContent: initialText || "",
+      fontFamily: "system-sans",
+      fontSize: 18,
+      lineHeight: 1.4,
+      textAlign: "left",
+      textColor: "#0f172a",
+      paddingY: 16,
+      paddingX: 0,
+      backgroundColor: "transparent",
     } as HeaderBlockConfig,
   };
 }

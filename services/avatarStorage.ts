@@ -393,3 +393,22 @@ export const AVATAR_ICON_OPTIONS: AvatarIconOption[] = [
     bgClass: "bg-pink-100",
   },
 ];
+
+export interface AvatarColorPreset {
+  name: string;
+  value: string;
+}
+
+export const AVATAR_COLOR_PRESETS: AvatarColorPreset[] = [
+  { name: "Clubgrün", value: "#1b4332" },
+  { name: "Smaragd", value: "#059669" },
+  { name: "Tennis-Lime", value: "#65a30d" },
+  { name: "Sonnengelb", value: "#d97706" },
+  { name: "Sandplatz-Orange", value: "#ea580c" },
+  { name: "Kaminrot", value: "#dc2626" },
+  { name: "Magenta-Pink", value: "#db2777" },
+  { name: "Violett", value: "#7c3aed" },
+  { name: "Königsblau", value: "#2563eb" },
+  { name: "Himmelblau", value: "#0284c7" },
+];
+

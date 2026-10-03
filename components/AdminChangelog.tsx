@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { listenToSystemUpdates, ClubSettings } from "../services/db";
 import { RichTextRenderer } from "./RichText";
 

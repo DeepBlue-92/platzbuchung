@@ -30,6 +30,7 @@ export function getDefaultTemplateLibrary(): EmailTemplate[] {
       id: "tmpl_default_reservation_confirmed",
       name: "Standard Buchungsbestätigung",
       eventType: "RESERVATION_CONFIRMED",
+      is_system_template: true,
       createdAt: new Date().toISOString(),
       deletedAt: null,
     },
@@ -38,6 +39,7 @@ export function getDefaultTemplateLibrary(): EmailTemplate[] {
       id: "tmpl_default_reservation_cancelled",
       name: "Standard Buchungsstornierung",
       eventType: "RESERVATION_CANCELLED",
+      is_system_template: true,
       createdAt: new Date().toISOString(),
       deletedAt: null,
     },
@@ -46,6 +48,7 @@ export function getDefaultTemplateLibrary(): EmailTemplate[] {
       id: "tmpl_default_reservation_modified",
       name: "Standard Buchungsänderung",
       eventType: "RESERVATION_MODIFIED",
+      is_system_template: true,
       createdAt: new Date().toISOString(),
       deletedAt: null,
     },
@@ -54,6 +57,7 @@ export function getDefaultTemplateLibrary(): EmailTemplate[] {
       id: "tmpl_default_hobbyliga_new_post",
       name: "Standard Hobbyliga-Post",
       eventType: "HOBBYLIGA_NEW_POST",
+      is_system_template: true,
       createdAt: new Date().toISOString(),
       deletedAt: null,
     },
@@ -62,6 +66,25 @@ export function getDefaultTemplateLibrary(): EmailTemplate[] {
       id: "tmpl_default_match_result_submitted",
       name: "Standard Match-Ergebnis",
       eventType: "MATCH_RESULT_SUBMITTED",
+      is_system_template: true,
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+    },
+    {
+      ...DEFAULT_EMAIL_TEMPLATES.USER_ACTIVATION,
+      id: "tmpl_default_user_activation",
+      name: "Standard Initiale Passwortvergabe",
+      eventType: "USER_ACTIVATION",
+      is_system_template: true,
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+    },
+    {
+      ...DEFAULT_EMAIL_TEMPLATES.PASSWORD_RESET,
+      id: "tmpl_default_password_reset",
+      name: "Standard Passwort zurücksetzen",
+      eventType: "PASSWORD_RESET",
+      is_system_template: true,
       createdAt: new Date().toISOString(),
       deletedAt: null,
     },
@@ -79,6 +102,8 @@ export function getDefaultEventAssignments(): EmailTemplateAssignments {
     RESERVATION_MODIFIED: "tmpl_default_reservation_modified",
     HOBBYLIGA_NEW_POST: "tmpl_default_hobbyliga_new_post",
     MATCH_RESULT_SUBMITTED: "tmpl_default_match_result_submitted",
+    USER_ACTIVATION: "tmpl_default_user_activation",
+    PASSWORD_RESET: "tmpl_default_password_reset",
   };
 }
 
@@ -255,6 +280,41 @@ export async function loadClubEmailTemplatesData(
 
   // 4. Filter out any soft-deleted templates older than 30 days
   const filteredTemplates = templates.filter((t) => !isOlderThan30Days(t.deletedAt));
+
+  // Ensure system templates exist for USER_ACTIVATION and PASSWORD_RESET even in pre-existing club data
+  const hasUserActivation = filteredTemplates.some((t) => t.eventType === "USER_ACTIVATION" && !t.deletedAt);
+  if (!hasUserActivation && DEFAULT_EMAIL_TEMPLATES.USER_ACTIVATION) {
+    const actTemplate: EmailTemplate = {
+      ...DEFAULT_EMAIL_TEMPLATES.USER_ACTIVATION,
+      id: "tmpl_default_user_activation",
+      name: "Standard Initiale Passwortvergabe",
+      eventType: "USER_ACTIVATION",
+      is_system_template: true,
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+    };
+    filteredTemplates.push(actTemplate);
+    if (!assignments.USER_ACTIVATION) {
+      assignments.USER_ACTIVATION = actTemplate.id;
+    }
+  }
+
+  const hasPasswordReset = filteredTemplates.some((t) => t.eventType === "PASSWORD_RESET" && !t.deletedAt);
+  if (!hasPasswordReset && DEFAULT_EMAIL_TEMPLATES.PASSWORD_RESET) {
+    const rstTemplate: EmailTemplate = {
+      ...DEFAULT_EMAIL_TEMPLATES.PASSWORD_RESET,
+      id: "tmpl_default_password_reset",
+      name: "Standard Passwort zurücksetzen",
+      eventType: "PASSWORD_RESET",
+      is_system_template: true,
+      createdAt: new Date().toISOString(),
+      deletedAt: null,
+    };
+    filteredTemplates.push(rstTemplate);
+    if (!assignments.PASSWORD_RESET) {
+      assignments.PASSWORD_RESET = rstTemplate.id;
+    }
+  }
 
   // 5. Ensure each known event type has an active assignment if templates exist
   for (const def of NOTIFICATION_EVENT_DEFINITIONS) {

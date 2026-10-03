@@ -334,29 +334,129 @@ export async function loadNotificationDefaultsApi(
 }
 
 /**
- * Saves default notification settings for new users.
+ * Sends initial account activation email with secure one-time token to a user.
  */
-export async function saveNotificationDefaultsApi(
-  vereinsId: string,
-  defaults: any
-): Promise<boolean> {
+export async function sendUserActivationApi(
+  userId: string,
+  options: { vereinsId?: string; clubName?: string; user?: any } = {}
+): Promise<{ success: boolean; message: string; sentAt?: string; mailResult?: any; error?: string }> {
   try {
-    const { updateClubDefaultNotificationSettings } = await import("./db");
-    await updateClubDefaultNotificationSettings(vereinsId, defaults);
-    return true;
-  } catch (clientErr) {
-    console.warn("Direct Firestore update failed, trying server endpoint:", clientErr);
-    try {
-      const res = await fetch("/api/notifications/defaults", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vereinsId, defaults }),
-      });
-      return res.ok;
-    } catch (err) {
-      console.warn("Could not save notification defaults via API:", err);
-      return false;
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/send-activation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vereinsId: options.vereinsId || "sv-neuhausen",
+        clubName: options.clubName || "Tennis-Club e.V.",
+        user: options.user,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        message: data.message || `Fehler beim Versenden der Aktivierungs-E-Mail (Status ${res.status}).`,
+        error: data.error,
+      };
     }
+
+    return data;
+  } catch (err: any) {
+    console.error("sendUserActivationApi error:", err);
+    return {
+      success: false,
+      message: err.message || "Netzwerkfehler beim Versenden der Aktivierungs-E-Mail.",
+      error: "NETWORK_ERROR",
+    };
   }
 }
+
+/**
+ * Sends password reset email with secure one-time token to an active user.
+ */
+export async function sendUserPasswordResetApi(
+  userId: string,
+  options: { vereinsId?: string; clubName?: string; user?: any } = {}
+): Promise<{ success: boolean; message: string; sentAt?: string; mailResult?: any; error?: string }> {
+  try {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/send-password-reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vereinsId: options.vereinsId || "sv-neuhausen",
+        clubName: options.clubName || "Tennis-Club e.V.",
+        user: options.user,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        message: data.message || `Fehler beim Versenden der Passwort-Reset-E-Mail (Status ${res.status}).`,
+        error: data.error,
+      };
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error("sendUserPasswordResetApi error:", err);
+    return {
+      success: false,
+      message: err.message || "Netzwerkfehler beim Versenden der Passwort-Reset-E-Mail.",
+      error: "NETWORK_ERROR",
+    };
+  }
+}
+
+/**
+ * Bulk sends activation emails to multiple selected users.
+ */
+export async function bulkSendUserActivationApi(
+  userIds: string[],
+  options: { vereinsId?: string; clubName?: string; users?: Record<string, any> } = {}
+): Promise<{
+  success: boolean;
+  sentCount: number;
+  failedCount: number;
+  skippedUsers: any[];
+  updatedTimestamps?: Record<string, string>;
+  message: string;
+}> {
+  try {
+    const res = await fetch("/api/admin/users/bulk-send-activation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userIds,
+        vereinsId: options.vereinsId || "sv-neuhausen",
+        clubName: options.clubName || "Tennis-Club e.V.",
+        users: options.users,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        sentCount: data.sentCount || 0,
+        failedCount: data.failedCount || userIds.length,
+        skippedUsers: data.skippedUsers || [],
+        message: data.message || `Fehler beim Massenversand (Status ${res.status}).`,
+      };
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error("bulkSendUserActivationApi error:", err);
+    return {
+      success: false,
+      sentCount: 0,
+      failedCount: userIds.length,
+      skippedUsers: [],
+      message: err.message || "Netzwerkfehler beim Massenversand der Aktivierungs-Mails.",
+    };
+  }
+}
+
 

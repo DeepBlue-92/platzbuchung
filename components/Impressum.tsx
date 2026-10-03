@@ -8,7 +8,7 @@ interface ImpressumProps {
 
 const Impressum: React.FC<ImpressumProps> = ({ onBack, impressumText }) => {
   return (
-    <div className="flex flex-col h-full lg:relative lg:inset-auto lg:z-auto lg:bg-transparent lg:max-w-4xl lg:mx-auto lg:w-full lg:animate-in lg:fade-in lg:slide-in-from-bottom-4 lg:duration-500">
+    <div className="flex flex-col h-full lg:relative lg:inset-auto lg:z-auto lg:bg-transparent lg:max-w-[1600px] lg:mx-auto lg:w-full lg:px-3 sm:lg:px-4 lg:py-4 lg:animate-in lg:fade-in lg:slide-in-from-bottom-4 lg:duration-500">
       
 
       <div className="flex-1 overflow-y-auto lg:overflow-visible lg:flex-none">

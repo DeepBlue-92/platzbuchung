@@ -335,7 +335,7 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow lg:animate-in lg:fade-in lg:duration-500 min-h-0">
       {/* ======================================================== */}
       {/* BENTO-CARD 1: Globaler Steuerungs-Header (Oben)          */}
       {/* ======================================================== */}

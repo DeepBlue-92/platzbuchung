@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useMemo } from "react";
 import {
   Type,
   MousePointerClick,
@@ -14,10 +14,10 @@ import {
   Minus,
   Plus,
   Palette,
-  Edit3,
   Columns2,
   LayoutTemplate,
   X,
+  Trash2,
 } from "lucide-react";
 import {
   TemplateBlock,
@@ -33,34 +33,59 @@ import {
   AVAILABLE_DYNAMIC_LINKS,
 } from "../../../services/blockTemplateCompiler";
 import { AVAILABLE_TEMPLATE_VARIABLES } from "../../../services/notificationTemplates";
+import { ColumnsInspector } from "./ColumnsInspector";
+import { HeaderInspector } from "./HeaderInspector";
 
 interface InspectorPanelProps {
   selectedBlock: TemplateBlock | null;
   onUpdateBlock: (updated: TemplateBlock) => void;
   onDeselect: () => void;
+  onDeleteBlock?: () => void;
   draftSubject: string;
   onChangeSubject: (subject: string) => void;
   globalSettings: EmailTemplateGlobalSettings;
   onChangeGlobalSettings: (settings: EmailTemplateGlobalSettings) => void;
   currentEventDef?: NotificationEventDefinition;
   totalBlocksCount: number;
+  tenantColors?: string[];
 }
 
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   selectedBlock,
   onUpdateBlock,
   onDeselect,
+  onDeleteBlock,
   draftSubject,
   onChangeSubject,
   globalSettings,
   onChangeGlobalSettings,
   currentEventDef,
   totalBlocksCount,
+  tenantColors,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const textInputRef = useRef<HTMLTextAreaElement>(null);
-  const subjectInputRef = useRef<HTMLInputElement>(null);
+
+  // Dynamic color palette: Always includes white (#ffffff), black (#000000), plus tenant branding colors from admin menu
+  const defaultColors = useMemo(() => {
+    const list = ["#ffffff", "#000000", ...(tenantColors || [])];
+    if (!tenantColors || tenantColors.length === 0) {
+      list.push("#1b4332", "#c04d2b", "#0f172a", "#ccff00");
+    }
+    const seen = new Set<string>();
+    const res: string[] = [];
+    for (const c of list) {
+      if (c && typeof c === "string") {
+        const lower = c.trim().toLowerCase();
+        if (lower.startsWith("#") && !seen.has(lower) && lower !== "transparent") {
+          seen.add(lower);
+          res.push(c.trim());
+        }
+      }
+    }
+    return res;
+  }, [tenantColors]);
 
   // Helper for Stepper value adjustment
   const adjustValue = (
@@ -93,81 +118,107 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Insert variable badge into header title
-  const handleInsertVariableInHeaderTitle = (badgeText: string) => {
-    if (!selectedBlock || selectedBlock.type !== "header") return;
-    const cfg = selectedBlock.config as HeaderBlockConfig;
-    const current = cfg.title || "";
-    onUpdateBlock({
-      ...selectedBlock,
-      config: { ...cfg, title: `${current} ${badgeText}`.trim() },
-    });
-  };
+  // Insert variable badge at cursor position of focused input or into appropriate active block field
+  const handleInsertVariableGlobally = (badgeText: string) => {
+    const activeEl = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
+    const isInputActive =
+      activeEl &&
+      (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
 
-  // Insert variable badge into header subtitle
-  const handleInsertVariableInHeaderSubtitle = (badgeText: string) => {
-    if (!selectedBlock || selectedBlock.type !== "header") return;
-    const cfg = selectedBlock.config as HeaderBlockConfig;
-    const current = cfg.subtitle || "";
-    onUpdateBlock({
-      ...selectedBlock,
-      config: { ...cfg, subtitle: `${current} ${badgeText}`.trim() },
-    });
-  };
+    if (isInputActive && activeEl) {
+      const start = activeEl.selectionStart ?? activeEl.value.length;
+      const end = activeEl.selectionEnd ?? activeEl.value.length;
+      const prevVal = activeEl.value;
+      const nextVal = prevVal.substring(0, start) + badgeText + prevVal.substring(end);
+      const field = activeEl.getAttribute("data-field");
 
-  // Insert variable into subject line
-  const handleInsertVariableInSubject = (badgeText: string) => {
-    const input = subjectInputRef.current;
-    if (!input) {
-      onChangeSubject(`${draftSubject} ${badgeText}`.trim());
-      return;
-    }
-    const start = input.selectionStart ?? input.value.length;
-    const end = input.selectionEnd ?? input.value.length;
-    const nextText =
-      draftSubject.substring(0, start) + badgeText + draftSubject.substring(end);
-    onChangeSubject(nextText);
-    setTimeout(() => {
-      input.focus();
-      input.setSelectionRange(start + badgeText.length, start + badgeText.length);
-    }, 0);
-  };
-
-  // Insert variable badge into text block
-  const handleInsertVariableInText = (badgeText: string) => {
-    if (!selectedBlock || selectedBlock.type !== "text") return;
-    const cfg = selectedBlock.config as TextBlockConfig;
-    const currentContent = cfg.content || "";
-
-    // Find active canvas textarea or any textarea currently present
-    const activeTextarea = (
-      document.activeElement?.tagName === "TEXTAREA"
-        ? document.activeElement
-        : document.querySelector("textarea")
-    ) as HTMLTextAreaElement | null;
-
-    if (activeTextarea) {
-      const start = activeTextarea.selectionStart ?? currentContent.length;
-      const end = activeTextarea.selectionEnd ?? currentContent.length;
-      const nextContent =
-        currentContent.substring(0, start) + badgeText + currentContent.substring(end);
-
-      onUpdateBlock({
-        ...selectedBlock,
-        config: { ...cfg, content: nextContent },
-      });
+      if (field === "subject") {
+        onChangeSubject(nextVal);
+      } else if (
+        (field === "header-text" || field === "header-title") &&
+        selectedBlock &&
+        selectedBlock.type === "header"
+      ) {
+        onUpdateBlock({
+          ...selectedBlock,
+          config: {
+            ...selectedBlock.config,
+            textContent: nextVal,
+            title: undefined,
+            subtitle: undefined,
+          },
+        });
+      } else if (field === "header-subtitle" && selectedBlock && selectedBlock.type === "header") {
+        onUpdateBlock({
+          ...selectedBlock,
+          config: { ...selectedBlock.config, subtitle: nextVal },
+        });
+      } else if (field === "text-content" && selectedBlock && selectedBlock.type === "text") {
+        onUpdateBlock({
+          ...selectedBlock,
+          config: { ...selectedBlock.config, content: nextVal },
+        });
+      } else if (field === "button-label" && selectedBlock && selectedBlock.type === "button") {
+        onUpdateBlock({
+          ...selectedBlock,
+          config: { ...selectedBlock.config, label: nextVal },
+        });
+      } else {
+        // Fallback: trigger input event on element
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+          activeEl.tagName === "INPUT" ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype,
+          "value"
+        )?.set;
+        if (nativeSetter) {
+          nativeSetter.call(activeEl, nextVal);
+          activeEl.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      }
 
       setTimeout(() => {
-        activeTextarea.focus();
-        activeTextarea.setSelectionRange(start + badgeText.length, start + badgeText.length);
-      }, 0);
+        activeEl.focus();
+        activeEl.setSelectionRange(start + badgeText.length, start + badgeText.length);
+      }, 10);
       return;
     }
 
-    onUpdateBlock({
-      ...selectedBlock,
-      config: { ...cfg, content: `${currentContent} ${badgeText}`.trim() },
-    });
+    // Fallback if no input was actively focused
+    if (selectedBlock) {
+      if (selectedBlock.type === "header") {
+        const cfg = selectedBlock.config as HeaderBlockConfig;
+        const currentText =
+          cfg.textContent !== undefined
+            ? cfg.textContent
+            : cfg.title
+            ? cfg.subtitle
+              ? `${cfg.title}\n${cfg.subtitle}`
+              : cfg.title
+            : "[Vereinsname]";
+        onUpdateBlock({
+          ...selectedBlock,
+          config: {
+            ...cfg,
+            textContent: `${currentText} ${badgeText}`.trim(),
+            title: undefined,
+            subtitle: undefined,
+          },
+        });
+      } else if (selectedBlock.type === "text") {
+        const cfg = selectedBlock.config as TextBlockConfig;
+        onUpdateBlock({
+          ...selectedBlock,
+          config: { ...cfg, content: `${cfg.content || ""} ${badgeText}`.trim() },
+        });
+      } else if (selectedBlock.type === "button") {
+        const cfg = selectedBlock.config as ButtonBlockConfig;
+        onUpdateBlock({
+          ...selectedBlock,
+          config: { ...cfg, label: `${cfg.label || ""} ${badgeText}`.trim() },
+        });
+      }
+    } else {
+      onChangeSubject(`${draftSubject || ""} ${badgeText}`.trim());
+    }
   };
 
   // Image Upload handler
@@ -191,9 +242,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // If no block selected: Vorlagen-Einstellungen
-  if (!selectedBlock) {
-    return (
+  // Render selected block or template settings
+  const renderInspectorContent = () => {
+    // If no block selected: Vorlagen-Einstellungen
+    if (!selectedBlock) {
+      return (
       <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-6">
         {/* Header */}
         <div className="border-b border-slate-200 pb-3 flex items-center justify-between">
@@ -208,49 +261,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <p className="text-xs font-medium text-slate-600">
                 Globale Konfiguration für die gewählte E-Mail
               </p>
-            </div>
-          </div>
-        </div>
-
-        {/* E-Mail Subject Line */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              E-Mail-Betreffzeile
-            </label>
-            <span className="text-xs font-semibold text-slate-600">
-              Im Posteingang sichtbar
-            </span>
-          </div>
-          <input
-            ref={subjectInputRef}
-            type="text"
-            value={draftSubject}
-            onChange={(e) => onChangeSubject(e.target.value)}
-            placeholder="z. B. Buchung bestätigt: Platz-Bezeichnung am Datum"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-none focus:border-emerald-600 transition-colors shadow-2xs"
-          />
-
-          {/* Quick variable badge pills for Subject (Felder einfügen) */}
-          <div className="pt-1.5 space-y-1.5">
-            <span className="text-xs font-bold text-slate-800 tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              <span>Felder einfügen</span>
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {AVAILABLE_TEMPLATE_VARIABLES.slice(0, 7).map((v) => {
-                const label = (VARIABLE_BADGE_MAP[v.key] || v.label).replace(/^\[|\]$/g, "");
-                return (
-                  <button
-                    key={v.key}
-                    type="button"
-                    onClick={() => handleInsertVariableInSubject(`[${label}]`)}
-                    className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border border-emerald-300 transition-all cursor-pointer shadow-2xs active:scale-95"
-                  >
-                    {label}
-                  </button>
-                );
-              })}
             </div>
           </div>
         </div>
@@ -310,10 +320,20 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </div>
           </div>
         )}
+      </div>
+    );
+  }
 
-        <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-300 text-amber-950 text-xs leading-relaxed font-medium">
-          💡 <strong>Hinweis:</strong> Klicke auf einen beliebigen Block in der linken Vorschau, um Schriftgröße, Abstände, Farben, Links oder Grafiken im Detail anzupassen.
-        </div>
+  // When COLUMNS Block is selected
+  if (selectedBlock.type === "columns") {
+    return (
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-5 animate-in fade-in duration-150">
+        <ColumnsInspector
+          block={selectedBlock}
+          onUpdate={onUpdateBlock}
+          onDelete={onDeleteBlock || (() => {})}
+          tenantColors={tenantColors}
+        />
       </div>
     );
   }
@@ -334,46 +354,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               Textblock bearbeiten
             </h3>
           </div>
-        </div>
-
-        {/* Direct Template Editing Notice */}
-        <div className="p-3.5 bg-slate-100 border border-slate-300 rounded-none text-slate-800 text-xs flex items-start gap-2.5">
-          <Edit3 className="w-4 h-4 text-slate-700 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <div className="font-extrabold text-slate-900">
-              Direkt im Template bearbeiten
-            </div>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Klicke links direkt in den Textblock auf der Canvas, um deinen Nachrichtentext frei zu schreiben.
-            </p>
-          </div>
-        </div>
-
-        {/* Clickable Variable Badges / Pills */}
-        <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>Dynamische Felder als Pill einfügen:</span>
-            </span>
-            <span className="text-[9px] text-slate-400">Klick = in Text einfügen</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
-            {AVAILABLE_TEMPLATE_VARIABLES.map((v) => {
-              const label = (VARIABLE_BADGE_MAP[v.key] || v.label).replace(/^\[|\]$/g, "");
-              return (
-                <button
-                  key={v.key}
-                  type="button"
-                  onClick={() => handleInsertVariableInText(`[${label}]`)}
-                  className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold bg-white hover:bg-emerald-100 text-emerald-900 border border-slate-200 hover:border-emerald-300 transition-all cursor-pointer shadow-2xs active:scale-95"
-                  title={`${v.label} (z.B. ${v.example})`}
-                >
-                  <span>{label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {onDeleteBlock && (
+            <button
+              type="button"
+              onClick={onDeleteBlock}
+              title="Diesen Textblock löschen"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Löschen</span>
+            </button>
+          )}
         </div>
 
         {/* Typography & Controls */}
@@ -670,23 +661,21 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 >
                   Keine
                 </button>
-                {["#ffffff", "#f8fafc", "#f0fdf4", "#eff6ff", "#fefce8"].map(
-                  (c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      style={{ backgroundColor: c }}
-                      onClick={() =>
-                        onUpdateBlock({
-                          ...selectedBlock,
-                          config: { ...cfg, backgroundColor: c },
-                        })
-                      }
-                      className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs hover:scale-110 transition-transform"
-                      title={c}
-                    />
-                  )
-                )}
+                {defaultColors.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    style={{ backgroundColor: c }}
+                    onClick={() =>
+                      onUpdateBlock({
+                        ...selectedBlock,
+                        config: { ...cfg, backgroundColor: c },
+                      })
+                    }
+                    className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs hover:scale-110 transition-transform cursor-pointer"
+                    title={c}
+                  />
+                ))}
               </div>
             </div>
           </div>
@@ -721,7 +710,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               />
               {/* Presets */}
               <div className="flex items-center gap-1 ml-auto">
-                {["#0f172a", "#334155", "#64748b", "#047857", "#1e3a8a"].map((c) => (
+                {defaultColors.map((c) => (
                   <button
                     key={c}
                     type="button"
@@ -732,13 +721,28 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                         config: { ...cfg, color: c },
                       })
                     }
-                    className="w-4 h-4 rounded-full border border-white shadow-2xs hover:scale-110 transition-transform"
+                    className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs hover:scale-110 transition-transform cursor-pointer"
+                    title={c}
                   />
                 ))}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Delete Block Action */}
+        {onDeleteBlock && (
+          <div className="pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onDeleteBlock}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Textblock löschen</span>
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -759,6 +763,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               Button bearbeiten
             </h3>
           </div>
+          {onDeleteBlock && (
+            <button
+              type="button"
+              onClick={onDeleteBlock}
+              title="Diesen Button löschen"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Löschen</span>
+            </button>
+          )}
         </div>
 
         {/* Button Label */}
@@ -768,7 +783,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           </label>
           <input
             type="text"
-            value={cfg.label || ""}
+            data-field="button-label"
+            value={cfg.label !== undefined ? cfg.label : "Buchung verwalten oder stornieren"}
             onChange={(e) =>
               onUpdateBlock({
                 ...selectedBlock,
@@ -1050,22 +1066,21 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   className="w-24 px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono uppercase bg-slate-50"
                 />
                 <div className="flex items-center gap-1 ml-auto">
-                  {["#047857", "#0f172a", "#0284c7", "#e11d48", "#d97706"].map(
-                    (col) => (
-                      <button
-                        key={col}
-                        type="button"
-                        style={{ backgroundColor: col }}
-                        onClick={() =>
-                          onUpdateBlock({
-                            ...selectedBlock,
-                            config: { ...cfg, buttonColor: col },
-                          })
-                        }
-                        className="w-4 h-4 rounded-full border border-white shadow-2xs hover:scale-110 transition-transform"
-                      />
-                    )
-                  )}
+                  {defaultColors.map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      style={{ backgroundColor: col }}
+                      onClick={() =>
+                        onUpdateBlock({
+                          ...selectedBlock,
+                          config: { ...cfg, buttonColor: col },
+                        })
+                      }
+                      className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs hover:scale-110 transition-transform cursor-pointer"
+                      title={col}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
@@ -1099,7 +1114,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   className="w-24 px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono uppercase bg-slate-50"
                 />
                 <div className="flex items-center gap-1 ml-auto">
-                  {["#ffffff", "#0f172a", "#fef08a"].map((tc) => (
+                  {defaultColors.map((tc) => (
                     <button
                       key={tc}
                       type="button"
@@ -1110,7 +1125,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                           config: { ...cfg, textColor: tc },
                         })
                       }
-                      className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs hover:scale-110 transition-transform"
+                      className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs hover:scale-110 transition-transform cursor-pointer"
+                      title={tc}
                     />
                   ))}
                 </div>
@@ -1133,10 +1149,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-800"
               >
                 <option value="transparent">Transparent (Standard)</option>
-                <option value="#f8fafc">Hellgrau (#f8fafc)</option>
-                <option value="#f0fdf4">Sanftes Grün (#f0fdf4)</option>
-                <option value="#eff6ff">Sanftes Blau (#eff6ff)</option>
                 <option value="#ffffff">Weiß (#ffffff)</option>
+                <option value="#000000">Schwarz (#000000)</option>
+                {defaultColors
+                  .filter((c) => c !== "#ffffff" && c !== "#000000")
+                  .map((c, idx) => (
+                    <option key={c} value={c}>
+                      Vereinsfarbe {idx + 1} ({c})
+                    </option>
+                  ))}
               </select>
             </div>
           </div>
@@ -1161,6 +1182,17 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               Grafikblock bearbeiten
             </h3>
           </div>
+          {onDeleteBlock && (
+            <button
+              type="button"
+              onClick={onDeleteBlock}
+              title="Diesen Grafikblock löschen"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Löschen</span>
+            </button>
+          )}
         </div>
 
         {/* Image Source & Upload */}
@@ -1474,616 +1506,103 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             />
           </div>
         </div>
+
+        {/* Delete Block Action */}
+        {onDeleteBlock && (
+          <div className="pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onDeleteBlock}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Grafikblock löschen</span>
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
-  // When HEADER Block (Kopfleiste) is selected
+  // When HEADER Block (Kopfzeile) is selected
   if (selectedBlock.type === "header") {
-    const cfg = selectedBlock.config as HeaderBlockConfig;
-
     return (
       <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-5 animate-in fade-in duration-150">
-        {/* Header */}
-        <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center">
-              <LayoutTemplate className="w-4 h-4" />
-            </div>
-            <h3 className="text-sm font-black text-slate-900 tracking-tight">
-              Kopfleiste bearbeiten
-            </h3>
+        <HeaderInspector
+          block={selectedBlock}
+          onUpdate={onUpdateBlock}
+          onDelete={onDeleteBlock || (() => {})}
+        />
+
+        {/* Dynamic Variable Chips for Header */}
+        <div className="pt-3 border-t border-slate-100 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              Variablen in den Text einfügen
+            </span>
           </div>
-        </div>
-
-        {/* Logo Section (Upload erlauben) */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Logo (Upload oder URL)
-          </label>
-          <div className="space-y-2">
-            <input
-              type="text"
-              value={cfg.logoUrl || ""}
-              onChange={(e) =>
-                onUpdateBlock({
-                  ...selectedBlock,
-                  config: { ...cfg, logoUrl: e.target.value },
-                })
-              }
-              placeholder="https://.../vereinslogo.png"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:border-emerald-600"
-            />
-
-            <div className="flex items-center gap-2">
-              <input
-                ref={logoFileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="hidden"
-              />
+          <div className="flex flex-wrap gap-1.5">
+            {eventAvailableVars.map((vKey) => (
               <button
+                key={vKey}
                 type="button"
-                onClick={() => logoFileInputRef.current?.click()}
-                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => handleInsertVariable(`[${vKey}]`)}
+                className="px-2 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold transition-colors cursor-pointer"
               >
-                <Upload className="w-3.5 h-3.5 text-slate-500" />
-                <span>Logo von Festplatte hochladen</span>
+                + [{vKey}]
               </button>
-              {cfg.logoUrl && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: { ...cfg, logoUrl: "" },
-                    })
-                  }
-                  className="px-2.5 py-2 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold transition-all cursor-pointer"
-                  title="Logo entfernen"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Logo Height Stepper if logo exists */}
-            {cfg.logoUrl && (
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-bold uppercase text-slate-400">
-                    <span>Logo-Höhe</span>
-                    <span>{cfg.logoHeight || 44}px</span>
-                  </div>
-                  <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateBlock({
-                          ...selectedBlock,
-                          config: {
-                            ...cfg,
-                            logoHeight: adjustValue(cfg.logoHeight || 44, -4, 20, 140),
-                          },
-                        })
-                      }
-                      className="px-2.5 py-1 text-slate-600 hover:bg-slate-200"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="flex-1 text-center text-xs font-bold text-slate-800">
-                      {cfg.logoHeight || 44}px
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateBlock({
-                          ...selectedBlock,
-                          config: {
-                            ...cfg,
-                            logoHeight: adjustValue(cfg.logoHeight || 44, 4, 20, 140),
-                          },
-                        })
-                      }
-                      className="px-2.5 py-1 text-slate-600 hover:bg-slate-200"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-slate-400 block">
-                    Alt-Text
-                  </label>
-                  <input
-                    type="text"
-                    value={cfg.logoAlt || ""}
-                    onChange={(e) =>
-                      onUpdateBlock({
-                        ...selectedBlock,
-                        config: { ...cfg, logoAlt: e.target.value },
-                      })
-                    }
-                    placeholder="Vereinslogo"
-                    className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-medium text-slate-900 bg-slate-50"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Titel Section */}
-        <div className="space-y-2 pt-2 border-t border-slate-100">
-          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Haupttitel
-          </label>
-          <input
-            type="text"
-            value={cfg.title || ""}
-            onChange={(e) =>
-              onUpdateBlock({
-                ...selectedBlock,
-                config: { ...cfg, title: e.target.value },
-              })
-            }
-            placeholder="z. B. Tennis-Club e.V."
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:border-emerald-600"
-          />
-
-          {/* Quick variable pills for Title */}
-          <div className="flex flex-wrap gap-1 pt-0.5">
-            {AVAILABLE_TEMPLATE_VARIABLES.slice(0, 5).map((v) => {
-              const label = (VARIABLE_BADGE_MAP[v.key] || v.label).replace(/^\[|\]$/g, "");
-              return (
-                <button
-                  key={v.key}
-                  type="button"
-                  onClick={() => handleInsertVariableInHeaderTitle(`[${label}]`)}
-                  className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 border border-slate-200 transition-colors cursor-pointer"
-                >
-                  +{label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            {/* Title Font Size */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-400">
-                Titel-Schriftgröße
-              </label>
-              <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: {
-                        ...cfg,
-                        fontSize: adjustValue(cfg.fontSize || 20, -1, 14, 38),
-                      },
-                    })
-                  }
-                  className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <span className="flex-1 text-center text-xs font-bold text-slate-800">
-                  {cfg.fontSize || 20}px
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: {
-                        ...cfg,
-                        fontSize: adjustValue(cfg.fontSize || 20, 1, 14, 38),
-                      },
-                    })
-                  }
-                  className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-
-            {/* Title Color (Textfarbe Style) */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-400">
-                Titelfarbe
-              </label>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="color"
-                  value={cfg.color || "#0f172a"}
-                  onChange={(e) =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: { ...cfg, color: e.target.value },
-                    })
-                  }
-                  className="w-7 h-7 rounded-lg border border-slate-200 cursor-pointer p-0.5"
-                />
-                <input
-                  type="text"
-                  value={cfg.color || "#0f172a"}
-                  onChange={(e) =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: { ...cfg, color: e.target.value },
-                    })
-                  }
-                  className="w-20 px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono uppercase bg-slate-50"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Untertitel Section */}
-        <div className="space-y-2 pt-2 border-t border-slate-100">
-          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Untertitel
-          </label>
-          <input
-            type="text"
-            value={cfg.subtitle || ""}
-            onChange={(e) =>
-              onUpdateBlock({
-                ...selectedBlock,
-                config: { ...cfg, subtitle: e.target.value },
-              })
-            }
-            placeholder="z. B. Platzreservierung & Benachrichtigung"
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:border-emerald-600"
-          />
-
-          {/* Quick variable pills for Subtitle */}
-          <div className="flex flex-wrap gap-1 pt-0.5">
-            {AVAILABLE_TEMPLATE_VARIABLES.slice(0, 5).map((v) => {
-              const label = (VARIABLE_BADGE_MAP[v.key] || v.label).replace(/^\[|\]$/g, "");
-              return (
-                <button
-                  key={v.key}
-                  type="button"
-                  onClick={() => handleInsertVariableInHeaderSubtitle(`[${label}]`)}
-                  className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 border border-slate-200 transition-colors cursor-pointer"
-                >
-                  +{label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            {/* Subtitle Font Size */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-400">
-                Untertitel-Größe
-              </label>
-              <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: {
-                        ...cfg,
-                        subtitleFontSize: adjustValue(cfg.subtitleFontSize || 13, -1, 10, 24),
-                      },
-                    })
-                  }
-                  className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <span className="flex-1 text-center text-xs font-bold text-slate-800">
-                  {cfg.subtitleFontSize || 13}px
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: {
-                        ...cfg,
-                        subtitleFontSize: adjustValue(cfg.subtitleFontSize || 13, 1, 10, 24),
-                      },
-                    })
-                  }
-                  className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-
-            {/* Subtitle Color (Textfarbe Style) */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-400">
-                Untertitel-Farbe
-              </label>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="color"
-                  value={cfg.subtitleColor || "#64748b"}
-                  onChange={(e) =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: { ...cfg, subtitleColor: e.target.value },
-                    })
-                  }
-                  className="w-7 h-7 rounded-lg border border-slate-200 cursor-pointer p-0.5"
-                />
-                <input
-                  type="text"
-                  value={cfg.subtitleColor || "#64748b"}
-                  onChange={(e) =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: { ...cfg, subtitleColor: e.target.value },
-                    })
-                  }
-                  className="w-20 px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono uppercase bg-slate-50"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Hintergrund (wie bei Text) */}
-        <div className="space-y-1.5 pt-2 border-t border-slate-100">
-          <label className="text-[10px] font-bold uppercase text-slate-400 block">
-            Hintergrund
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={
-                cfg.backgroundColor && cfg.backgroundColor !== "transparent"
-                  ? cfg.backgroundColor
-                  : "#f8fafc"
-              }
-              onChange={(e) =>
-                onUpdateBlock({
-                  ...selectedBlock,
-                  config: { ...cfg, backgroundColor: e.target.value },
-                })
-              }
-              className="w-7 h-7 rounded-lg border border-slate-200 cursor-pointer p-0.5"
-            />
-            <input
-              type="text"
-              value={cfg.backgroundColor || "#f8fafc"}
-              onChange={(e) =>
-                onUpdateBlock({
-                  ...selectedBlock,
-                  config: { ...cfg, backgroundColor: e.target.value },
-                })
-              }
-              className="w-24 px-2 py-1 rounded-lg border border-slate-200 text-xs font-mono lowercase bg-slate-50"
-            />
-            {/* Presets */}
-            <div className="flex items-center gap-1.5 ml-auto">
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateBlock({
-                    ...selectedBlock,
-                    config: { ...cfg, backgroundColor: "transparent" },
-                  })
-                }
-                title="Kein Hintergrund (Transparent)"
-                className={`px-1.5 py-0.5 text-[10px] font-bold rounded border transition-colors ${
-                  cfg.backgroundColor === "transparent"
-                    ? "border-slate-800 bg-slate-800 text-white"
-                    : "border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                Keine
-              </button>
-              {["#f8fafc", "#ffffff", "#064e3b", "#0f172a", "#1e3a8a"].map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  style={{ backgroundColor: c }}
-                  onClick={() =>
-                    onUpdateBlock({
-                      ...selectedBlock,
-                      config: { ...cfg, backgroundColor: c },
-                    })
-                  }
-                  className="w-4 h-4 rounded-full border border-slate-300 shadow-2xs hover:scale-110 transition-transform"
-                  title={c}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Textformatierung wie bei Text */}
-        <div className="pt-2 border-t border-slate-100 space-y-3">
-          <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Typografie & Ausrichtung
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {/* Font Family */}
-            <div className="space-y-1">
-              <label className="text-xs font-bold uppercase text-slate-700">
-                Schriftart
-              </label>
-              <select
-                value={
-                  cfg.fontFamily === "sans"
-                    ? "system-sans"
-                    : cfg.fontFamily === "serif"
-                    ? "georgia"
-                    : cfg.fontFamily === "mono"
-                    ? "courier"
-                    : cfg.fontFamily || "system-sans"
-                }
-                onChange={(e) =>
-                  onUpdateBlock({
-                    ...selectedBlock,
-                    config: { ...cfg, fontFamily: e.target.value as any },
-                  })
-                }
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600"
-              >
-                <option value="system-sans">System Sans (Modern)</option>
-                <option value="arial">Arial / Helvetica (Neutral)</option>
-                <option value="trebuchet">Trebuchet MS (Prägnant)</option>
-                <option value="georgia">Georgia (Elegant Serif)</option>
-                <option value="times">Times New Roman (Klassisch)</option>
-                <option value="courier">Courier New (Monospace)</option>
-                <option value="verdana">Verdana (Hohe Lesbarkeit)</option>
-              </select>
-            </div>
-
-            {/* Alignment */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-400">
-                Ausrichtung
-              </label>
-              <div className="flex border border-slate-200 rounded-lg p-0.5 bg-slate-50">
-                {[
-                  { id: "left", icon: AlignLeft },
-                  { id: "center", icon: AlignCenter },
-                  { id: "right", icon: AlignRight },
-                ].map((a) => {
-                  const Icon = a.icon;
-                  const isActive = (cfg.textAlign || "center") === a.id;
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() =>
-                        onUpdateBlock({
-                          ...selectedBlock,
-                          config: { ...cfg, textAlign: a.id as any },
-                        })
-                      }
-                      className={`flex-1 py-1 flex items-center justify-center rounded transition-colors ${
-                        isActive
-                          ? "bg-white text-emerald-800 shadow-2xs font-bold"
-                          : "text-slate-500 hover:text-slate-900"
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Padding wie bei Text */}
-        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-          {/* Padding Y */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] font-bold uppercase text-slate-400">
-                Abstand Oben/Unten
-              </label>
-              <span className="text-[10px] text-slate-500 font-mono">
-                {cfg.paddingY ?? 20}px
-              </span>
-            </div>
-            <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateBlock({
-                    ...selectedBlock,
-                    config: {
-                      ...cfg,
-                      paddingY: adjustValue(cfg.paddingY ?? 20, -2, 0, 60),
-                    },
-                  })
-                }
-                className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                <Minus className="w-3 h-3" />
-              </button>
-              <span className="flex-1 text-center text-xs font-bold text-slate-800">
-                {cfg.paddingY ?? 20}px
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateBlock({
-                    ...selectedBlock,
-                    config: {
-                      ...cfg,
-                      paddingY: adjustValue(cfg.paddingY ?? 20, 2, 0, 60),
-                    },
-                  })
-                }
-                className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-          {/* Padding X */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <label className="text-[10px] font-bold uppercase text-slate-400">
-                Rand Links/Rechts
-              </label>
-              <span className="text-[10px] text-slate-500 font-mono">
-                {cfg.paddingX ?? 24}px
-              </span>
-            </div>
-            <div className="flex items-center border border-slate-200 rounded-lg bg-slate-50 overflow-hidden">
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateBlock({
-                    ...selectedBlock,
-                    config: {
-                      ...cfg,
-                      paddingX: adjustValue(cfg.paddingX ?? 24, -2, 0, 60),
-                    },
-                  })
-                }
-                className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                <Minus className="w-3 h-3" />
-              </button>
-              <span className="flex-1 text-center text-xs font-bold text-slate-800">
-                {cfg.paddingX ?? 24}px
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateBlock({
-                    ...selectedBlock,
-                    config: {
-                      ...cfg,
-                      paddingX: adjustValue(cfg.paddingX ?? 24, 2, 0, 60),
-                    },
-                  })
-                }
-                className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
+            ))}
           </div>
         </div>
       </div>
     );
   }
 
-  return null;
+    return null;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Active block or template settings */}
+      {renderInspectorContent()}
+
+      {/* Dedicated Section: VERFÜGBARE DYNAMISCHE VARIABLEN */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-sm space-y-2.5">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+          </div>
+          <div>
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-900">
+              Verfügbare dynamische Variablen
+            </h4>
+            <p className="text-[10px] text-slate-500">
+              Klick fügt die Variable an die Cursor-Position des aktiven Felds ein
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 pt-0.5">
+          {AVAILABLE_TEMPLATE_VARIABLES.map((v) => {
+            const label = (VARIABLE_BADGE_MAP[v.key] || v.label).replace(/^\[|\]$/g, "");
+            return (
+              <button
+                key={v.key}
+                type="button"
+                onMouseDown={(e) => {
+                  // Crucial: prevents active input or textarea from blurring!
+                  e.preventDefault();
+                }}
+                onClick={() => handleInsertVariableGlobally(`[${label}]`)}
+                className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 transition-colors cursor-pointer select-none active:scale-95"
+                title={`${v.label} (Beispiel: ${v.example})`}
+              >
+                +{label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 };

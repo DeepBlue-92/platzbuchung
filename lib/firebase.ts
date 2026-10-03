@@ -356,6 +356,8 @@ export async function loginWithUsername(username: string, passwordRaw: string, v
       showContactInfo: userData.showContactInfo !== undefined ? !!userData.showContactInfo : (userData.kontaktfreigabe !== undefined ? !!userData.kontaktfreigabe : true),
       onboarding_pending: userData.onboarding_pending !== undefined ? !!userData.onboarding_pending : false,
       avatarUrl: userData.avatarUrl || null,
+      avatarIcon: userData.avatarIcon || null,
+      avatarColor: userData.avatarColor || null,
       avatarId: userData.avatarId || null,
       createdAt: userData.createdAt || new Date().toISOString()
     } as User;

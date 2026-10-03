@@ -306,6 +306,8 @@ interface DashboardProps {
   userClubs?: any[];
   allClubs?: any[];
   onSwitchClub?: (clubId: string) => void;
+  initialBookingSlot?: { date: string; time: string; court: string } | null;
+  onClearInitialBookingSlot?: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -329,6 +331,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   userClubs,
   allClubs: propAllClubs,
   onSwitchClub,
+  initialBookingSlot,
+  onClearInitialBookingSlot,
 }) => {
   const [leagueUsers, setLeagueUsers] = useState<User[]>([]);
 
@@ -1254,6 +1258,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [inlinePassword, setInlinePassword] = useState("");
   const [isInlineLoggingIn, setIsInlineLoggingIn] = useState(false);
   const [inlineLoginError, setInlineLoginError] = useState<string | null>(null);
+  const [inlineLoginPrompt, setInlineLoginPrompt] = useState<string | null>(null);
+  const [pendingBookingSlot, setPendingBookingSlot] = useState<{ date: string; time: string; court: string } | null>(null);
   const [isPublicLoginModalOpen, setIsPublicLoginModalOpen] = useState(false);
 
   const [internalMobileViewType, setInternalMobileViewType] = useState<"day" | "week">("day");
@@ -1264,11 +1270,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   const effectiveMobileView = mobileViewType !== undefined ? mobileViewType : internalMobileViewType;
   const effectiveDesktopView = desktopViewType !== undefined ? desktopViewType : internalDesktopViewType;
 
-  const viewType = isPublicWochenplan
-    ? "week"
-    : isMobile
-      ? effectiveMobileView
-      : effectiveDesktopView;
+  const viewType = isMobile
+    ? effectiveMobileView
+    : effectiveDesktopView;
 
   const setViewType = useCallback(
     (v: "day" | "week") => {
@@ -2111,13 +2115,27 @@ const Dashboard: React.FC<DashboardProps> = ({
   ) => {
     const isPassed = isSlotPassed(date, time);
 
-    if (isPublicWochenplan) {
+    if (isPublicWochenplan || !currentUser) {
+      if (isPassed && !isPastAllowed) {
+        if (booking) {
+          setInlineLoginPrompt(
+            `Bitte melde dich an, um Details zu dieser Buchung (${court}, ${time} Uhr) einzusehen.`
+          );
+          setIsPublicLoginModalOpen(true);
+          setInlineLoginError(null);
+        }
+        return;
+      }
+      setPendingBookingSlot({ date, time, court });
+      const [year, month, day] = date.split("-");
+      const formattedDate = day && month ? `${day}.${month}.${year}` : date;
+      setInlineLoginPrompt(
+        booking
+          ? `Bitte melde dich an, um Details zu dieser Buchung (${court}, ${time} Uhr) einzusehen.`
+          : `Bitte melde dich an, um ${court} am ${formattedDate} um ${time} Uhr zu reservieren.`
+      );
       setIsPublicLoginModalOpen(true);
       setInlineLoginError(null);
-      return;
-    }
-
-    if (!currentUser) {
       return;
     }
 
@@ -2203,6 +2221,19 @@ const Dashboard: React.FC<DashboardProps> = ({
     handleOpenModal();
     setIsFullDay(false);
   };
+
+  // Auto-open booking modal when navigated from landing page with a prefilled slot
+  useEffect(() => {
+    if (initialBookingSlot) {
+      const { date, time, court } = initialBookingSlot;
+      setSelectedDate(date);
+      const existing = bookings.find(
+        (b) => b.court === court && b.date === date && b.time === time
+      );
+      handleSlotClick(date, time, court, existing);
+      onClearInitialBookingSlot?.();
+    }
+  }, [initialBookingSlot]);
 
   const confirmAction = async () => {
     if (!selectedSlot) return;
@@ -2472,6 +2503,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                     onClick={isEvent ? undefined : () =>
                       handleSlotClick(selectedDate, time, court, booking)
                     }
+                    title={
+                      !currentUser
+                        ? booking
+                          ? "Belegt • Bitte anmelden für Details"
+                          : !isClosedState && !slotStatus.disabled
+                            ? `Frei • Klicken um ${court} um ${time} Uhr zu buchen`
+                            : undefined
+                        : undefined
+                    }
                     style={dynamicProps ? {
                       backgroundColor: dynamicProps.backgroundColor,
                       borderTopColor: dynamicProps.borderColor,
@@ -2551,9 +2591,16 @@ const Dashboard: React.FC<DashboardProps> = ({
                             <span 
                               className="text-xs font-black text-emerald-950 uppercase line-clamp-2 block leading-tight"
                               style={{ wordBreak: "break-word" }}
-                              title={booking.players.join(", ") + (booking.guestCount ? ` + ${booking.guestCount} Gast` : "")}
+                              title={!currentUser ? "Belegt • Bitte anmelden für Details" : booking.players.join(", ") + (booking.guestCount ? ` + ${booking.guestCount} Gast` : "")}
                             >
-                              {booking.players.map(formatPlayerName).join(", ") + (booking.guestCount ? ` + ${booking.guestCount} Gast` : "")}
+                              {!currentUser ? (
+                                <span className="flex items-center gap-1.5 text-slate-700">
+                                  <i className="fa-solid fa-lock text-[9px] opacity-60"></i>
+                                  <span>Belegt</span>
+                                </span>
+                              ) : (
+                                booking.players.map(formatPlayerName).join(", ") + (booking.guestCount ? ` + ${booking.guestCount} Gast` : "")
+                              )}
                             </span>
                           </div>
                         )}
@@ -2655,6 +2702,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div 
                 key={time} 
                 style={{ height: slotHeight }}
+                title={!currentUser && !isGenuinelyClosed && !isPassed ? `Frei • Klicken um ${court} um ${time} Uhr zu buchen` : undefined}
                 className={`border-b border-slate-300 last:border-b-0 w-full transition-colors group/cell ${bgClass}`}
                 onMouseEnter={() => setHoveredTime(time)}
                 onMouseLeave={() => setHoveredTime(null)}
@@ -2665,7 +2713,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 }}
               >
                 <div className="w-full h-full flex items-center justify-center transition-opacity opacity-0 group-hover/cell:opacity-100">
-                   {!isPublicWochenplan && !isGenuinelyClosed && (!isPassed || isAdmin) && (
+                   {!isGenuinelyClosed && (!isPassed || isAdmin) && (
                       <i 
                          className="fa-solid fa-plus text-xs" 
                          style={{ color: settings?.primaryColor || "var(--color-primary)" }}
@@ -2756,6 +2804,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 zIndex: zIndexStyle,
               }}
               className={`absolute p-[2px] ${pastVeilClass} ${pastOpacityClass} ${pastPointerClass}`}
+              title={!currentUser && !booking.isLocked ? "Belegt • Bitte anmelden für Details" : undefined}
               onMouseEnter={() => setHoveredTime(times[startIdx])}
               onMouseLeave={() => setHoveredTime(null)}
               onClick={isEvent ? undefined : () => handleSlotClick(date, times[startIdx], court, booking)}
@@ -2805,8 +2854,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                     className="text-[9px] sm:text-[9px] md:text-[10px] font-black w-full truncate leading-tight block text-emerald-950"
                     style={dynamicProps ? { color: dynamicProps.color } : {}}
                   >
-                    {booking.players.map(formatPlayerNameCompact).join(", ")}
-                    {booking.guestCount && booking.guestCount > 0 ? ` + ${booking.guestCount} Gast` : ""}
+                    {!currentUser ? (
+                      <span className="flex items-center gap-1 text-slate-700">
+                        <i className="fa-solid fa-lock text-[8px] opacity-60"></i>
+                        <span>Belegt</span>
+                      </span>
+                    ) : (
+                      <>
+                        {booking.players.map(formatPlayerNameCompact).join(", ")}
+                        {booking.guestCount && booking.guestCount > 0 ? ` + ${booking.guestCount} Gast` : ""}
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -3103,6 +3161,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                                   )
                                 }
                                 className={`border-l border-slate-200 p-0.5 text-center align-middle relative select-none ${cellBgClassStr} ${pastVeilClass} ${pastOpacityClass} ${pastPointerClass}`}
+                                title={
+                                  !currentUser
+                                    ? booking
+                                      ? "Belegt • Bitte anmelden für Details"
+                                      : !isClosedState
+                                        ? `Frei • Klicken um ${court} um ${time} Uhr zu buchen`
+                                        : undefined
+                                    : undefined
+                                }
                                 style={{
                                   height: "1px",
                                   ...(dynamicProps ? {
@@ -3140,20 +3207,29 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         <div
                                           className="text-emerald-950 font-extrabold text-[10px] sm:text-[11px] leading-tight text-left w-full truncate"
                                           title={
-                                            booking.players.join(", ") +
-                                            (booking.guestCount
-                                              ? ` + ${booking.guestCount} Gast`
-                                              : "")
+                                            !currentUser
+                                              ? "Belegt • Bitte anmelden für Details"
+                                              : booking.players.join(", ") +
+                                                (booking.guestCount
+                                                  ? ` + ${booking.guestCount} Gast`
+                                                  : "")
                                           }
                                         >
-                                          {booking.players.map(formatPlayerNameCompact).join(", ") + (booking.guestCount > 0 ? ` + ${booking.guestCount} Gast` : "")}
+                                          {!currentUser ? (
+                                            <span className="flex items-center gap-1 text-slate-700 font-bold">
+                                              <i className="fa-solid fa-lock text-[8px] opacity-60"></i>
+                                              <span>Belegt</span>
+                                            </span>
+                                          ) : (
+                                            booking.players.map(formatPlayerNameCompact).join(", ") + (booking.guestCount > 0 ? ` + ${booking.guestCount} Gast` : "")
+                                          )}
                                         </div>
                                       </div>
                                     )}
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center h-full transition-all">
-                                    {isGenuinelyClosed || isPublicWochenplan || (isClosedState &&
+                                    {isGenuinelyClosed || (isClosedState &&
                                     !(isPassed && isAdmin)) ? null : (
                                       <i
                                         className={`fa-solid fa-plus text-xs ${isPassed ? "text-gray-400 opacity-60" : ""}`}
@@ -4236,66 +4312,51 @@ const Dashboard: React.FC<DashboardProps> = ({
             </button>
           </div>
           <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200 shadow-sm w-full sm:w-auto shrink-0 h-8 relative overflow-hidden gap-0.5">
-            {isPublicWochenplan ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsPublicLoginModalOpen(true);
-                  setInlineLoginError(null);
-                }}
-                className="flex-1 px-3 sm:px-4 h-full rounded-lg bg-emerald-600 hover:bg-emerald-700 font-black uppercase text-[10px] lg:text-[9px] tracking-widest text-white transition-all flex items-center justify-center gap-1.5 relative cursor-pointer outline-none shadow-sm active:scale-95 whitespace-nowrap"
+            <button
+              type="button"
+              onClick={() => setViewType("day")}
+              className="flex-1 sm:px-3 h-full rounded-lg font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
+            >
+              {viewType === "day" && (
+                <motion.div
+                  layoutId="desktopViewTypeBadge"
+                  className="absolute inset-0 rounded-lg shadow-sm"
+                  style={{
+                    backgroundColor:
+                      settings?.primaryColor || "var(--color-primary)",
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 40 }}
+                />
+              )}
+              <span
+                className={`relative z-10 flex items-center gap-1.5 ${viewType === "day" ? "text-white" : "text-slate-500 hover:text-slate-700"}`}
               >
-                <i className="fa-solid fa-right-to-bracket text-[10px]"></i> Anmelden
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setViewType("day")}
-                  className="flex-1 sm:px-3 h-full rounded-lg font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
-                >
-                  {viewType === "day" && (
-                    <motion.div
-                      layoutId="desktopViewTypeBadge"
-                      className="absolute inset-0 rounded-lg shadow-sm"
-                      style={{
-                        backgroundColor:
-                          settings?.primaryColor || "var(--color-primary)",
-                      }}
-                      transition={{ type: "spring", stiffness: 400, damping: 40 }}
-                    />
-                  )}
-                  <span
-                    className={`relative z-10 flex items-center gap-1.5 ${viewType === "day" ? "text-white" : "text-slate-500 hover:text-slate-700"}`}
-                  >
-                    <i className="fa-solid fa-calendar-day text-[10px]"></i> Tag
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewType("week")}
-                  className="flex-1 sm:px-3 h-full rounded-lg font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
-                >
-                  {viewType === "week" && (
-                    <motion.div
-                      layoutId="desktopViewTypeBadge"
-                      className="absolute inset-0 rounded-lg shadow-sm"
-                      style={{
-                        backgroundColor:
-                          settings?.primaryColor || "var(--color-primary)",
-                      }}
-                      transition={{ type: "spring", stiffness: 400, damping: 40 }}
-                    />
-                  )}
-                  <span
-                    className={`relative z-10 flex items-center gap-1.5 ${viewType === "week" ? "text-white" : "text-slate-500 hover:text-slate-700"}`}
-                  >
-                    <i className="fa-solid fa-calendar-week text-[10px]"></i> Woche
-                  </span>
-                </button>
-                <div className="w-[1px] h-3 bg-slate-300 mx-1 shrink-0 relative z-10" />
-              </>
-            )}
+                <i className="fa-solid fa-calendar-day text-[10px]"></i> Tag
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewType("week")}
+              className="flex-1 sm:px-3 h-full rounded-lg font-black md:font-medium uppercase text-[10px] lg:text-[9px] tracking-widest transition-colors flex items-center justify-center gap-1.5 relative cursor-pointer outline-none"
+            >
+              {viewType === "week" && (
+                <motion.div
+                  layoutId="desktopViewTypeBadge"
+                  className="absolute inset-0 rounded-lg shadow-sm"
+                  style={{
+                    backgroundColor:
+                      settings?.primaryColor || "var(--color-primary)",
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 40 }}
+                />
+              )}
+              <span
+                className={`relative z-10 flex items-center gap-1.5 ${viewType === "week" ? "text-white" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                <i className="fa-solid fa-calendar-week text-[10px]"></i> Woche
+              </span>
+            </button>
+            <div className="w-[1px] h-3 bg-slate-300 mx-1 shrink-0 relative z-10" />
             <button
               type="button"
               onClick={() => {
@@ -4309,6 +4370,23 @@ const Dashboard: React.FC<DashboardProps> = ({
               <i className="fa-solid fa-clock-rotate-left text-[10px]"></i>{" "}
               Heute
             </button>
+            {(isPublicWochenplan || !currentUser) && (
+              <>
+                <div className="w-[1px] h-3 bg-slate-300 mx-1 shrink-0 relative z-10" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInlineLoginPrompt("Melde dich an, um Plätze zu reservieren und alle Buchungsdetails einzusehen.");
+                    setIsPublicLoginModalOpen(true);
+                    setInlineLoginError(null);
+                  }}
+                  className="px-2.5 sm:px-3 h-full rounded-lg bg-[var(--color-primary)] hover:brightness-95 font-black uppercase text-[10px] lg:text-[9px] tracking-widest text-white transition-all flex items-center justify-center gap-1.5 relative cursor-pointer outline-none shadow-sm active:scale-95 whitespace-nowrap"
+                  title="Jetzt anmelden"
+                >
+                  <i className="fa-solid fa-right-to-bracket text-[10px]"></i> Anmelden
+                </button>
+              </>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-3 sm:gap-4 overflow-x-auto w-full lg:w-auto shrink-0 border-t sm:border-t-0 lg:border-l border-slate-200 lg:border-slate-300 pt-1 sm:pt-0 lg:pl-4 lg:pr-3 min-h-8 items-center justify-center sm:justify-start">
@@ -5453,7 +5531,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 Vereins-Login
               </h3>
               <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                Melde dich an, um Plätze zu reservieren und alle Details einzusehen.
+                {inlineLoginPrompt || "Melde dich an, um Plätze zu reservieren und alle Details einzusehen."}
               </p>
             </div>
 
@@ -5478,6 +5556,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                   setIsPublicLoginModalOpen(false);
                   if (onPublicLoginSuccess) {
                     onPublicLoginSuccess(loggedInUser);
+                  }
+                  if (pendingBookingSlot) {
+                    const pending = pendingBookingSlot;
+                    setPendingBookingSlot(null);
+                    setTimeout(() => {
+                      handleSlotClick(pending.date, pending.time, pending.court);
+                    }, 200);
                   }
                 } catch (err: any) {
                   setInlineLoginError(

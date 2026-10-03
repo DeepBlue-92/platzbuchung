@@ -18,6 +18,7 @@ import {
   Lock,
   ChevronUp,
   ChevronDown,
+  LayoutTemplate,
 } from "lucide-react";
 import {
   EmailTemplate,
@@ -25,6 +26,7 @@ import {
   TemplateBlock,
   TemplateBlockType,
   TextBlockConfig,
+  ButtonBlockConfig,
   EmailTemplateGlobalSettings,
   SendMailResult,
   EmailTemplateAssignments,
@@ -44,6 +46,8 @@ import {
   createButtonBlock,
   createImageBlock,
   createHeaderBlock,
+  createColumnsBlock,
+  migrateHeaderToColumns,
   getDynamicTestPayload,
 } from "../../services/blockTemplateCompiler";
 import {
@@ -51,8 +55,10 @@ import {
   saveClubEmailTemplatesData,
   createNewTemplate,
 } from "../../services/emailTemplateStorage";
+import { listenToSettings } from "../../services/db";
 import { User } from "../../types";
 import { CanvasBlockRenderer } from "./emailDesigner/CanvasBlockRenderer";
+import { CanvasSubjectHeader } from "./emailDesigner/CanvasSubjectHeader";
 import { InlineBlockInsert } from "./emailDesigner/InlineBlockInsert";
 import { InspectorPanel } from "./emailDesigner/InspectorPanel";
 import { TemplateLibraryTable } from "./emailDesigner/TemplateLibraryTable";
@@ -67,6 +73,7 @@ interface EmailTemplateManagerProps {
   setActiveEditingId?: (id: string | null) => void;
   onUpdateTemplates?: (updated: EmailTemplate[]) => Promise<void> | void;
   onUpdateAssignments?: (updated: EmailTemplateAssignments) => Promise<void> | void;
+  tenantColors?: string[];
 }
 
 export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
@@ -79,7 +86,35 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
   setActiveEditingId: propSetActiveEditingId,
   onUpdateTemplates: propOnUpdateTemplates,
   onUpdateAssignments: propOnUpdateAssignments,
+  tenantColors,
 }) => {
+  // Active tenant branding colors
+  const [activeTenantColors, setActiveTenantColors] = useState<string[]>(
+    tenantColors && tenantColors.length > 0 ? tenantColors : []
+  );
+
+  useEffect(() => {
+    if (tenantColors && tenantColors.length > 0) {
+      setActiveTenantColors(tenantColors);
+    }
+  }, [tenantColors]);
+
+  useEffect(() => {
+    if (!currentClubId) return;
+    const unsubscribe = listenToSettings(currentClubId, (s) => {
+      const colors = [
+        s.primaryColor,
+        s.accentColor,
+        s.accentColor2,
+        s.accentColor3,
+      ].filter(Boolean) as string[];
+      if (colors.length > 0) {
+        setActiveTenantColors(colors);
+      }
+    });
+    return () => unsubscribe();
+  }, [currentClubId]);
+
   // 1. Internal state fallback if not controlled by parent
   const [internalTemplates, setInternalTemplates] = useState<EmailTemplate[]>([]);
   const [internalAssignments, setInternalAssignments] = useState<EmailTemplateAssignments>({});
@@ -121,6 +156,13 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [showHtmlCodeModal, setShowHtmlCodeModal] = useState<boolean>(false);
   const [showTestMailModal, setShowTestMailModal] = useState<boolean>(false);
+  const [saveWarningModal, setSaveWarningModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    missingToken: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Unified dynamic fields payload for preview & test emails
   const dynamicTestPayload = useMemo(() => getDynamicTestPayload(clubName), [clubName]);
@@ -141,6 +183,7 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
 
   // Ref for smooth scrolling to editor
   const editorRef = useRef<HTMLDivElement>(null);
+  const subjectInputRef = useRef<HTMLInputElement>(null);
 
   // Sync draft when editingTemplate changes
   useEffect(() => {
@@ -150,7 +193,7 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
       setDraftBlocks(
         editingTemplate.blocks && editingTemplate.blocks.length > 0
           ? JSON.parse(JSON.stringify(editingTemplate.blocks))
-          : [createTextBlock()]
+          : [createHeaderBlock(), createTextBlock()]
       );
       setGlobalSettings(
         editingTemplate.globalSettings
@@ -203,6 +246,18 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
     let i = 0;
     while (i < draftBlocks.length) {
       const current = draftBlocks[i];
+
+      // Header block must strictly be full width (1 column row)
+      if (current.type === "header" || current.columnSpan === "full" || !current.columnSpan) {
+        rows.push({
+          id: `row_${current.id}`,
+          columnCount: 1,
+          items: [{ block: current.type === "header" ? { ...current, columnSpan: "full" } : current, index: i }],
+          insertIndexAfter: i + 1,
+        });
+        i += 1;
+        continue;
+      }
 
       if (current.columnSpan === "third") {
         const next1 = draftBlocks[i + 1];
@@ -357,24 +412,18 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
   };
 
   const handlePermanentDelete = async (templateId: string) => {
-    if (
-      window.confirm(
-        "Möchtest du diese Vorlage wirklich unwiderruflich und endgültig aus der Datenbank löschen?"
-      )
-    ) {
-      const updatedList = templates.filter((t) => t.id !== templateId);
-      await updateTemplatesList(updatedList);
+    const updatedList = templates.filter((t) => t.id !== templateId);
+    await updateTemplatesList(updatedList);
 
-      if (activeEditingId === templateId) {
-        setActiveEditingId(null);
-      }
-
-      setToastMessage({
-        type: "info",
-        text: "Vorlage endgültig gelöscht.",
-      });
-      setTimeout(() => setToastMessage(null), 3500);
+    if (activeEditingId === templateId) {
+      setActiveEditingId(null);
     }
+
+    setToastMessage({
+      type: "info",
+      text: "Vorlage endgültig gelöscht.",
+    });
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   // -------------------------------------------------------------
@@ -389,7 +438,8 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
 
   const handleInsertBlockAtIndex = (type: TemplateBlockType, index: number) => {
     let newBlock: TemplateBlock;
-    if (type === "header") newBlock = createHeaderBlock();
+    if (type === "columns") newBlock = createColumnsBlock("25-75");
+    else if (type === "header") newBlock = createColumnsBlock("25-75");
     else if (type === "button") newBlock = createButtonBlock();
     else if (type === "image") newBlock = createImageBlock();
     else newBlock = createTextBlock();
@@ -408,7 +458,8 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
     type: TemplateBlockType
   ) => {
     const current = draftBlocks[blockIndex];
-    if (!current) return;
+    if (!current || current.type === "header") return; // Header cannot be multi-column
+    if (type === "header") return; // Header must always be full-width
 
     // Find row that contains this block
     const targetRow = canvasRows.find((r) =>
@@ -421,9 +472,7 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
     const nextSpan: "half" | "third" = targetRow.columnCount === 1 ? "half" : "third";
 
     let newBlock: TemplateBlock;
-    if (type === "header") {
-      newBlock = createHeaderBlock(undefined, undefined, nextSpan);
-    } else if (type === "button") {
+    if (type === "button") {
       newBlock = {
         ...createButtonBlock(),
         columnSpan: nextSpan,
@@ -485,51 +534,108 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
   const handleDeleteBlock = (blockId: string) => {
     const blockIndex = draftBlocks.findIndex((b) => b.id === blockId);
     if (blockIndex === -1) return;
-    const block = draftBlocks[blockIndex];
 
-    if (
-      window.confirm(
-        `Möchtest du diese ${block.type.toUpperCase()}-Kachel wirklich löschen?`
-      )
-    ) {
-      if (selectedBlockId === block.id) {
-        setSelectedBlockId(null);
-      }
-
-      const targetRow = canvasRows.find((r) =>
-        r.items.some((item) => item.block.id === block.id)
-      );
-
-      let nextBlocks = draftBlocks.filter((b) => b.id !== block.id);
-
-      if (targetRow) {
-        const remainingSiblings = targetRow.items
-          .filter((item) => item.block.id !== block.id)
-          .map((item) => item.block.id);
-
-        if (remainingSiblings.length === 1) {
-          // 2-card row reduced to 1 -> expands to 100% full width
-          nextBlocks = nextBlocks.map((b) =>
-            remainingSiblings.includes(b.id) ? { ...b, columnSpan: "full" } : b
-          );
-        } else if (remainingSiblings.length === 2) {
-          // 3-card row reduced to 2 -> adjusts to 50% half width
-          nextBlocks = nextBlocks.map((b) =>
-            remainingSiblings.includes(b.id) ? { ...b, columnSpan: "half" } : b
-          );
-        }
-      }
-
-      setDraftBlocks(nextBlocks);
+    if (selectedBlockId === blockId) {
+      setSelectedBlockId(null);
     }
+
+    const targetRow = canvasRows.find((r) =>
+      r.items.some((item) => item.block.id === blockId)
+    );
+
+    let nextBlocks = draftBlocks.filter((b) => b.id !== blockId);
+
+    if (targetRow) {
+      const remainingSiblings = targetRow.items
+        .filter((item) => item.block.id !== blockId)
+        .map((item) => item.block.id);
+
+      if (remainingSiblings.length === 1) {
+        // 2-card row reduced to 1 -> expands to 100% full width
+        nextBlocks = nextBlocks.map((b) =>
+          remainingSiblings.includes(b.id) ? { ...b, columnSpan: "full" } : b
+        );
+      } else if (remainingSiblings.length === 2) {
+        // 3-card row reduced to 2 -> adjusts to 50% half width
+        nextBlocks = nextBlocks.map((b) =>
+          remainingSiblings.includes(b.id) ? { ...b, columnSpan: "half" } : b
+        );
+      }
+    }
+
+    setDraftBlocks(nextBlocks);
+    setToastMessage({
+      type: "info",
+      text: "Kachel / Block entfernt.",
+    });
+    setTimeout(() => setToastMessage(null), 2500);
   };
 
   // -------------------------------------------------------------
   // SAVE & RESET
   // -------------------------------------------------------------
 
-  const handleSaveTemplate = async () => {
+  const handleSaveTemplate = async (force = false) => {
     if (!editingTemplate) return;
+
+    if (!force) {
+      if (editingTemplate.eventType === "USER_ACTIVATION") {
+        const hasActivationButton = draftBlocks.some(
+          (b) => b.type === "button" && (b.config as ButtonBlockConfig)?.dynamicLinkKey === "activation_link"
+        );
+        const hasActivationText = draftBlocks.some(
+          (b) =>
+            b.type === "text" &&
+            typeof (b.config as TextBlockConfig)?.content === "string" &&
+            ((b.config as TextBlockConfig).content.includes("activation_link") ||
+              (b.config as TextBlockConfig).content.includes("[Aktivierungs-Link]") ||
+              (b.config as TextBlockConfig).content.includes("{{activation_link}}"))
+        );
+
+        if (!hasActivationButton && !hasActivationText) {
+          setSaveWarningModal({
+            isOpen: true,
+            title: "Aktivierungs-Link fehlt im Template",
+            message:
+              "In dieser Vorlage für die „Initiale Passwortvergabe“ wurde kein Button oder Link mit dem Aktivierungs-Link ([activation_link]) gefunden. Neu eingeladene Mitglieder können ohne diesen Link ihr persönliches Passwort nicht vergeben.",
+            missingToken: "{{activation_link}}",
+            onConfirm: () => {
+              setSaveWarningModal(null);
+              handleSaveTemplate(true);
+            },
+          });
+          return;
+        }
+      } else if (editingTemplate.eventType === "PASSWORD_RESET") {
+        const hasResetButton = draftBlocks.some(
+          (b) => b.type === "button" && (b.config as ButtonBlockConfig)?.dynamicLinkKey === "password_reset_link"
+        );
+        const hasResetText = draftBlocks.some(
+          (b) =>
+            b.type === "text" &&
+            typeof (b.config as TextBlockConfig)?.content === "string" &&
+            ((b.config as TextBlockConfig).content.includes("password_reset_link") ||
+              (b.config as TextBlockConfig).content.includes("[Passwort-Reset-Link]") ||
+              (b.config as TextBlockConfig).content.includes("{{password_reset_link}}"))
+        );
+
+        if (!hasResetButton && !hasResetText) {
+          setSaveWarningModal({
+            isOpen: true,
+            title: "Passwort-Reset-Link fehlt im Template",
+            message:
+              "In dieser Vorlage für „Passwort zurücksetzen“ wurde kein Button oder Link mit dem Passwort-Reset-Link ([password_reset_link]) gefunden. Mitglieder können ohne diesen Link ihr Passwort nicht zurücksetzen.",
+            missingToken: "{{password_reset_link}}",
+            onConfirm: () => {
+              setSaveWarningModal(null);
+              handleSaveTemplate(true);
+            },
+          });
+          return;
+        }
+      }
+    }
+
     const compiledBody = compileBlocksToEmailHtml(draftBlocks, globalSettings);
 
     const updated: EmailTemplate = {
@@ -561,30 +667,24 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
     const factory = DEFAULT_EMAIL_TEMPLATES[editingTemplate.eventType];
     if (!factory) return;
 
-    if (
-      window.confirm(
-        `Möchtest du die Vorlage „${draftName}“ wirklich auf den Auslieferungszustand des Events „${editingTemplate.eventType}“ zurücksetzen?`
-      )
-    ) {
-      setDraftSubject(factory.subject);
-      setDraftBlocks(
-        factory.blocks && factory.blocks.length > 0
-          ? JSON.parse(JSON.stringify(factory.blocks))
-          : [createTextBlock()]
-      );
-      setGlobalSettings(
-        factory.globalSettings
-          ? { ...factory.globalSettings }
-          : { fontFamily: "system-sans" }
-      );
-      setSelectedBlockId(null);
+    setDraftSubject(factory.subject);
+    setDraftBlocks(
+      factory.blocks && factory.blocks.length > 0
+        ? JSON.parse(JSON.stringify(factory.blocks))
+        : [createHeaderBlock(), createTextBlock()]
+    );
+    setGlobalSettings(
+      factory.globalSettings
+        ? { ...factory.globalSettings }
+        : { fontFamily: "system-sans" }
+    );
+    setSelectedBlockId(null);
 
-      setToastMessage({
-        type: "info",
-        text: `Design auf Standardbausteine zurückgesetzt. Klicke auf „Vorlage speichern“, um dauerhaft zu übernehmen.`,
-      });
-      setTimeout(() => setToastMessage(null), 3500);
-    }
+    setToastMessage({
+      type: "info",
+      text: `Design auf Standardbausteine zurückgesetzt. Klicke auf „Vorlage speichern“, um dauerhaft zu übernehmen.`,
+    });
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   // -------------------------------------------------------------
@@ -702,31 +802,30 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
         >
           {/* Active Editor Header Card */}
           <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1">
+            <div className="space-y-1 flex-1 min-w-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 shadow-2xs">
                   <Layers className="w-5 h-5 text-emerald-700" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <input
                       type="text"
                       value={draftName}
                       onChange={(e) => setDraftName(e.target.value)}
-                      className="text-base sm:text-lg font-black text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-emerald-600 focus:outline-none transition-colors px-1"
+                      className="text-base sm:text-lg font-black text-slate-900 border-b border-transparent hover:border-slate-300 focus:border-emerald-600 focus:outline-none transition-colors px-1 flex-1 min-w-[240px] max-w-xl"
                       title="Klicken, um den Namen der Vorlage zu bearbeiten"
                     />
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-200">
-                      {currentEventDef?.label || editingTemplate.eventType}
-                    </span>
-                    {assignments[editingTemplate.eventType] === editingTemplate.id && (
-                      <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 flex items-center gap-1 shadow-2xs">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                        <span>Aktiv zugewiesen</span>
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {assignments[editingTemplate.eventType] === editingTemplate.id && (
+                        <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-950 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                          <span>Aktiv zugewiesen</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
+                  <p className="text-xs text-slate-500 mt-0.5 font-medium truncate">
                     {currentEventDef?.description || "Bearbeite das Design visuell im Canvas"}
                   </p>
                 </div>
@@ -839,34 +938,22 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
                 </div>
               </div>
 
-              {/* Email Envelope Header Bar (Betreff & Posteingang-Simulator) */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-3">
-                <div className="space-y-0.5 overflow-hidden">
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700">
-                    Posteingang Betreffzeile:
-                  </div>
-                  <div className="text-sm font-bold text-slate-900 truncate">
-                    {livePreview.renderedSubject || draftSubject || "(Kein Betreff)"}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBlockId(null)}
-                  className="px-2.5 py-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200/80 transition-colors shrink-0 cursor-pointer"
-                >
-                  Betreff bearbeiten
-                </button>
-              </div>
+              {/* Statischer, dauerhaft verankerter Betreffzeilen-Header mit Live-Badges */}
+              <CanvasSubjectHeader
+                subject={draftSubject}
+                onChangeSubject={setDraftSubject}
+                inputRef={subjectInputRef}
+              />
 
               {/* Canvas Device Container */}
-              <div className="bg-slate-200/80 p-3 sm:p-6 rounded-3xl border border-slate-300/70 shadow-inner flex justify-center overflow-x-auto min-h-[500px]">
+              <div className="bg-slate-200/80 p-6 sm:p-8 rounded-3xl border border-slate-300/70 shadow-inner flex justify-center items-start overflow-x-auto">
                 <div
                   style={{
                     width: previewDevice === "desktop" ? "600px" : "360px",
                     maxWidth: "100%",
                     transition: "width 0.2s ease-in-out",
                   }}
-                  className="bg-white rounded-none shadow-xl border border-slate-300 overflow-hidden flex flex-col"
+                  className="bg-white rounded-none shadow-xl border border-slate-300 relative w-full h-fit self-start overflow-hidden"
                 >
                   {/* Subtle Mac/Window Header Decoration (ohne Zähler) */}
                   <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex items-center justify-between select-none">
@@ -880,28 +967,21 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* Fixed Email Corporate Header Banner */}
-                  <div
-                    style={{ backgroundColor: globalSettings.primaryColor || "#064e3b" }}
-                    className="p-5 text-white flex items-center gap-3.5 select-none rounded-none"
-                  >
-                    <div className="w-10 h-10 rounded-none bg-white/10 flex items-center justify-center font-bold text-lg border border-white/20">
-                      🎾
-                    </div>
-                    <div>
-                      <div className="font-extrabold text-base leading-tight">
-                        {clubName}
-                      </div>
-                      <div className="text-[11px] text-white/80 font-medium uppercase tracking-wider">
-                        Platzreservierung & Benachrichtigungen
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Canvas Body: Blocks List */}
-                  <div className="p-0 space-y-0 divide-y divide-transparent bg-white flex-1 min-h-[300px]">
+                  {/* Canvas Body: Blocks List (starts directly with dynamic blocks, no hardcoded header banner) */}
+                  <div className="p-0 space-y-0 bg-white">
                     {/* Top Inline Insert (Index 0) */}
                     <InlineBlockInsert onInsert={(type) => handleInsertBlockAtIndex(type, 0)} />
+
+                    {/* Empty State when no blocks */}
+                    {draftBlocks.length === 0 && (
+                      <div className="py-16 px-6 text-center text-slate-400">
+                        <LayoutTemplate className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                        <p className="text-sm font-semibold text-slate-600">Keine Bausteine vorhanden</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Klicke oben auf das „+“-Symbol, um eine Kopfzeile, Text, Button oder eine Grafik einzufügen.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Stacked Canvas Rows */}
                     {canvasRows.map((row, rowIndex) => (
@@ -940,21 +1020,31 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
                               : "grid grid-cols-1 gap-0"
                           }`}
                         >
-                          {row.items.map(({ block, index }) => (
-                            <div key={block.id} className="relative group">
-                              <CanvasBlockRenderer
-                                block={block}
-                                isSelected={selectedBlockId === block.id}
-                                onSelect={() => setSelectedBlockId(block.id)}
-                                onUpdateBlock={handleUpdateBlock}
-                                onDelete={() => handleDeleteBlock(block.id)}
-                                canAddColumn={row.columnCount < 3}
-                                onInsertColumn={(side, type) =>
-                                  handleInsertColumn(index, side, type)
-                                }
-                              />
-                            </div>
-                          ))}
+                          {row.items.map(({ block, index }, itemIndex) => {
+                            const canAddMore =
+                              row.columnCount < 3 &&
+                              block.type !== "header" &&
+                              block.type !== "columns";
+                            const canAddLeft = canAddMore && (row.columnCount === 1 || itemIndex === 0);
+                            const canAddRight = canAddMore;
+
+                            return (
+                              <div key={block.id} className="relative group">
+                                <CanvasBlockRenderer
+                                  block={block}
+                                  isSelected={selectedBlockId === block.id}
+                                  onSelect={() => setSelectedBlockId(block.id)}
+                                  onUpdateBlock={handleUpdateBlock}
+                                  onDelete={() => handleDeleteBlock(block.id)}
+                                  canAddColumnLeft={canAddLeft}
+                                  canAddColumnRight={canAddRight}
+                                  onInsertColumn={(side, type) =>
+                                    handleInsertColumn(index, side, type)
+                                  }
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {/* Inline Insert After this Row */}
@@ -981,6 +1071,7 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
                 globalSettings={globalSettings}
                 onChangeGlobalSettings={setGlobalSettings}
                 onUpdateBlock={handleUpdateBlock}
+                onDeselect={() => setSelectedBlockId(null)}
                 onDeleteBlock={() => {
                   if (selectedBlockId) {
                     handleDeleteBlock(selectedBlockId);
@@ -997,6 +1088,7 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
                     targetAudience: "Empfänger",
                   }
                 }
+                tenantColors={activeTenantColors}
               />
             </div>
           </div>
@@ -1141,6 +1233,51 @@ export const EmailTemplateManager: React.FC<EmailTemplateManagerProps> = ({
                 className="px-4 py-1.5 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200/60 cursor-pointer"
               >
                 Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Token Warning Modal */}
+      {saveWarningModal?.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white border border-amber-200 rounded-2xl max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-black text-slate-900">
+                  {saveWarningModal.title}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {saveWarningModal.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 text-[11px] text-amber-900 flex items-center justify-between">
+              <span className="font-medium">Erforderliches Token:</span>
+              <code className="bg-white px-2 py-0.5 rounded border border-amber-300 font-mono font-bold text-amber-800">
+                {saveWarningModal.missingToken}
+              </code>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setSaveWarningModal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Abbrechen & Link einfügen
+              </button>
+              <button
+                type="button"
+                onClick={saveWarningModal.onConfirm}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer shadow-sm active:scale-95"
+              >
+                Trotzdem speichern
               </button>
             </div>
           </div>

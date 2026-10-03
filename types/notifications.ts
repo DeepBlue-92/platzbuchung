@@ -8,6 +8,8 @@ export type NotificationEventKey =
   | "RESERVATION_MODIFIED"
   | "HOBBYLIGA_NEW_POST"
   | "MATCH_RESULT_SUBMITTED"
+  | "USER_ACTIVATION"
+  | "PASSWORD_RESET"
   | string;
 
 export interface UserNotificationSettings {
@@ -16,6 +18,8 @@ export interface UserNotificationSettings {
   RESERVATION_CONFIRMED?: boolean;
   RESERVATION_CANCELLED?: boolean;
   RESERVATION_MODIFIED?: boolean;
+  USER_ACTIVATION?: boolean;
+  PASSWORD_RESET?: boolean;
   [key: string]: boolean | undefined;
 }
 
@@ -24,7 +28,7 @@ export type SystemwideNotificationSettings = Record<string, boolean>;
 export interface NotificationEventDefinition {
   key: NotificationEventKey;
   label: string;
-  category: "hobbyliga" | "matches" | "booking";
+  category: "hobbyliga" | "matches" | "booking" | "auth";
   description: string;
   defaultEnabled: boolean;
   targetAudience: string;
@@ -50,24 +54,58 @@ export type EmailFontFamily =
   | "serif"
   | "mono";
 
-export type TemplateBlockType = "text" | "button" | "image" | "header";
+export type TemplateBlockType = "text" | "button" | "image" | "header" | "columns";
+
+export type ColumnChildBlockType = "text" | "button" | "image";
+
+export interface ColumnChildBlock {
+  id: string;
+  type: ColumnChildBlockType;
+  config: TextBlockConfig | ButtonBlockConfig | ImageBlockConfig;
+}
+
+export interface ColumnDefinition {
+  id: string;
+  widthPercent: number; // e.g. 25, 75, 50, 33.33
+  blocks: ColumnChildBlock[];
+}
+
+export interface ColumnsBlockConfig {
+  columns: ColumnDefinition[];
+  gap: number; // Gap in px between columns, e.g. 0
+  paddingY?: number; // in px, e.g. 12
+  paddingX?: number; // in px, e.g. 0
+  backgroundColor?: string; // background color, e.g. "transparent" or "#ffffff"
+  backgroundImageUrl?: string; // background image URL or base64
+  verticalAlign?: "top" | "middle" | "bottom";
+  titleFontFamily?: EmailFontFamily;
+  titleFontSize?: number;
+  titleColor?: string;
+  subtitleFontFamily?: EmailFontFamily;
+  subtitleFontSize?: number;
+  subtitleColor?: string;
+}
 
 export interface HeaderBlockConfig {
   logoUrl?: string;
   logoAlt?: string;
-  logoHeight?: number; // e.g. 44 in px
-  title: string;
-  subtitle?: string;
+  logoWidth?: number; // e.g. 72 in px (square logo)
+  logoHeight?: number; // fallback/compat in px
+  textContent?: string; // freely formattable text on right
+  title?: string; // backward compat fallback
+  subtitle?: string; // backward compat fallback
   fontFamily?: EmailFontFamily;
-  fontSize?: number; // Title font size e.g. 20
-  subtitleFontSize?: number; // Subtitle font size e.g. 13
-  lineHeight?: number; // e.g. 1.3
+  fontSize?: number; // font size e.g. 18
+  subtitleFontSize?: number; // fallback
+  lineHeight?: number; // e.g. 1.4
   textAlign?: "left" | "center" | "right";
-  paddingY?: number; // in px, e.g. 20
-  paddingX?: number; // in px, e.g. 24
-  color?: string; // Title / text color, e.g. #ffffff or #0f172a
-  subtitleColor?: string; // Subtitle color, e.g. #94a3b8 or #64748b
-  backgroundColor?: string; // background color, e.g. #064e3b or #ffffff
+  textColor?: string; // e.g. #0f172a
+  color?: string; // fallback
+  subtitleColor?: string;
+  paddingY?: number; // in px, e.g. 16
+  paddingX?: number; // in px, e.g. 0
+  backgroundColor?: string; // background color, e.g. "transparent" or "#ffffff"
+  backgroundImageUrl?: string; // background image URL or base64
 }
 
 export interface TextBlockConfig {
@@ -111,7 +149,7 @@ export interface TemplateBlock {
   id: string;
   type: TemplateBlockType;
   columnSpan?: "full" | "half" | "third"; // "full" = 100%, "half" = 50%, "third" = 33.3%
-  config: TextBlockConfig | ButtonBlockConfig | ImageBlockConfig | HeaderBlockConfig;
+  config: TextBlockConfig | ButtonBlockConfig | ImageBlockConfig | HeaderBlockConfig | ColumnsBlockConfig;
 }
 
 export interface EmailTemplateGlobalSettings {
@@ -130,6 +168,7 @@ export interface EmailTemplate {
   blocks?: TemplateBlock[];
   globalSettings?: EmailTemplateGlobalSettings;
   availableVariables?: string[];
+  is_system_template?: boolean;
   createdAt?: string;
   updatedAt?: string;
   updatedBy?: string;

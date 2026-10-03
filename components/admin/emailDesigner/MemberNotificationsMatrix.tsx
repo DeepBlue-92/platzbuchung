@@ -313,12 +313,21 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
       </div>
 
       {/* Spieler-Matrix Tabelle */}
-      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs min-h-[580px] flex flex-col justify-between">
+        <div className="overflow-x-auto flex-1">
+          <table className="w-full min-w-[800px] table-fixed text-left text-xs border-collapse">
+            <colgroup>
+              <col style={{ width: "48px" }} />
+              <col />
+              <col style={{ width: "135px" }} />
+              <col style={{ width: "120px" }} />
+              <col style={{ width: "120px" }} />
+              <col style={{ width: "135px" }} />
+              <col style={{ width: "135px" }} />
+            </colgroup>
             <thead className="bg-slate-100/90 sticky top-0 z-10 border-b border-slate-200 select-none">
               <tr className="text-[11px] font-black uppercase tracking-wider text-slate-600">
-                <th className="py-2.5 px-3 w-10 text-center">
+                <th className="py-2.5 px-3 text-center">
                   <input
                     type="checkbox"
                     checked={isAllSelected}
@@ -327,11 +336,11 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
                     title="Alle sichtbar gefilterten Spieler an- oder abwählen"
                   />
                 </th>
-                <th className="py-2.5 px-3 min-w-[200px]">Mitglied</th>
+                <th className="py-2.5 px-3">Mitglied</th>
                 {MATRIX_COLUMNS.map((col) => {
                   const isGloballyOff = systemwideActive[col.key] === false || isGlobalEmailPaused;
                   return (
-                    <th key={col.key} className="py-2.5 px-3 text-center min-w-[110px]">
+                    <th key={col.key} className="py-2.5 px-3 text-center">
                       <div className="flex flex-col items-center">
                         <span className={isGloballyOff ? "text-slate-400 line-through" : "text-slate-800"}>
                           {col.label}
@@ -350,7 +359,7 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
             <tbody className="divide-y divide-slate-100">
               {paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400 text-xs">
+                  <td colSpan={7} className="py-24 text-center text-slate-400 text-xs">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search className="w-6 h-6 text-slate-300" />
                       <span>Keine Spieler passend zu „{searchQuery}“ gefunden.</span>
@@ -388,11 +397,11 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
                       </td>
 
                       {/* Mitglied Spalte */}
-                      <td className="py-2.5 px-3">
-                        <div className="font-bold text-slate-900 text-xs truncate max-w-xs">
+                      <td className="py-2.5 px-3 overflow-hidden">
+                        <div className="font-bold text-slate-900 text-xs truncate">
                           {item.displayName}
                         </div>
-                        <div className="text-[11px] text-slate-400 truncate max-w-xs">
+                        <div className="text-[11px] text-slate-400 truncate">
                           {item.email || "Keine E-Mail"}
                         </div>
                       </td>
@@ -429,12 +438,14 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
           </table>
         </div>
 
-        {/* Paginierungs-Leiste: erscheint nur, wenn mehr als 30 Spieler vorhanden sind */}
-        {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
-            <span className="text-slate-600 font-bold">
-              Seite {currentPage} von {totalPages} ({filteredUsers.length} Spieler gesamt)
-            </span>
+        {/* Paginierungs- & Status-Leiste: sorgt für stabile Höhe und saubere Orientierung */}
+        <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs mt-auto">
+          <span className="text-slate-600 font-bold">
+            {totalPages > 1
+              ? `Seite ${currentPage} von ${totalPages} (${filteredUsers.length} Spieler gesamt)`
+              : `${filteredUsers.length} Spieler ${searchQuery ? "gefunden" : "im System"}`}
+          </span>
+          {totalPages > 1 && (
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -455,8 +466,8 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

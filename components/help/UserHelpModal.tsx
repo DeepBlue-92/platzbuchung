@@ -265,7 +265,7 @@ export const UserHelpModal: React.FC<UserHelpModalProps> = ({
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto h-full flex flex-col py-2 sm:py-6 px-2 sm:px-4 animate-in fade-in duration-300">
+    <div className="w-full max-w-[1600px] mx-auto h-full flex flex-col py-4 px-3 sm:px-4 animate-in fade-in duration-300">
       {content}
     </div>
   );

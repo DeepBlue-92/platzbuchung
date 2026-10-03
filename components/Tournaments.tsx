@@ -735,7 +735,7 @@ const Tournaments: React.FC<TournamentsProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full lg:animate-in lg:fade-in lg:duration-500">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow lg:animate-in lg:fade-in lg:duration-500 min-h-0">
       {/* Slider Drawer via Portal */}
       {isSliderOpen &&
         createPortal(

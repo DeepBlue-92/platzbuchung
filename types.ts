@@ -57,6 +57,7 @@ export interface Person {
   clubs?: UserClub[];
   avatarUrl?: string | null; // WebP komprimiertes Profilbild (< 25 KB, permanent gecached)
   avatarIcon?: string | null; // Zero-Bandwidth Vektor-Icon ID (z.B. "tennis-ball", "racket", "trophy")
+  avatarColor?: string | null; // Freie Farbwahl für Icon-Avatar (z.B. "#1b4332", "#2563eb")
   onboarding_pending?: boolean; // Indicates if member onboarding is required
   onboardingPending?: boolean; // CamelCase alias for onboarding_pending
   showAiAssistant?: boolean; // Club-Assistent ('Ace') aktivieren (Default: true)
@@ -64,6 +65,15 @@ export interface Person {
   notification_settings?: UserNotificationSettings; // Notification event subscriptions
   notificationSettings?: UserNotificationSettings; // CamelCase alias
   notificationPreferences?: UserNotificationSettings; // Preference alias
+  lastLogin?: string | null;
+  lastLoginAt?: string | null;
+  last_login?: string | null;
+  activationSentAt?: string | null;
+  activationToken?: string | null;
+  activationTokenExpiresAt?: string | null;
+  passwordResetSentAt?: string | null;
+  passwordResetToken?: string | null;
+  passwordResetTokenExpiresAt?: string | null;
 }
 
 export type OnboardingFieldPermission = "HIDDEN" | "READ_ONLY" | "EDITABLE";
@@ -395,3 +405,33 @@ export interface GlobalSystemSettings {
   lastUpdated?: string;
   updatedBy?: string;
 }
+
+export type BentoItemType =
+  | "rich_text"
+  | "worklet_courts"
+  | "worklet_events"
+  | "worklet_championship"
+  | "worklet_weather";
+
+export interface BentoItem {
+  id: string;
+  type: BentoItemType;
+  col_span: 4 | 6 | 8 | 12;
+  order: number;
+  title: string;
+  content: string; // Rich Text (formatted text/markdown/paragraphs)
+  default_view?: "day" | "week"; // For worklet_courts
+  eyebrow?: string; // Optional custom eyebrow badge
+  city?: string; // For worklet_weather
+  latitude?: number; // For worklet_weather
+  longitude?: number; // For worklet_weather
+}
+
+export interface LandingPageConfig {
+  is_enabled: boolean;
+  nav_order?: string[];
+  items: BentoItem[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
