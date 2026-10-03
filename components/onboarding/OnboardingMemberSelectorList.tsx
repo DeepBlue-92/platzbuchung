@@ -123,7 +123,7 @@ export const OnboardingMemberSelectorList: React.FC<OnboardingMemberSelectorList
                     </span>
                   )}
 
-                  {/* Schnell-Toggle / Button ganz rechts */}
+                  {/* Schnelltoggle / Button ganz rechts */}
                   <button
                     type="button"
                     onClick={() => onToggleSingleStatus(user)}

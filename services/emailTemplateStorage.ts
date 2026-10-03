@@ -55,7 +55,7 @@ export function getDefaultTemplateLibrary(): EmailTemplate[] {
     {
       ...DEFAULT_EMAIL_TEMPLATES.HOBBYLIGA_NEW_POST,
       id: "tmpl_default_hobbyliga_new_post",
-      name: "Standard Hobbyliga-Post",
+      name: "Standard Hobbyligapost",
       eventType: "HOBBYLIGA_NEW_POST",
       is_system_template: true,
       createdAt: new Date().toISOString(),
@@ -64,7 +64,7 @@ export function getDefaultTemplateLibrary(): EmailTemplate[] {
     {
       ...DEFAULT_EMAIL_TEMPLATES.MATCH_RESULT_SUBMITTED,
       id: "tmpl_default_match_result_submitted",
-      name: "Standard Match-Ergebnis",
+      name: "Standard Matchergebnis",
       eventType: "MATCH_RESULT_SUBMITTED",
       is_system_template: true,
       createdAt: new Date().toISOString(),

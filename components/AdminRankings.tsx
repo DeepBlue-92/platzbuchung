@@ -281,23 +281,23 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
   return (
     <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
       {/* Global View Mode Setting */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-2">
+          <h4 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <i className="fa-solid fa-eye text-[var(--color-primary)]"></i>
-            Globales Ansichtsformat der Rangliste
+            <span>Globales Ansichtsformat der Rangliste</span>
           </h4>
-          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-            Bestimmt die Darstellung für alle Mitglieder (Pyramide oder Tabelle). Der manuelle Ansichts-Schalter auf der Mitgliederseite ist deaktiviert.
+          <p className="text-xs text-slate-500 font-normal mt-0.5">
+            Bestimmt die Darstellung für alle Mitglieder (Pyramide oder Tabelle). Der manuelle Ansichtsschalter auf der Mitgliederseite ist deaktiviert.
           </p>
         </div>
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80 shrink-0">
           <button
             type="button"
             onClick={() => handleUpdateGlobalViewMode("pyramid")}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               currentViewMode === "pyramid"
-                ? "bg-white text-slate-900 shadow-xs font-black"
+                ? "bg-white text-slate-900 shadow-xs font-bold"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -309,7 +309,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
             onClick={() => handleUpdateGlobalViewMode("list")}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               currentViewMode === "list"
-                ? "bg-white text-slate-900 shadow-xs font-black"
+                ? "bg-white text-slate-900 shadow-xs font-bold"
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -319,20 +319,32 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
         {/* Category Management */}
-        <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 shadow-sm">
-          <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-            <i className="fa-solid fa-list-ol"></i> Verfügbare Ranglisten
-          </h3>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5 flex flex-col">
+          <div className="border-b border-slate-100 pb-3">
+            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <i className="fa-solid fa-list-ol text-[var(--color-primary)]"></i>
+              <span>Verfügbare Ranglisten</span>
+            </h3>
+            <p className="text-xs text-slate-500 font-normal mt-0.5">
+              Kategorien anlegen, sortieren und Ansichtsmodus festlegen.
+            </p>
+          </div>
 
-          <div className="flex flex-col gap-2 mb-4">
+          <div className="flex flex-col gap-2.5">
             <input 
               type="text"
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newCatName.trim()) {
+                  e.preventDefault();
+                  handleAddCategory();
+                }
+              }}
               placeholder="Name (z.B. Herren, Damen)"
-              className="w-full px-2.5 rounded-xl border border-slate-300 text-xs bg-white py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+              className="w-full h-10 px-3.5 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all font-normal placeholder:text-slate-400"
             />
             <div className="flex gap-2">
               <select 
@@ -340,16 +352,19 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                 onChange={(e) =>
                   setNewCatLayout(e.target.value as "pyramid" | "linear")
                 }
-                className="flex-1 px-2.5 rounded-xl border border-slate-300 text-xs bg-white py-2 font-sans font-medium"
+                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all cursor-pointer"
               >
                 <option value="pyramid">Tannenbaum (Pyramide)</option>
                 <option value="linear">Lineare Liste</option>
               </select>
               <button
+                type="button"
                 onClick={handleAddCategory}
-                className="bg-[var(--color-primary)] text-white px-4 rounded-xl uppercase hover:bg-[var(--color-accent)] transition-colors active:scale-95 shrink-0 py-2.5 text-sm font-medium"
+                disabled={!newCatName.trim()}
+                className="h-10 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white font-semibold text-xs rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-95 shrink-0"
               >
-                Hinzufügen
+                <i className="fa-solid fa-plus text-xs"></i>
+                <span>Hinzufügen</span>
               </button>
             </div>
           </div>
@@ -358,23 +373,23 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
             {categories.map((cat, idx) => (
               <div
                 key={cat.id}
-                className={`flex justify-between items-center bg-white p-3 rounded-2xl border cursor-pointer overflow-hidden group transition-all duration-200 ${activeCategoryId === cat.id ? "border-l-4 border-l-[var(--color-primary)] border-t-slate-200 border-r-slate-200 border-b-slate-200 bg-slate-50 shadow-sm" : "border-slate-200 hover:border-slate-300"}`}
+                className={`flex justify-between items-center bg-white p-3 rounded-xl border cursor-pointer overflow-hidden group transition-all duration-200 ${activeCategoryId === cat.id ? "border-l-4 border-l-[var(--color-primary)] border-t-slate-200 border-r-slate-200 border-b-slate-200 bg-slate-50/80 shadow-2xs" : "border-slate-200 hover:border-slate-300"}`}
                 onClick={() => setActiveCategoryId(cat.id)}
               >
                 <div className="flex items-center gap-3 w-full min-w-0">
                   <span
-                    className={`text-white text-xs font-bold px-2 py-1 rounded-full uppercase shrink-0 ${activeCategoryId === cat.id ? "bg-[var(--color-primary)]" : "bg-slate-300"}`}
+                    className={`text-white text-xs font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${activeCategoryId === cat.id ? "bg-[var(--color-primary)]" : "bg-slate-400"}`}
                   >
                     {cat.entries.length} Sp.
                   </span>
                   <div className="flex flex-col min-w-0">
                     <span
-                      className={`font-black text-xs md:text-sm uppercase truncate ${activeCategoryId === cat.id ? "text-[var(--color-primary)]" : "text-slate-700"}`}
+                      className={`font-bold text-xs md:text-sm truncate ${activeCategoryId === cat.id ? "text-slate-900" : "text-slate-700"}`}
                     >
                       {cat.name}
                     </span>
                     <span
-                      className={`text-[9px] font-bold uppercase ${activeCategoryId === cat.id ? "text-[var(--color-primary)]/70" : "text-slate-400"}`}
+                      className={`text-[10px] font-medium ${activeCategoryId === cat.id ? "text-[var(--color-primary)]" : "text-slate-400"}`}
                     >
                       {(cat.layout || "pyramid") === "pyramid"
                         ? "Tannenbaum"
@@ -390,7 +405,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                       e.stopPropagation();
                       moveCategory(idx, "up");
                     }}
-                    className="w-8 h-8 rounded-lg text-slate-400 hover:text-[var(--color-primary)] disabled:opacity-20 active:scale-90"
+                    className="w-7 h-7 rounded-lg text-slate-400 hover:text-[var(--color-primary)] disabled:opacity-20 active:scale-90 flex items-center justify-center cursor-pointer"
                   >
                     <i className="fa-solid fa-arrow-up text-xs"></i>
                   </button>
@@ -400,7 +415,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                       e.stopPropagation();
                       moveCategory(idx, "down");
                     }}
-                    className="w-8 h-8 rounded-lg text-slate-400 hover:text-[var(--color-primary)] disabled:opacity-20 active:scale-90"
+                    className="w-7 h-7 rounded-lg text-slate-400 hover:text-[var(--color-primary)] disabled:opacity-20 active:scale-90 flex items-center justify-center cursor-pointer"
                   >
                     <i className="fa-solid fa-arrow-down text-xs"></i>
                   </button>
@@ -409,7 +424,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                       e.stopPropagation();
                       handleDeleteCategory(cat.id);
                     }}
-                    className="w-8 h-8 rounded-lg text-red-300 hover:text-red-500 active:scale-90"
+                    className="w-7 h-7 rounded-lg text-slate-400 hover:text-red-500 active:scale-90 flex items-center justify-center cursor-pointer"
                   >
                     <i className="fa-solid fa-trash text-xs"></i>
                   </button>
@@ -417,7 +432,7 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
               </div>
             ))}
             {categories.length === 0 && (
-              <div className="text-center text-slate-400 text-xs font-bold py-4">
+              <div className="text-center text-slate-400 text-xs font-semibold py-4">
                 Noch keine Ranglisten erstellt.
               </div>
             )}
@@ -425,39 +440,42 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
         </div>
 
         {/* Player Management */}
-        <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 shadow-sm flex flex-col h-full">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5 flex flex-col h-full">
           {activeCategory ? (
             <>
-              <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-slate-900 flex items-center justify-between border-b border-slate-100 pb-3">
                 <span className="flex items-center gap-2">
-                  <i className="fa-solid fa-users"></i> Spieler:{" "}
+                  <i className="fa-solid fa-users text-[var(--color-primary)]"></i> Spieler:{" "}
                   {activeCategory.name}
+                </span>
+                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200/60">
+                  {activeCategory.entries.length} Spieler
                 </span>
               </h3>
 
               {/* Meta & Configuration Row */}
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                <div className="flex-1 flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200">
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 flex items-center justify-between bg-slate-50/50 px-3 py-2 rounded-xl border border-slate-200">
+                  <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wider">
                     Layout:
                   </span>
-                  <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
+                  <div className="flex gap-1 bg-slate-200/70 p-0.5 rounded-lg">
                     <button
                       onClick={() => handleUpdateCategoryLayout("pyramid")}
-                      className={`px-3 py-1 rounded-md text-[9px] font-black uppercase transition-all ${
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all ${
                         (activeCategory.layout || "pyramid") === "pyramid"
-                          ? "bg-slate-700 text-white shadow-sm"
-                          : "text-slate-500 hover:bg-slate-200"
+                          ? "bg-[var(--color-primary)] text-white shadow-xs"
+                          : "text-slate-600 hover:bg-white/60"
                       }`}
                     >
                       Tannenbaum
                     </button>
                     <button
                       onClick={() => handleUpdateCategoryLayout("linear")}
-                      className={`px-3 py-1 rounded-md text-[9px] font-black uppercase transition-all ${
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all ${
                         activeCategory.layout === "linear"
-                          ? "bg-slate-700 text-white shadow-sm"
-                          : "text-slate-500 hover:bg-slate-200"
+                          ? "bg-[var(--color-primary)] text-white shadow-xs"
+                          : "text-slate-600 hover:bg-white/60"
                       }`}
                     >
                       Lineare Liste
@@ -465,16 +483,16 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                   </div>
                 </div>
 
-                <div className="flex-1 flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200">
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                <div className="flex-1 flex items-center justify-between bg-slate-50/50 px-3 py-2 rounded-xl border border-slate-200">
+                  <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wider">
                     Regeln:
                   </span>
                   {!isEditingRules && (
                     <button
                       onClick={() => setIsEditingRules(true)}
-                      className="px-2 py-1 rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all font-black uppercase text-[9px] flex items-center gap-1.5 text-slate-600 active:scale-95"
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition-all font-bold text-xs flex items-center gap-1.5 text-slate-700 active:scale-95 shadow-2xs cursor-pointer"
                     >
-                      <i className="fa-solid fa-pen-to-square text-[var(--color-accent)]"></i>{" "}
+                      <i className="fa-solid fa-pen-to-square text-[var(--color-primary)]"></i>{" "}
                       Bearbeiten
                     </button>
                   )}
@@ -482,9 +500,9 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
               </div>
 
               {isEditingRules && (
-                <div className="mb-4 bg-white p-3 rounded-2xl border border-slate-200 space-y-3">
+                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
                   <textarea
-                    className="w-full min-h-[140px] border border-slate-250 rounded-xl outline-none focus:border-[var(--color-primary)] text-slate-800 bg-slate-50/50 resize-y p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                    className="w-full min-h-[140px] border border-slate-200 rounded-xl outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 bg-white resize-y p-3 text-sm placeholder:text-slate-400 font-sans"
                     value={editedRulesText}
                     onChange={(e) => setEditedRulesText(e.target.value)}
                     placeholder="Trage hier die Regeln ein. Verwende * am Zeilenanfang für Listenpunkte..."
@@ -496,27 +514,28 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                         setEditedRulesText(rules);
                         setIsEditingRules(false);
                       }}
-                      className="px-4 h-10 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-black uppercase tracking-wider text-[10px] transition-colors"
+                      className="h-10 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
                     >
                       Abbrechen
                     </button>
                     <button
                       type="button"
                       onClick={handleSaveRules}
-                      className="px-4 bg-[var(--color-primary)] hover:bg-[var(--color-accent)] text-white rounded-xl uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-sm py-2.5 text-sm font-medium"
+                      className="h-10 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white font-semibold text-xs rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer whitespace-nowrap active:scale-95"
                     >
-                      <i className="fa-solid fa-check text-white/80"></i>{" "}
-                      Speichern
+                      <i className="fa-solid fa-check text-xs"></i>{" "}
+                      <span>Speichern</span>
                     </button>
                   </div>
                 </div>
               )}
 
               {/* Search and Add Player directly */}
-              <div className="mb-4 relative z-[180]">
+              <div className="relative z-[180]">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <input className="w-full rounded-xl border border-slate-300 bg-white p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                    <input
+                      className="w-full h-10 px-3.5 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all placeholder:text-slate-400"
                       placeholder="Spielername suchen..."
                       value={newPlayerQuery}
                       onChange={(e) => {
@@ -532,12 +551,12 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                       }
                     />
                     {showNewPlayerSuggestions && newPlayerQuery && (
-                      <div className="absolute z-[200] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-56 overflow-y-auto no-scrollbar">
+                      <div className="absolute z-[200] w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto no-scrollbar py-1">
                         {newPlayerSuggestions.length > 0 ? (
                           newPlayerSuggestions.map((s) => (
                             <button
                               key={s}
-                              className="w-full text-left px-3 hover:bg-slate-100 text-slate-700 border-b last:border-0 py-2.5 text-sm font-medium"
+                              className="w-full text-left px-3.5 py-2 hover:bg-slate-50 text-slate-700 text-sm font-medium border-b border-slate-100 last:border-0 cursor-pointer"
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 handleAddPlayerByName(s);
@@ -547,14 +566,14 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                             </button>
                           ))
                         ) : (
-                          <div className="p-3 text-center text-slate-400 text-[10px] font-bold">
+                          <div className="p-3 text-center text-slate-400 text-xs font-medium">
                             Kein genauer Treffer.
                             <button
                               onMouseDown={(e) => {
                                 e.preventDefault();
                                 handleAddPlayerByName(newPlayerQuery.trim());
                               }}
-                              className="mt-2 w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-center font-black uppercase text-[var(--color-primary)] rounded-lg text-[9px]"
+                              className="mt-2 w-full py-2 bg-slate-100 hover:bg-slate-200 text-center font-semibold text-[var(--color-primary)] rounded-lg text-xs cursor-pointer"
                             >
                               "{newPlayerQuery.trim()}" hinzufügen
                             </button>
@@ -571,9 +590,10 @@ const AdminRankings: React.FC<AdminRankingsProps> = ({
                         handleAddPlayerByName("Gastspieler");
                       }
                     }}
-                    className="bg-[var(--color-primary)] text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] hover:bg-[var(--color-accent)] transition-colors active:scale-95 shrink-0"
+                    className="h-10 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white font-semibold text-xs rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer whitespace-nowrap active:scale-95 shrink-0"
                   >
-                    Hinzufügen
+                    <i className="fa-solid fa-plus text-xs"></i>
+                    <span>Hinzufügen</span>
                   </button>
                 </div>
               </div>

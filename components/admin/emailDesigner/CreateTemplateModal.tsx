@@ -120,11 +120,11 @@ export const CreateTemplateModal: React.FC<CreateTemplateModalProps> = ({
             />
           </div>
 
-          {/* Event-Typ Dropdown */}
+          {/* Eventtyp Dropdown */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-900 uppercase tracking-wider block">
-                Event-Typ <span className="text-rose-500">*</span>
+                Eventtyp <span className="text-rose-500">*</span>
               </label>
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md">
                 Nach Erstellung fest zugeordnet

@@ -90,7 +90,7 @@ export async function sendTestEmailApi(options: {
       return {
         success: false,
         status: "failed",
-        message: errorData.message || `Server-Fehler: Status ${response.status}`,
+        message: errorData.message || `Serverfehler: Status ${response.status}`,
         error: errorData.error || "HTTP_ERROR",
       };
     }

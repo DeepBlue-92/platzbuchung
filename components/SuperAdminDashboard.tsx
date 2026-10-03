@@ -484,7 +484,7 @@ export default function SuperAdminDashboard({
     try {
       const res = await resetLeagueTestData(leagueToResetTestData.id, leagueToResetTestData.name);
       setLeagueNotification({
-        text: `Testdaten für "${leagueToResetTestData.name}" wurden zurückgesetzt (${res.matchesDeleted} Matches, ${res.profilesReset} Profile). Ein automatischer Sicherheits-Snapshot (${res.backupName}) wurde im Backup-Bereich gesichert.`,
+        text: `Testdaten für "${leagueToResetTestData.name}" wurden zurückgesetzt (${res.matchesDeleted} Matches, ${res.profilesReset} Profile). Ein automatischer Sicherheitssnapshot (${res.backupName}) wurde im Backup-Bereich gesichert.`,
         type: "success",
       });
       setTimeout(() => setLeagueNotification(null), 6000);
@@ -647,7 +647,7 @@ export default function SuperAdminDashboard({
   const handleOpenEditConfigModal = (ver: LeagueConfigVersion) => {
     const targetLeague = availableLeagues.find((l) => l.id === ver.leagueId) || {
       id: ver.leagueId || (ver.is_base_rule ? "base_rule_20000101" : "herren"),
-      name: ver.is_base_rule ? "Basis-Regelwerk (Universal)" : (availableLeagues.find((l) => l.id === ver.leagueId)?.name || ver.leagueId || "Hobbyliga"),
+      name: ver.is_base_rule ? "Basisregelwerk (Universal)" : (availableLeagues.find((l) => l.id === ver.leagueId)?.name || ver.leagueId || "Hobbyliga"),
     };
     setManagingRulesLeague(targetLeague);
   };
@@ -737,7 +737,7 @@ export default function SuperAdminDashboard({
       await saveSystemUpdates(changelogText, "Super-Admin");
       setChangelogSavedText(changelogText);
       setChangelogNotification({
-        text: "Das Changelog und die System-Updates wurden erfolgreich systemweit für alle Vereins-Administratoren gespeichert.",
+        text: "Das Changelog und die Systemupdates wurden erfolgreich systemweit für alle Vereins-Administratoren gespeichert.",
         type: "success",
       });
       setTimeout(() => setChangelogNotification(null), 5000);
@@ -1576,7 +1576,7 @@ export default function SuperAdminDashboard({
                             <td className="px-6 py-4 text-right space-x-2">
                               <button
                                 onClick={() =>
-                                  window.open(`/${club.vereinsId}`, "_blank")
+                                  window.open(`/${club.vereinsId}#login`, "_blank")
                                 }
                                 className="text-slate-400 hover:text-[var(--color-accent)] transition-colors p-1.5"
                                 title="Anmeldeseite aufrufen"
@@ -1852,12 +1852,12 @@ export default function SuperAdminDashboard({
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <div>
                       <h2 className="text-sm font-black text-slate-700 uppercase tracking-tight">
-                        System-Updates & Changelog
+                        Systemupdates & Changelog
                       </h2>
                       <p className="text-xs text-slate-500 font-medium leading-relaxed">
                         Bearbeite hier die globalen Systemänderungen. Diese
                         Mitteilung wird allen Vereins-Administratoren in deren
-                        Steuerungs-Dashboard als "System-Updates" angezeigt, um
+                        Steuerungs-Dashboard als "Systemupdates" angezeigt, um
                         über neue Versionen zu informieren.
                       </p>
                     </div>
@@ -1898,7 +1898,7 @@ export default function SuperAdminDashboard({
                           ref={textareaRef}
                           value={changelogText}
                           onChange={(e) => setChangelogText(e.target.value)}
-                          placeholder="# Version 2.0.0\n- Neues Modul 'System-Updates' hinzugefügt\n- Fehler bei Dirty-Save-Checks behoben"
+                          placeholder="# Version 2.0.0\n- Neues Modul 'Systemupdates' hinzugefügt\n- Fehler bei Dirty-Save-Checks behoben"
                           className="w-full h-96 bg-white border-2 border-t-0 border-slate-200 rounded-b-2xl p-4 text-xs font-mono text-slate-700 focus:outline-none focus:border-blue-500 hover:border-slate-300 transition-colors resize-y leading-relaxed font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                         />
                       </div>
@@ -2630,7 +2630,7 @@ export default function SuperAdminDashboard({
                       <div className="flex items-center gap-2">
                         <i className="fa-solid fa-calendar-check text-amber-500 text-lg"></i>
                         <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">
-                          Stichtag-Regelwerk & Historisierung
+                          Stichtagsregelwerk & Historisierung
                         </h2>
                       </div>
                       <p className="text-xs text-slate-500 font-medium leading-relaxed mt-1 max-w-3xl">
@@ -2666,7 +2666,7 @@ export default function SuperAdminDashboard({
                       <div>
                         <p className="font-extrabold uppercase">Automatische Neuberechnung läuft...</p>
                         <p className="font-normal text-[11px] text-amber-800">
-                          Alle Hobbyliga-Matches und Spielerpunkte werden chronologisch anhand der Stichtags-Regelwerke neu verarbeitet.
+                          Alle Hobbyligamatches und Spielerpunkte werden chronologisch anhand der Stichtags-Regelwerke neu verarbeitet.
                         </p>
                       </div>
                     </div>
@@ -2695,10 +2695,10 @@ export default function SuperAdminDashboard({
                               <div>
                                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                                   {isEditingBaseRule
-                                    ? "Basis-Regelwerk bearbeiten (System Default)"
+                                    ? "Basisregelwerk bearbeiten (System Default)"
                                     : editingConfigId
-                                    ? "Stichtag-Regelwerk bearbeiten"
-                                    : "Neues Stichtag-Regelwerk anlegen"}
+                                    ? "Stichtagsregelwerk bearbeiten"
+                                    : "Neues Stichtagsregelwerk anlegen"}
                                   {isEditingBaseRule && (
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase tracking-wider">
                                       Fixiert (01.01.2000)
@@ -2987,7 +2987,7 @@ export default function SuperAdminDashboard({
                                         badgeStyle: "bg-[#081c15] text-[#52b788] border-[#2d6a4f]/70",
                                       },
                                       {
-                                        title: "Underdog-Sieg",
+                                        title: "Underdogsieg",
                                         subtitle: "80 vs. 120 Pkt.",
                                         playerPts: 80,
                                         oppPts: 120,
@@ -3051,7 +3051,7 @@ export default function SuperAdminDashboard({
                                                 <span className="font-black text-[#52b788] block mb-0.5 text-[10px] uppercase tracking-wider">
                                                   3. Gesamtergebnis:
                                                 </span>
-                                                Teilnahme: <span className="font-mono text-[#74c69d] font-bold">+{baseWin.toFixed(1)}</span> | Logistischer Gegner-Bonus: <span className="font-mono text-[#52b788] font-bold">+{bonus.toFixed(1)}</span> | Gesamt: <span className="font-mono text-white font-black text-xs">+{total.toFixed(1)} Pkt.</span>
+                                                Teilnahme: <span className="font-mono text-[#74c69d] font-bold">+{baseWin.toFixed(1)}</span> | Logistischer Gegnerbonus: <span className="font-mono text-[#52b788] font-bold">+{bonus.toFixed(1)}</span> | Gesamt: <span className="font-mono text-white font-black text-xs">+{total.toFixed(1)} Pkt.</span>
                                               </div>
                                             </div>
                                           </div>
@@ -3070,7 +3070,7 @@ export default function SuperAdminDashboard({
                                 className="flex-1 py-3 bg-[#1b4332] hover:bg-black text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
                               >
                                 <i className="fa-solid fa-floppy-disk text-sm"></i>
-                                {isEditingBaseRule ? "Basis-Regelwerk speichern & Neuberechnung starten" : "Änderungen speichern & Neuberechnung starten"}
+                                {isEditingBaseRule ? "Basisregelwerk speichern & Neuberechnung starten" : "Änderungen speichern & Neuberechnung starten"}
                               </button>
 
                               <button
@@ -3175,7 +3175,7 @@ export default function SuperAdminDashboard({
                                   </span>
                                 </td>
                                 <td className="px-5 py-4 font-medium text-slate-600">
-                                  {isBaseRule ? "Basis-Regelwerk" : "Anpassung"}
+                                  {isBaseRule ? "Basisregelwerk" : "Anpassung"}
                                 </td>
                                 <td className="px-5 py-4 font-semibold text-slate-800">
                                   {(() => {
@@ -3207,7 +3207,7 @@ export default function SuperAdminDashboard({
                                     </button>
                                     {isBaseRule ? (
                                       <span
-                                        title="Das Basis-Regelwerk (01.01.2000) ist unveränderlich und kann nicht gelöscht werden."
+                                        title="Das Basisregelwerk (01.01.2000) ist unveränderlich und kann nicht gelöscht werden."
                                         className="px-2.5 py-1.5 bg-slate-100 text-slate-400 rounded-lg text-[11px] font-bold border border-slate-200 select-none flex items-center gap-1"
                                       >
                                         <i className="fa-solid fa-lock text-[10px]"></i>
@@ -3490,7 +3490,7 @@ export default function SuperAdminDashboard({
                         vereinsName: e.target.value,
                       })
                     }
-                    placeholder="z.B. Tennis-Club"
+                    placeholder="z.B. Tennisclub"
                     className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                   />
                 </div>
@@ -3741,7 +3741,7 @@ export default function SuperAdminDashboard({
                       vereinsName: e.target.value,
                     })
                   }
-                  placeholder="z.B. Tennis-Club"
+                  placeholder="z.B. Tennisclub"
                   className="w-full bg-slate-50 border-2 border-slate-200 rounded-xl px-4 text-sm text-slate-700 focus:outline-none focus:border-[#1b4332] transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
@@ -4053,7 +4053,7 @@ export default function SuperAdminDashboard({
                         <i className="fa-solid fa-triangle-exclamation text-amber-600 text-base shrink-0 mt-0.5"></i>
                         <div className="space-y-1">
                           <p className="font-extrabold text-amber-900">
-                            Achtung: {conflictCount} direkte Hobbyliga-Match-Konflikte
+                            Achtung: {conflictCount} direkte Hobbyligamatch-Konflikte
                           </p>
                           <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
                             Diese beiden Personen haben in der Vergangenheit gegeneinander gespielt. Diese direkten Duelle werden storniert, damit das Konto nicht gegen sich selbst gewertet wird.
@@ -4137,7 +4137,7 @@ export default function SuperAdminDashboard({
                   Tenant & Mitgliedschaften
                 </div>
                 <p className="text-slate-800 font-bold leading-relaxed">
-                  Für alle {batchConfirmData.pairs.length} ausgewählten Paarungen werden die Vereinsmitgliedschaften (Set-Union aller Tenants) und lokalen Daten (Match-Historie, Buchungen, Arbeitseinsätze) vollständig im jeweiligen Ziel-Account gebündelt.
+                  Für alle {batchConfirmData.pairs.length} ausgewählten Paarungen werden die Vereinsmitgliedschaften (Set-Union aller Tenants) und lokalen Daten (Matchhistorie, Buchungen, Arbeitseinsätze) vollständig im jeweiligen Ziel-Account gebündelt.
                 </p>
               </div>
 
@@ -4440,7 +4440,7 @@ export default function SuperAdminDashboard({
                   Die Liga &ldquo;<span className="font-bold text-slate-900">{leagueToResetTestData.name}</span>&rdquo; ist aktuell <span className="font-bold text-emerald-700">AKTIV</span> geschaltet. Um das versehentliche Löschen von Live-Daten zu verhindern, ist das Zurücksetzen von Testdaten für aktive Ligen strikt gesperrt.
                 </p>
                 <p className="text-slate-600 text-[11px]">
-                  <strong>Schritt 1:</strong> Setze die Liga auf <strong>INAKTIV</strong>. Anschließend kannst du die Testdaten mit manueller Text-Bestätigung und automatischem Sicherheits-Snapshot bereinigen.
+                  <strong>Schritt 1:</strong> Setze die Liga auf <strong>INAKTIV</strong>. Anschließend kannst du die Testdaten mit manueller Text-Bestätigung und automatischem Sicherheitssnapshot bereinigen.
                 </p>
                 <div className="pt-1">
                   <button
@@ -4466,7 +4466,7 @@ export default function SuperAdminDashboard({
                   </ul>
                   <div className="mt-2 pt-2 border-t border-purple-200/80 text-[11px] text-purple-900 flex items-start gap-1.5">
                     <i className="fa-solid fa-shield text-purple-600 mt-0.5 shrink-0"></i>
-                    <span><strong>Automatischer Snapshot:</strong> Direkt vor der Bereinigung wird ein Sicherheits-Snapshot angelegt, der im Notfall über den Backup-Bereich wiederhergestellt werden kann.</span>
+                    <span><strong>Automatischer Snapshot:</strong> Direkt vor der Bereinigung wird ein Sicherheitssnapshot angelegt, der im Notfall über den Backup-Bereich wiederhergestellt werden kann.</span>
                   </div>
                 </div>
 
@@ -4546,7 +4546,7 @@ export default function SuperAdminDashboard({
               </p>
               <ul className="list-disc pl-4 space-y-1 text-slate-700 font-medium">
                 <li>Die Liga wird als <strong>Inaktiv / Archiviert</strong> markiert.</li>
-                <li>Zugeordnete Spielerprofile werden freigegeben (ihre Liga-Zuordnung wird zurückgesetzt), sodass sie über die Waterfall-Regeln neu zugeordnet werden können.</li>
+                <li>Zugeordnete Spielerprofile werden freigegeben (ihre Ligazuordnung wird zurückgesetzt), sodass sie über die Waterfall-Regeln neu zugeordnet werden können.</li>
                 <li>Alle historischen Spiele, Ranglistenpunkte und Ergebnisse bleiben <strong>vollständig erhalten</strong>.</li>
                 <li>Du kannst die Liga jederzeit mit einem Klick auf <strong>Wiederherstellen</strong> reaktivieren.</li>
               </ul>

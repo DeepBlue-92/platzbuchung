@@ -5,8 +5,8 @@ import { EmailTemplate, TemplateVariableInfo, NotificationEventDefinition, UserN
  * 1. Buchungsbestätigung
  * 2. Buchungsstornierung
  * 3. Buchungsänderung
- * 4. Neuer Hobbyliga-Beitrag
- * 5. Match-Ergebnis eingetragen
+ * 4. Neuer Hobbyligabeitrag
+ * 5. Matchergebnis eingetragen
  */
 export const NOTIFICATION_EVENT_DEFINITIONS: NotificationEventDefinition[] = [
   {
@@ -35,15 +35,15 @@ export const NOTIFICATION_EVENT_DEFINITIONS: NotificationEventDefinition[] = [
   },
   {
     key: "HOBBYLIGA_NEW_POST",
-    label: "Neuer Hobbyliga-Beitrag",
+    label: "Neuer Hobbyligabeitrag",
     category: "hobbyliga",
-    description: "Broadcast-Benachrichtigung an alle Liga-Teilnehmer bei neuem Pinnwand-Beitrag (außer Verfasser).",
+    description: "Broadcast-Benachrichtigung an alle Liga-Teilnehmer bei neuem Pinnwandbeitrag (außer Verfasser).",
     defaultEnabled: true,
-    targetAudience: "Alle Hobbyliga-Teilnehmer (exkl. Verfasser)",
+    targetAudience: "Alle Hobbyligateilnehmer (exkl. Verfasser)",
   },
   {
     key: "MATCH_RESULT_SUBMITTED",
-    label: "Match-Ergebnis eingetragen",
+    label: "Matchergebnis eingetragen",
     category: "matches",
     description: "Benachrichtigung über ein eingetragenes Spielergebnis (geht strikt nur an den gegnerischen Spieler).",
     defaultEnabled: true,
@@ -53,7 +53,7 @@ export const NOTIFICATION_EVENT_DEFINITIONS: NotificationEventDefinition[] = [
     key: "USER_ACTIVATION",
     label: "Initiale Passwortvergabe",
     category: "auth",
-    description: "Konto-Aktivierung mit persönlichem Einweg-Link für neue Mitglieder zur erstmaligen Passwortvergabe.",
+    description: "Kontoaktivierung mit persönlichem Einweglink für neue Mitglieder zur erstmaligen Passwortvergabe.",
     defaultEnabled: true,
     targetAudience: "Neu angelegtes / eingeladenes Mitglied",
   },
@@ -61,7 +61,7 @@ export const NOTIFICATION_EVENT_DEFINITIONS: NotificationEventDefinition[] = [
     key: "PASSWORD_RESET",
     label: "Passwort zurücksetzen",
     category: "auth",
-    description: "Sicherheits-E-Mail mit zeitlich begrenztem Einweg-Link zum Zurücksetzen des Passworts.",
+    description: "Sicherheits-E-Mail mit zeitlich begrenztem Einweglink zum Zurücksetzen des Passworts.",
     defaultEnabled: true,
     targetAudience: "Aktives Mitglied",
   },
@@ -94,7 +94,7 @@ export const AVAILABLE_TEMPLATE_VARIABLES: TemplateVariableInfo[] = [
   {
     key: "user_name",
     placeholder: "{{user_name}}",
-    label: "Spieler-Name",
+    label: "Spielername",
     description: "Vollständiger Name des Empfängers (z. B. Max Mustermann)",
     example: "Max Mustermann",
   },
@@ -150,7 +150,7 @@ export const AVAILABLE_TEMPLATE_VARIABLES: TemplateVariableInfo[] = [
   {
     key: "cancellation_link",
     placeholder: "{{cancellation_link}}",
-    label: "Stornierungs-Link",
+    label: "Stornierungslink",
     description: "Direkter Link zur Stornierung oder Buchungsübersicht",
     example: "https://tennis-club.de/my-bookings?cancel=b-12345",
   },
@@ -164,43 +164,43 @@ export const AVAILABLE_TEMPLATE_VARIABLES: TemplateVariableInfo[] = [
   {
     key: "booking_id",
     placeholder: "{{booking_id}}",
-    label: "Buchungs-Nummer",
+    label: "Buchungsnummer",
     description: "Eindeutige ID der Buchung",
     example: "BK-2026-0849",
   },
   {
     key: "league_name",
     placeholder: "{{league_name}}",
-    label: "Liga-Name",
+    label: "Liganame",
     description: "Name der Hobbyliga (z. B. Herren Einzel A)",
     example: "Hobbyliga Herren A",
   },
   {
     key: "author_name",
     placeholder: "{{author_name}}",
-    label: "Verfasser-Name",
-    description: "Name des Autors des Pinnwand-Beitrags",
+    label: "Verfassername",
+    description: "Name des Autors des Pinnwandbeitrags",
     example: "Boris Becker",
   },
   {
     key: "post_title",
     placeholder: "{{post_title}}",
-    label: "Beitrags-Titel",
+    label: "Beitragstitel",
     description: "Titel oder Überschrift des Beitrags",
     example: "Spielpartner für Samstag gesucht",
   },
   {
     key: "post_content",
     placeholder: "{{post_content}}",
-    label: "Beitrags-Text",
+    label: "Beitragstext",
     description: "Inhalt des Beitrags auf der Pinnwand",
     example: "Hallo zusammen, wer hat Lust am Samstag um 10 Uhr eine Runde zu spielen?",
   },
   {
     key: "league_link",
     placeholder: "{{league_link}}",
-    label: "Hobbyliga-Link",
-    description: "Direkter Link zur Hobbyliga-Übersicht",
+    label: "Hobbyligalink",
+    description: "Direkter Link zur Hobbyligaübersicht",
     example: "https://tennis-club.app/hobbyliga",
   },
   {
@@ -213,43 +213,43 @@ export const AVAILABLE_TEMPLATE_VARIABLES: TemplateVariableInfo[] = [
   {
     key: "opponent_name",
     placeholder: "{{opponent_name}}",
-    label: "Gegner-Name",
+    label: "Gegnername",
     description: "Name des gegnerischen Spielers",
     example: "Jan-Lennard Struff",
   },
   {
     key: "result_score",
     placeholder: "{{result_score}}",
-    label: "Match-Ergebnis",
+    label: "Matchergebnis",
     description: "Satzergebnis des Matches (z. B. 6:4, 7:5)",
     example: "6:4, 7:5",
   },
   {
     key: "match_date",
     placeholder: "{{match_date}}",
-    label: "Match-Datum",
+    label: "Matchdatum",
     description: "Datum, an dem das Match stattfand",
     example: "24.09.2026",
   },
   {
     key: "match_link",
     placeholder: "{{match_link}}",
-    label: "Match-Link",
+    label: "Matchlink",
     description: "Direkter Link zur Spielansicht oder Bestätigung",
     example: "https://tennis-club.app/match/m-492",
   },
   {
     key: "activation_link",
     placeholder: "{{activation_link}}",
-    label: "Aktivierungs-Link",
-    description: "Kryptografisch gesicherter Einweg-Link zur initialen Kontoaktivierung und Passwortvergabe",
+    label: "Aktivierungslink",
+    description: "Kryptografisch gesicherter Einweglink zur initialen Kontoaktivierung und Passwortvergabe",
     example: "https://tennis-club.app/#activate?token=act_7f9a2b...",
   },
   {
     key: "password_reset_link",
     placeholder: "{{password_reset_link}}",
     label: "Passwort-Reset-Link",
-    description: "Kryptografisch gesicherter Einweg-Link zum Zurücksetzen des Passworts",
+    description: "Kryptografisch gesicherter Einweglink zum Zurücksetzen des Passworts",
     example: "https://tennis-club.app/#reset-password?token=rst_3c8e1a...",
   },
   {
@@ -277,7 +277,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "full",
         config: {
-          content: "Hallo [Spieler-Name],\n\ndeine Platzbuchung wurde erfolgreich erfasst. Wir wünschen dir ein faires und spannendes Spiel auf unserer Tennisanlage!",
+          content: "Hallo [Spielername],\n\ndeine Platzbuchung wurde erfolgreich erfasst. Wir wünschen dir ein faires und spannendes Spiel auf unserer Tennisanlage!",
           fontFamily: "sans",
           fontSize: 16,
           lineHeight: 1.6,
@@ -309,7 +309,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "half",
         config: {
-          content: "⏱ Zeit & Buchungs-ID:\n• Zeit: [Uhrzeit]\n• ID: [Buchungs-Nummer]",
+          content: "⏱ Zeit & Buchungs-ID:\n• Zeit: [Uhrzeit]\n• ID: [Buchungsnummer]",
           fontFamily: "sans",
           fontSize: 14,
           lineHeight: 1.6,
@@ -380,7 +380,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   deine Platzbuchung wurde erfolgreich in unserem Buchungssystem erfasst. Wir wünschen dir ein spannendes und faires Spiel!
 </p>
 
-<!-- Buchungs-Details Box -->
+<!-- Buchungsdetails Box -->
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
   <tr>
     <td style="padding: 16px 20px;">
@@ -439,7 +439,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         id: "b_can_1",
         type: "text",
         config: {
-          content: "Hallo [Spieler-Name],\n\ndeine Reservierung für [Platz-Bezeichnung] am [Datum] ([Uhrzeit]) wurde storniert. Der Platz steht nun wieder anderen Vereinsmitgliedern zur Verfügung.",
+          content: "Hallo [Spielername],\n\ndeine Reservierung für [Platz-Bezeichnung] am [Datum] ([Uhrzeit]) wurde storniert. Der Platz steht nun wieder anderen Vereinsmitgliedern zur Verfügung.",
           fontFamily: "sans",
           fontSize: 16,
           lineHeight: 1.6,
@@ -561,7 +561,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "full",
         config: {
-          content: "Hallo [Spieler-Name],\n\ndeine Platzreservierung wurde soeben erfolgreich bearbeitet bzw. umgebucht. Hier findest du deine aktualisierten Spieldetails:",
+          content: "Hallo [Spielername],\n\ndeine Platzreservierung wurde soeben erfolgreich bearbeitet bzw. umgebucht. Hier findest du deine aktualisierten Spieldetails:",
           fontFamily: "sans",
           fontSize: 16,
           lineHeight: 1.6,
@@ -664,7 +664,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   deine Platzreservierung wurde soeben erfolgreich bearbeitet bzw. umgebucht. Hier findest du deine aktualisierten Spieldetails:
 </p>
 
-<!-- Neue Buchungs-Details Box -->
+<!-- Neue Buchungsdetails Box -->
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; border-radius: 8px;">
   <tr>
     <td style="padding: 16px 20px;">
@@ -697,7 +697,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   </tr>
 </table>
 
-<!-- Vorherige Buchungs-Details Box (Vergleich) -->
+<!-- Vorherige Buchungsdetails Box (Vergleich) -->
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
   <tr>
     <td style="padding: 12px 18px;">
@@ -758,7 +758,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         id: "b_post_1",
         type: "text",
         config: {
-          content: "Hallo [Spieler-Name],\n\nes gibt einen neuen Beitrag an der Liga-Pinnwand in deiner [Liga-Name] von [Verfasser-Name]:",
+          content: "Hallo [Spielername],\n\nes gibt einen neuen Beitrag an der Ligapinnwand in deiner [Liganame] von [Verfassername]:",
           fontFamily: "sans",
           fontSize: 16,
           lineHeight: 1.6,
@@ -772,7 +772,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         id: "b_post_2",
         type: "text",
         config: {
-          content: "»[Beitrags-Titel]«\n\n[Beitrags-Text]",
+          content: "»[Beitragstitel]«\n\n[Beitragstext]",
           fontFamily: "sans",
           fontSize: 15,
           lineHeight: 1.6,
@@ -804,7 +804,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "full",
         config: {
-          content: "Du erhältst diese Benachrichtigung als aktiver Teilnehmer der [Liga-Name]. Du kannst deine Benachrichtigungs-Einstellungen jederzeit im Profil anpassen.",
+          content: "Du erhältst diese Benachrichtigung als aktiver Teilnehmer der [Liganame]. Du kannst deine Benachrichtigungseinstellungen jederzeit im Profil anpassen.",
           fontFamily: "sans",
           fontSize: 12,
           lineHeight: 1.5,
@@ -838,10 +838,10 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
 </p>
 
 <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 24px; color: #334155;">
-  in deiner <strong>{{league_name}}</strong> hat <strong>{{author_name}}</strong> einen neuen Beitrag auf der Liga-Pinnwand veröffentlicht:
+  in deiner <strong>{{league_name}}</strong> hat <strong>{{author_name}}</strong> einen neuen Beitrag auf der Ligapinnwand veröffentlicht:
 </p>
 
-<!-- Pinnwand-Beitrag Vorschau-Box -->
+<!-- Pinnwandbeitrag Vorschaubox -->
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #047857; border-radius: 6px;">
   <tr>
     <td style="padding: 18px 20px;">
@@ -866,7 +866,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
 </p>
 
 <p style="margin: 0; font-size: 12px; line-height: 18px; color: #94a3b8;">
-  Du erhältst diese Benachrichtigung als aktiver Teilnehmer der {{league_name}}. Du kannst deine Benachrichtigungs-Einstellungen jederzeit im Profil anpassen.
+  Du erhältst diese Benachrichtigung als aktiver Teilnehmer der {{league_name}}. Du kannst deine Benachrichtigungseinstellungen jederzeit im Profil anpassen.
 </p>
     `.trim(),
     availableVariables: [
@@ -883,8 +883,8 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   MATCH_RESULT_SUBMITTED: {
     id: "MATCH_RESULT_SUBMITTED",
     eventType: "MATCH_RESULT_SUBMITTED",
-    name: "Match-Ergebnis eingetragen",
-    description: "Geht strikt nur an den gegnerischen Spieler, nachdem ein Match-Ergebnis eingetragen wurde.",
+    name: "Matchergebnis eingetragen",
+    description: "Geht strikt nur an den gegnerischen Spieler, nachdem ein Matchergebnis eingetragen wurde.",
     subject: "Spielergebnis eingetragen: {{submitter_name}} vs. {{opponent_name}} ({{result_score}})",
     blocks: [
       {
@@ -892,7 +892,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "full",
         config: {
-          content: "Hallo [Gegner-Name],\n\ndein Spielpartner [Eintragender Spieler] hat das Ergebnis eures Matches in der [Liga-Name] eingetragen:",
+          content: "Hallo [Gegnername],\n\ndein Spielpartner [Eintragender Spieler] hat das Ergebnis eures Matches in der [Liganame] eingetragen:",
           fontFamily: "sans",
           fontSize: 16,
           lineHeight: 1.6,
@@ -908,7 +908,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "half",
         config: {
-          content: "🏆 Spielergebnis:\n• Satz & Spiele: [Match-Ergebnis]\n• Spieldatum: [Match-Datum]",
+          content: "🏆 Spielergebnis:\n• Satz & Spiele: [Matchergebnis]\n• Spieldatum: [Matchdatum]",
           fontFamily: "sans",
           fontSize: 14,
           lineHeight: 1.6,
@@ -924,7 +924,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "half",
         config: {
-          content: "👥 Match-Paarung:\n• [Eintragender Spieler]\nvs. [Gegner-Name]",
+          content: "👥 Matchpaarung:\n• [Eintragender Spieler]\nvs. [Gegnername]",
           fontFamily: "sans",
           fontSize: 14,
           lineHeight: 1.6,
@@ -995,7 +995,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
   dein Spielpartner <strong>{{submitter_name}}</strong> hat soeben das Ergebnis eures Matches in der <strong>{{league_name}}</strong> eingetragen.
 </p>
 
-<!-- Ergebnis-Box -->
+<!-- Ergebnisbox -->
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 24px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
   <tr>
     <td style="padding: 20px; text-align: center;">
@@ -1041,7 +1041,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
     id: "USER_ACTIVATION",
     eventType: "USER_ACTIVATION",
     name: "Standard Initiale Passwortvergabe",
-    description: "System-Standardvorlage für die erstmalige Konto-Aktivierung und Passwortvergabe.",
+    description: "System-Standardvorlage für die erstmalige Kontoaktivierung und Passwortvergabe.",
     subject: "Willkommen bei [Vereinsname]! Bitte erstelle dein persönliches Passwort",
     is_system_template: true,
     blocks: [
@@ -1051,7 +1051,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         columnSpan: "full",
         config: {
           logoUrl: "",
-          logoAlt: "Vereins-Logo",
+          logoAlt: "Vereinslogo",
           logoWidth: 72,
           textContent: "Willkommen bei [Vereinsname]!\nAktiviere jetzt dein persönliches Mitgliedskonto",
           fontFamily: "system-sans",
@@ -1069,7 +1069,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "full",
         config: {
-          content: "Hallo [Spieler-Name],\n\nherzlich willkommen bei [Vereinsname]! Für dich wurde soeben ein persönlicher Zugang zu unserem digitalen Vereinsportal und Platzbuchungssystem eingerichtet.\n\nBitte klicke auf den folgenden Button, um dein persönliches Passwort festzulegen und dein Mitgliedskonto zu aktivieren:",
+          content: "Hallo [Spielername],\n\nherzlich willkommen bei [Vereinsname]! Für dich wurde soeben ein persönlicher Zugang zu unserem digitalen Vereinsportal und Platzbuchungssystem eingerichtet.\n\nBitte klicke auf den folgenden Button, um dein persönliches Passwort festzulegen und dein Mitgliedskonto zu aktivieren:",
           fontFamily: "sans",
           fontSize: 15,
           lineHeight: 1.6,
@@ -1136,7 +1136,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         columnSpan: "full",
         config: {
           logoUrl: "",
-          logoAlt: "Vereins-Logo",
+          logoAlt: "Vereinslogo",
           logoWidth: 72,
           textContent: "Passwort zurücksetzen\nSicherheitsanfrage für dein Mitgliedskonto",
           fontFamily: "system-sans",
@@ -1154,7 +1154,7 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplate> = {
         type: "text",
         columnSpan: "full",
         config: {
-          content: "Hallo [Spieler-Name],\n\nwir haben eine Anfrage erhalten, das Passwort für dein Vereinskonto bei [Vereinsname] zurückzusetzen.\n\nKlicke auf den folgenden Button, um ein neues, sicheres Passwort für dein Konto festzulegen:",
+          content: "Hallo [Spielername],\n\nwir haben eine Anfrage erhalten, das Passwort für dein Vereinskonto bei [Vereinsname] zurückzusetzen.\n\nKlicke auf den folgenden Button, um ein neues, sicheres Passwort für dein Konto festzulegen:",
           fontFamily: "sans",
           fontSize: 15,
           lineHeight: 1.6,

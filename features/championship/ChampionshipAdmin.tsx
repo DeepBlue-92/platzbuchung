@@ -62,7 +62,7 @@ export const ChampionshipAdmin: React.FC<ChampionshipAdminProps> = ({
   onSelectTournament,
   activeTournamentId,
   onNavigateToAuditLog,
-  clubName = 'Tennis-Club',
+  clubName = 'Tennisclub',
 }) => {
   const [adminTab, setAdminTab] = useState<'manage' | 'trash'>('manage');
   const [isAssignerOpen, setIsAssignerOpen] = useState<boolean>(false);
@@ -601,7 +601,7 @@ export const ChampionshipAdmin: React.FC<ChampionshipAdminProps> = ({
           <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <strong>Papierkorb-Schutz:</strong> Gelöschte Meisterschaften verbleiben hier 30 Tage lang und können jederzeit mit einem Klick vollständig samt aller Ergebnisse und Historien wiederhergestellt werden. Nach 30 Tagen werden sie automatisch bereinigt.
+              <strong>Papierkorbschutz:</strong> Gelöschte Meisterschaften verbleiben hier 30 Tage lang und können jederzeit mit einem Klick vollständig samt aller Ergebnisse und Historien wiederhergestellt werden. Nach 30 Tagen werden sie automatisch bereinigt.
             </div>
           </div>
 

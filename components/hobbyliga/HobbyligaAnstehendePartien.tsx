@@ -44,7 +44,7 @@ export const HobbyligaAnstehendePartien: React.FC<HobbyligaAnstehendePartienProp
               Anstehende Begegnungen
             </h3>
             <p className="text-[11px] text-slate-500 font-medium">
-              Öffentliche Spieltermine & Zuschauer-Infos
+              Öffentliche Spieltermine & Zuschauerinfos
             </p>
           </div>
         </div>

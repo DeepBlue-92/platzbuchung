@@ -316,7 +316,7 @@ export const TennisAssistantWidget: React.FC<TennisAssistantWidgetProps> = ({
 
   const getWelcomeGreeting = (name: string) => {
     const greeting = name ? `Servus ${name}!` : `Servus!`;
-    return `${greeting} Ich bin Ace, dein persönlicher Vereins- und Tennis-Assistent der DJK Fürth. 🎾\nFrag mi gerne nach Tennisregeln, Platzreservierungen, Arbeitseinsätzen oder Vereinsspielen!`;
+    return `${greeting} Ich bin Ace, dein persönlicher Vereins- und Tennisassistent der DJK Fürth. 🎾\nFrag mi gerne nach Tennisregeln, Platzreservierungen, Arbeitseinsätzen oder Vereinsspielen!`;
   };
 
   const [isOpen, setIsOpen] = useState(false);
@@ -513,7 +513,7 @@ export const TennisAssistantWidget: React.FC<TennisAssistantWidgetProps> = ({
 
     // Step 4: Comprehensive Club & Tutorial Fallback adhering to personality
     if (!replyText) {
-      replyText = `Dazu hob i im Handbuch leider nix g'funden – frag am besten kurz direkt beim Sportwart oder beim Vorstand nach.\n\nIn unserem **Vereins-Handbuch** findest du alle wichtigen Regeln und Abläufe:\n\n• **Plätze reservieren:** Einzel 60 Min, Doppel bis 120 Min. Es muss immer ein Partner, ein Gast oder die Ballmaschine eingetragen sein.\n• **Gastspiele:** Keine Barzahlung auf der Anlage – die Abrechnung erfolgt bequem am Saisonende per SEPA-Lastschrift.\n• **Meisterschaft:** Bei 1:1 Sätzen wird kein 3. Satz gespielt, sondern direkt ein Match-Tiebreak bis 10 Punkte.\n• **Arbeitseinsätze:** 10 Soll-Stunden pro Saison (Übersicht und Einreichung im Menü *Arbeitseinsätze*).\n• **Platzpflege:** Nach dem Spiel kreisförmig abziehen, Linien säubern und wässern (keine Pfützen wegschieben).\n\nFrag mi gerne zu einem dieser Bereiche genauer! 🎾`;
+      replyText = `Dazu hob i im Handbuch leider nix g'funden – frag am besten kurz direkt beim Sportwart oder beim Vorstand nach.\n\nIn unserem **Vereins-Handbuch** findest du alle wichtigen Regeln und Abläufe:\n\n• **Plätze reservieren:** Einzel 60 Min, Doppel bis 120 Min. Es muss immer ein Partner, ein Gast oder die Ballmaschine eingetragen sein.\n• **Gastspiele:** Keine Barzahlung auf der Anlage – die Abrechnung erfolgt bequem am Saisonende per SEPA-Lastschrift.\n• **Meisterschaft:** Bei 1:1 Sätzen wird kein 3. Satz gespielt, sondern direkt ein Match-Tiebreak bis 10 Punkte.\n• **Arbeitseinsätze:** 10 Sollstunden pro Saison (Übersicht und Einreichung im Menü *Arbeitseinsätze*).\n• **Platzpflege:** Nach dem Spiel kreisförmig abziehen, Linien säubern und wässern (keine Pfützen wegschieben).\n\nFrag mi gerne zu einem dieser Bereiche genauer! 🎾`;
     }
 
     // Enforce Rule 1: First answer must start with "Servus {{VORNAME}}!" (or "Servus!")
@@ -706,8 +706,8 @@ export const TennisAssistantWidget: React.FC<TennisAssistantWidgetProps> = ({
         <button
           type="button"
           onClick={() => setIsOpen(prev => !prev)}
-          title="Tennis-Assistent 'Ace' öffnen"
-          aria-label="Tennis-Assistent 'Ace' öffnen"
+          title="Tennisassistent 'Ace' öffnen"
+          aria-label="Tennisassistent 'Ace' öffnen"
           className="ace-floating-btn group relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:shadow-[0_12px_32px_rgba(0,0,0,0.25)] border-2 border-lime-400 hover:border-lime-500 active:scale-95 transition-all duration-200 cursor-pointer outline-none focus:ring-4 focus:ring-lime-300/60"
         >
           {/* Subtle online pulse indicator */}
@@ -803,7 +803,7 @@ export const TennisAssistantWidget: React.FC<TennisAssistantWidgetProps> = ({
         <div
           id="ace-assistant-dialog"
           role="dialog"
-          aria-label="Tennis-Assistent Ace Dialog"
+          aria-label="Tennisassistent Ace Dialog"
           className="fixed bottom-20 right-3 sm:right-6 sm:bottom-24 z-50 h-[500px] max-h-[75vh] w-[92vw] sm:w-[380px] md:h-[640px] md:max-h-[82vh] md:w-[420px] bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.22)] border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200 select-none print:hidden"
         >
           {/* Header - Cleaned: Only Avatar + Name on left, Menu + Close on right */}

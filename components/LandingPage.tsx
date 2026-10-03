@@ -5,6 +5,7 @@ import { WorkletCourts } from "./bento/WorkletCourts";
 import { WorkletEvents } from "./bento/WorkletEvents";
 import { WorkletChampionship } from "./bento/WorkletChampionship";
 import { WorkletWeather } from "./bento/WorkletWeather";
+import { WorkletHeroBanner } from "./bento/WorkletHeroBanner";
 import {
   Calendar,
   ArrowRight,
@@ -44,7 +45,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onSelectSlot,
   onNavigateToEvents,
   onNavigateToChampionship,
-  clubName = "Tennis-Club",
+  clubName = "Tennisclub",
   onLogin,
   loginError,
   isLoggingIn = false,
@@ -62,25 +63,37 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-6 w-full flex-grow lg:animate-in lg:fade-in lg:duration-500 min-h-0 select-text">
-      {/* Bento Grid: 12 Columns */}
+      {/* Bento Grid: 3-Tier Responsive with Auto-Packing */}
       {sortedItems.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 w-full [grid-auto-flow:dense]">
           {sortedItems.map((item) => {
             const colSpanClass =
               item.col_span === 4
-                ? "md:col-span-4"
+                ? "md:col-span-1 lg:col-span-4"
                 : item.col_span === 6
-                ? "md:col-span-6"
+                ? "md:col-span-1 lg:col-span-6"
                 : item.col_span === 8
-                ? "md:col-span-8"
-                : "md:col-span-12";
+                ? "md:col-span-2 lg:col-span-8"
+                : "md:col-span-2 lg:col-span-12";
 
+            const isHero = item.type === "hero_banner";
             return (
               <div
                 key={item.id}
-                className={`col-span-1 ${colSpanClass} bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 sm:p-6 lg:p-7 flex flex-col justify-between min-w-0`}
+                className={`col-span-1 ${colSpanClass} ${
+                  isHero
+                    ? "bg-transparent p-0 border-0 shadow-none"
+                    : "bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 sm:p-6 lg:p-7 flex flex-col justify-between"
+                } min-w-0`}
               >
-                {item.type === "worklet_courts" ? (
+                {item.type === "hero_banner" ? (
+                  <WorkletHeroBanner
+                    item={item}
+                    primaryColor={primaryColor}
+                    clubName={clubName}
+                    onNavigateToBooking={onNavigateToBooking}
+                  />
+                ) : item.type === "worklet_courts" ? (
                   <WorkletCourts
                     item={item}
                     courts={courts}

@@ -20,7 +20,7 @@ export const ChampionshipPrintModal: React.FC<ChampionshipPrintModalProps> = ({
   onClose,
   tournament,
   users,
-  clubName = 'Tennis-Club',
+  clubName = 'Tennisclub',
   logoUrl,
   rankings,
 }) => {
@@ -108,7 +108,7 @@ export const ChampionshipPrintModal: React.FC<ChampionshipPrintModalProps> = ({
 
         {/* Modal Footer Hinweis */}
         <div className="bg-white px-4 sm:px-6 py-2.5 border-t border-slate-200 text-center text-[11px] text-slate-500 shrink-0">
-          💡 Hinweis: Beim Klick auf <strong>„Als PDF herunterladen“</strong> wird das Dokument direkt als Datei gespeichert. Für Direktdruck im Browser-Dialog <em>„Hintergrundgrafiken“</em> aktivieren.
+          💡 Hinweis: Beim Klick auf <strong>„Als PDF herunterladen“</strong> wird das Dokument direkt als Datei gespeichert. Für Direktdruck im Browserdialog <em>„Hintergrundgrafiken“</em> aktivieren.
         </div>
       </div>
     </div>

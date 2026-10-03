@@ -75,28 +75,26 @@ export const WorkletEvents: React.FC<WorkletEventsProps> = ({
           </div>
         </div>
 
-        {/* Structured Container */}
-        <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 sm:p-3.5">
-          {/* Dynamic List of Upcoming Events */}
-          {upcomingEvents.length > 0 ? (
-            <div className="space-y-2.5">
-              {upcomingEvents.map((t) => {
-                const { day, month } = parseDateParts(t.date);
-                const isRegistered =
-                  currentUser &&
-                  t.participants &&
-                  t.participants.some(
-                    (p) =>
-                      p.toLowerCase() === (currentUser.name || "").toLowerCase() ||
-                      p.toLowerCase() === (currentUser.id || "").toLowerCase() ||
-                      p.toLowerCase() === `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim().toLowerCase()
-                  );
+        {/* Dynamic List of Upcoming Events */}
+        {upcomingEvents.length > 0 ? (
+          <div className="space-y-2.5">
+            {upcomingEvents.map((t) => {
+              const { day, month } = parseDateParts(t.date);
+              const isRegistered =
+                currentUser &&
+                t.participants &&
+                t.participants.some(
+                  (p) =>
+                    p.toLowerCase() === (currentUser.name || "").toLowerCase() ||
+                    p.toLowerCase() === (currentUser.id || "").toLowerCase() ||
+                    p.toLowerCase() === `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim().toLowerCase()
+                );
 
-                return (
-                  <div
-                    key={t.id}
-                    className="bg-white hover:bg-slate-50/80 rounded-xl border border-slate-200/80 p-3 flex items-center justify-between gap-3 transition-colors shadow-2xs"
-                  >
+              return (
+                <div
+                  key={t.id}
+                  className="bg-slate-50/70 hover:bg-slate-100/80 rounded-xl border border-slate-200/80 p-3 flex items-center justify-between gap-3 transition-colors shadow-2xs"
+                >
                   {/* Left: Date Badge */}
                   <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100/80 text-[var(--color-primary)] flex flex-col items-center justify-center shrink-0">
                     <span className="text-sm font-black leading-none">{day}</span>
@@ -145,7 +143,6 @@ export const WorkletEvents: React.FC<WorkletEventsProps> = ({
             <p className="text-xs font-semibold">Aktuell keine kommenden Veranstaltungen geplant.</p>
           </div>
         )}
-        </div>
       </div>
 
       {/* Footer Link */}

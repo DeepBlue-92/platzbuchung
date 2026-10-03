@@ -29,7 +29,7 @@ export const MemberOnboardingModal: React.FC<MemberOnboardingModalProps> = ({
   const onboardingConfig: ClubOnboardingSettings = settings.club_onboarding_settings || {
     enable_onboarding: false,
     auto_enable_for_new_users: true,
-    welcome_title: "Willkommen in unserem Tennis-Club!",
+    welcome_title: "Willkommen in unserem Tennisclub!",
     welcome_description:
       "Wir freuen uns, dich auf unserer modernen Plattform zu begrüßen. Bitte nimm dir kurz Zeit, deine Stammdaten zu überprüfen und bei Bedarf zu aktualisieren.",
     show_animation: true,

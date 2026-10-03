@@ -159,12 +159,12 @@ export const ChampionshipTournamentJourney: React.FC<ChampionshipTournamentJourn
 
   return (
     <div className="bg-white border border-slate-200/90 rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs space-y-2">
-      {/* 4. Gesamt-Fortschritt integrieren (Rechtsbündig in der Stepper-Kopfzeile) */}
+      {/* 4. Gesamtfortschritt integrieren (Rechtsbündig in der Stepperkopfzeile) */}
       <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
         <div className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
           <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-700">
-            Turnier-Fortschritt
+            Turnierfortschritt
           </h3>
         </div>
 

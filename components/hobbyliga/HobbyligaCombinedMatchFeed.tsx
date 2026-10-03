@@ -288,7 +288,7 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                 ) : (
                   <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200/80 flex items-center gap-1">
                     <i className="fa-solid fa-trophy text-[9px] text-amber-500"></i>
-                    Liga-Match
+                    Ligamatch
                   </span>
                 );
               })()
@@ -496,7 +496,7 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
           /* Empty state for upcoming matches */
           <div className="p-3.5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-center space-y-1">
             <p className="text-xs text-slate-500 font-medium">
-              Aktuell kein anstehendes Liga-Spiel geplant.
+              Aktuell kein anstehendes Ligaspiel geplant.
             </p>
           </div>
         )}
@@ -777,7 +777,7 @@ export const HobbyligaCombinedMatchFeed: React.FC<HobbyligaCombinedMatchFeedProp
                     <button
                       onClick={() => onCancelMatch && onCancelMatch(currentCompleted)}
                       className="py-1.5 px-3 border border-slate-200 bg-white text-slate-600 text-xs font-medium rounded-xl hover:bg-slate-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                      title="Match-Ergebnis stornieren und Punkte zurücksetzen"
+                      title="Matchergebnis stornieren und Punkte zurücksetzen"
                     >
                       <i className="fa-solid fa-rotate-left text-[10px]" /> Stornieren
                     </button>

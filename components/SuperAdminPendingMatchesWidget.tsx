@@ -376,11 +376,11 @@ function AdminResultModal({
             const tb1 = typeof sets[i].tb1 === 'number' ? sets[i].tb1 as number : NaN;
             const tb2 = typeof sets[i].tb2 === 'number' ? sets[i].tb2 as number : NaN;
             if (isNaN(tb1) || isNaN(tb2)) {
-              setError(`Tiebreak-Ergebnis in Satz ${i+1} fehlt.`);
+              setError(`Tiebreakergebnis in Satz ${i+1} fehlt.`);
               return;
             }
             if (tb1 < 7 || tb1 - tb2 < 2) {
-              setError(`Ungültiges Tiebreak-Ergebnis in Satz ${i+1} (p1).`);
+              setError(`Ungültiges Tiebreakergebnis in Satz ${i+1} (p1).`);
               return;
             }
             p1Wins++;
@@ -389,11 +389,11 @@ function AdminResultModal({
             const tb1 = typeof sets[i].tb1 === 'number' ? sets[i].tb1 as number : NaN;
             const tb2 = typeof sets[i].tb2 === 'number' ? sets[i].tb2 as number : NaN;
             if (isNaN(tb1) || isNaN(tb2)) {
-              setError(`Tiebreak-Ergebnis in Satz ${i+1} fehlt.`);
+              setError(`Tiebreakergebnis in Satz ${i+1} fehlt.`);
               return;
             }
             if (tb2 < 7 || tb2 - tb1 < 2) {
-              setError(`Ungültiges Tiebreak-Ergebnis in Satz ${i+1} (p2).`);
+              setError(`Ungültiges Tiebreakergebnis in Satz ${i+1} (p2).`);
               return;
             }
             p2Wins++;

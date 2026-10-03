@@ -24,6 +24,7 @@ import {
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
 import { LandingPage } from "./components/LandingPage";
+import { EmbeddedCourtWidget } from "./components/EmbeddedCourtWidget";
 import AdminReports from "./components/AdminReports";
 import AdminNews from "./components/AdminNews";
 import AdminSettings from "./components/AdminSettings";
@@ -44,7 +45,7 @@ import { LeagueDashboard } from "./components/LeagueDashboard";
 import { ChampionshipHub } from "./features/championship/ChampionshipHub";
 import { RichTextRenderer } from "./components/RichText";
 import { User, Booking, Role, Tournament, RankingState, UserClub, LandingPageConfig } from "./types";
-import { getLandingPageConfig, DEFAULT_LANDING_PAGE } from "./services/landingPageService";
+import { getLandingPageConfig, listenToLandingPageConfig, DEFAULT_LANDING_PAGE } from "./services/landingPageService";
 import { getUserClubs, isClubAdmin, isSuperAdmin } from "./lib/userUtils";
 import { calculateBookingFee, buildBookingFeeContext } from "./utils/guestFeeCalculator";
 import { TIME_SLOTS } from "./constants";
@@ -433,6 +434,18 @@ const App: React.FC = () => {
   });
   const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
+  const isEmbeddedMode = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    const hash = window.location.hash.toLowerCase();
+    return (
+      params.get("embed") === "courts" ||
+      params.get("embed") === "true" ||
+      params.get("widget") === "courts" ||
+      hash.includes("embed=courts")
+    );
+  }, []);
+
   const [view, setView] = useState<
     | "landing_page"
     | "reservation"
@@ -591,26 +604,23 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    getLandingPageConfig(currentVereinsId)
-      .then((cfg) => {
-        if (!isMounted) return;
-        setLandingPageConfig(cfg);
-        const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
-        const isStartActive = (settings.modules?.landing_page !== false) && (cfg.is_enabled !== false);
-        if (isStartActive && (!hash || hash === "startseite" || hash === "landing" || hash === "home")) {
-          setView("landing_page");
-        } else if (!isStartActive && view === "landing_page") {
-          setView("reservation");
-        }
-      })
-      .catch((err) => {
-        console.error("Error loading landing page config:", err);
-      });
+    const unsub = listenToLandingPageConfig(currentVereinsId, (cfg) => {
+      if (!isMounted) return;
+      setLandingPageConfig(cfg);
+      const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+      const isStartActive = (settings.modules?.landing_page !== false) && (cfg.is_enabled !== false);
+      if (isStartActive && (!hash || hash === "startseite" || hash === "landing" || hash === "home")) {
+        setView("landing_page");
+      } else if (!isStartActive && view === "landing_page") {
+        setView("reservation");
+      }
+    });
 
     return () => {
       isMounted = false;
+      unsub();
     };
-  }, [currentVereinsId]);
+  }, [currentVereinsId, settings.modules?.landing_page]);
   const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
   const [isMehrDropdownOpen, setIsMehrDropdownOpen] = useState(false);
   const mehrDropdownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1054,10 +1064,70 @@ const App: React.FC = () => {
     return () => window.removeEventListener("hashchange", checkTokenAuthInUrl);
   }, []);
 
+  const isTenantRoute = useMemo(() => {
+    const segments = window.location.pathname.split("/").filter(Boolean);
+    const rawPath = segments[0] || "";
+    const path = decodeURIComponent(rawPath).toLowerCase().trim();
+    const params = new URLSearchParams(window.location.search);
+    const tenantParam = params.get("tenant");
+
+    const isSystemPath = [
+      "api",
+      "admin",
+      "superadmin",
+      "reservation",
+      "reports",
+      "tournaments",
+      "ranking",
+      "help",
+      "guests",
+      "adminsettings",
+      "undefined",
+      "null",
+      "public",
+      "assets",
+      "static",
+      "vite",
+      "system",
+      "super-admin",
+      "",
+    ].includes(path);
+
+    return Boolean(tenantParam) || (Boolean(path) && !isSystemPath);
+  }, []);
+
   const isSuperadminRoute = useMemo(() => {
     const segments = window.location.pathname.split("/").filter(Boolean);
     const firstRoute = segments[0]?.toLowerCase();
-    return firstRoute === "superadmin" || firstRoute === "admin";
+    return firstRoute === "superadmin" || firstRoute === "admin" || (currentUser?.role === Role.SUPER_ADMIN && !isTenantRoute);
+  }, [currentUser?.role, isTenantRoute]);
+
+  const effectiveCurrentUser = useMemo(() => {
+    // If a global superadmin accesses a tenant route directly (e.g. via 'Anmeldeseite aufrufen'),
+    // do not force the superadmin session in this tab unless in an explicit proxy session ("Aufschalten").
+    if (currentUser?.role === Role.SUPER_ADMIN && !superAdminContext && isTenantRoute) {
+      return null;
+    }
+    return currentUser;
+  }, [currentUser, superAdminContext, isTenantRoute]);
+
+  useEffect(() => {
+    const checkLoginIntent = () => {
+      const hash = window.location.hash.toLowerCase().replace(/^#\/?/, "");
+      const params = new URLSearchParams(window.location.search);
+      if (
+        hash === "login" ||
+        hash.startsWith("login") ||
+        params.get("login") === "true" ||
+        params.get("login") === "1" ||
+        params.get("view") === "login"
+      ) {
+        setIsStartPageLoginModalOpen(true);
+      }
+    };
+    checkLoginIntent();
+    window.addEventListener("hashchange", checkLoginIntent);
+    return () => window.removeEventListener("hashchange", checkLoginIntent);
   }, []);
 
   const anonymizedBookings = useMemo(() => {
@@ -1176,8 +1246,10 @@ const App: React.FC = () => {
   }, [allClubs, uniqueUserClubsRaw, currentVereinsId, settings?.clubName]);
 
   const isAdmin = useMemo(() => {
+    if (superAdminContext && isSuperAdmin(superAdminContext)) return true;
+    if (currentUser && isSuperAdmin(currentUser)) return true;
     return isClubAdmin(currentUser, currentVereinsId, allClubs);
-  }, [currentUser, currentVereinsId, allClubs]);
+  }, [currentUser, currentVereinsId, allClubs, superAdminContext]);
 
   // Initial Fallback
   useEffect(() => {
@@ -1695,7 +1767,7 @@ const App: React.FC = () => {
     setProxyUser(null);
     setView("reservation");
 
-    // Synchronisiere Tenant State für Proxy-Sitzung
+    // Synchronisiere Tenant State für Proxysitzung
     const targetTenantId = safeTargetClubId || tenantAdmin.vereinsId;
     if (targetTenantId) {
       const normId = targetTenantId.toLowerCase().replace(/\s/g, "");
@@ -1988,6 +2060,7 @@ const App: React.FC = () => {
           bookings.find(
             (b) =>
               b.id !== deleteId &&
+              (!editingGroupToken || b.group_token !== editingGroupToken) &&
               b.date === date &&
               b.time === time &&
               b.court === court,
@@ -2025,8 +2098,9 @@ const App: React.FC = () => {
             p.toLowerCase().includes("gastspieler") ||
             p.toLowerCase().includes("gast"),
         );
+      const slotDocId = `slot_${date}_${time.replace(':', '-')}_${court.replace(/\s+/g, '_')}`;
       const b: Booking = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: slotDocId,
         date,
         time,
         court,
@@ -2035,6 +2109,8 @@ const App: React.FC = () => {
         isLocked: false,
         hasBallMachine,
         bookedBy: bookingUser?.id,
+        userId: bookingUser?.id,
+        editingBookingId: deleteId,
         comment,
         group_token: groupToken,
       };
@@ -2095,7 +2171,7 @@ const App: React.FC = () => {
         }
       }
 
-      // 3. Erst NACH erfolgreichem Speichern der neuen Slots die alte Buchung löschen (Transaktions- & Rollback-Sicherheit)
+      // 3. Erst NACH erfolgreichem Speichern der neuen Slots die alte Buchung löschen (Transaktions- & Rollbacksicherheit)
       if (deleteId) {
         if (editingGroupToken) {
           const groupToCancel = bookings.filter((b) => b.group_token === editingGroupToken);
@@ -2128,7 +2204,7 @@ const App: React.FC = () => {
           clubName: settings.clubName || currentVereinsId,
           users: users,
         }).catch((notifErr) => {
-          console.warn("Buchungsänderungs-Benachrichtigung konnte nicht versendet werden (soft-catch):", notifErr);
+          console.warn("Buchungsänderungsbenachrichtigung konnte nicht versendet werden (soft-catch):", notifErr);
         });
       }
     } catch (err: any) {
@@ -2360,7 +2436,7 @@ const App: React.FC = () => {
   }, [settings.customHeaderLogoUrl, settings.headerLogoUrl, settings.customLogoUrl, settings.logoUrl, currentVereinsId]);
 
   const splashClubName = useMemo(() => {
-    if (settings.clubName && !["Tennis-Club", "Tennis Club", "Verein"].includes(settings.clubName)) {
+    if (settings.clubName && !["Tennisclub", "Tennis Club", "Verein"].includes(settings.clubName)) {
       return settings.clubName;
     }
     try {
@@ -2467,20 +2543,20 @@ const App: React.FC = () => {
     dropdownClass: string;
   }> = [
     {
+      id: "adminSettings",
+      label: "Admin",
+      IconComponent: Settings,
+      show: isAdmin,
+      barClass: "flex",
+      dropdownClass: "hidden",
+    },
+    {
       id: "reports",
       label: "Statistik",
       IconComponent: BarChart3,
       show: isAdmin,
-      barClass: "hidden 2xl:flex",
-      dropdownClass: "block 2xl:hidden",
-    },
-    {
-      id: "adminSettings",
-      label: "System",
-      IconComponent: Settings,
-      show: isAdmin,
-      barClass: "hidden 2xl:flex",
-      dropdownClass: "block 2xl:hidden",
+      barClass: "hidden xl:flex",
+      dropdownClass: "block xl:hidden",
     },
   ];
 
@@ -2558,12 +2634,12 @@ const App: React.FC = () => {
           <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 text-left space-y-2 shadow-sm">
             <p className="text-[10px] font-black uppercase text-rose-600 tracking-wider flex items-center gap-1.5 font-sans">
               <i className="fa-solid fa-circle-exclamation"></i>
-              Papierkorb-Info
+              Papierkorbinfo
             </p>
             <p className="text-[11px] text-rose-800 font-semibold leading-relaxed font-sans">
-              Der Verein wird nach Ablauf der 30-tägigen Backup-Frist
+              Der Verein wird nach Ablauf der 30-tägigen Backupfrist
               unumkehrbar und unwiderruflich gelöscht. Bei Fragen wende dich
-              direkt an das Admin-Team des übergeordneten Systems.
+              direkt an das Adminteam des übergeordneten Systems.
             </p>
           </div>
 
@@ -2622,7 +2698,7 @@ const App: React.FC = () => {
     );
   }
 
-  if (!currentUser && !isPublicWochenplanRoute) {
+  if (!effectiveCurrentUser && !isPublicWochenplanRoute) {
     if (landingPageConfig === null) {
       return (
         <div className="fixed inset-0 bg-[#0f172a] flex items-center justify-center p-6 z-[9999]">
@@ -2725,8 +2801,8 @@ const App: React.FC = () => {
                 </h1>
                 <p className="text-slate-400 text-[8px] sm:text-[9px] lg:text-[8.5px] font-black uppercase tracking-widest mt-1 sm:mt-1.5 lg:mt-1.5 text-center mb-4 sm:mb-7 lg:mb-5">
                   {isSuperadminRoute
-                    ? "System-Wartung & Verwaltung"
-                    : "Mitglieder-Login"}
+                    ? "Systemwartung & Verwaltung"
+                    : "Mitgliederlogin"}
                 </p>
 
                 {error && (
@@ -2938,10 +3014,10 @@ const App: React.FC = () => {
   }
 
   if (
-    (!currentUser || (
-      currentUser.role !== Role.SUPER_ADMIN &&
-      currentUser.vereinsId !== "super-admin" &&
-      currentUser.vereinsId !== "system"
+    (!effectiveCurrentUser || (
+      effectiveCurrentUser.role !== Role.SUPER_ADMIN &&
+      effectiveCurrentUser.vereinsId !== "super-admin" &&
+      effectiveCurrentUser.vereinsId !== "system"
     )) &&
     isLoading
   ) {
@@ -3002,12 +3078,12 @@ const App: React.FC = () => {
     );
   }
 
-  if (currentUser && currentUser.role === Role.SUPER_ADMIN) {
+  if (effectiveCurrentUser && effectiveCurrentUser.role === Role.SUPER_ADMIN) {
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50 top-0 mt-0">
         <ErrorBoundary fallbackTitle="Super-Admin Dashboard Fehler" fallbackMessage="Beim Laden des Super-Admin Dashboards ist ein unerwarteter Fehler aufgetreten.">
           <SuperAdminDashboard
-            currentUser={currentUser}
+            currentUser={effectiveCurrentUser}
             onLogout={handleLogout}
             onLoginAs={handleSuperAdminLoginAs}
           />
@@ -3208,6 +3284,55 @@ const App: React.FC = () => {
   }
 
 
+  if (isEmbeddedMode) {
+    return (
+      <div className="w-full min-h-0 h-auto p-2 sm:p-4 bg-transparent flex flex-col justify-start font-sans">
+        <style>{`
+          html, body {
+            background-color: transparent !important;
+            margin: 0;
+            padding: 0;
+          }
+          :root {
+            --color-primary: ${settings.primaryColor || "#1b4332"};
+            --color-accent: ${settings.accentColor || "#c04d2b"};
+            --color-accent-2: ${settings.accentColor2 || "#0f172a"};
+            --color-accent-3: ${settings.accentColor3 || "#ccff00"};
+          }
+        `}</style>
+        <EmbeddedCourtWidget
+          clubId={currentVereinsId}
+          clubName={settings.clubName}
+          primaryColor={settings.primaryColor}
+          courts={settings.courts || ["Platz 1", "Platz 2", "Platz 3"]}
+          bookings={anonymizedBookings}
+          currentUser={proxyUser || currentUser}
+          onLogin={async (u, p) => {
+            await performLogin(u, p);
+          }}
+          onSelectSlot={(court, time, date) => {
+            const origin = window.location.origin;
+            const url = new URL(origin);
+            url.searchParams.set("tenant", currentVereinsId);
+            url.searchParams.set("court", court);
+            url.searchParams.set("time", time);
+            url.searchParams.set("date", date);
+            window.open(url.toString(), "_blank");
+          }}
+          onNavigateToFullApp={(court, time, date) => {
+            const origin = window.location.origin;
+            const url = new URL(origin);
+            url.searchParams.set("tenant", currentVereinsId);
+            if (court) url.searchParams.set("court", court);
+            if (time) url.searchParams.set("time", time);
+            if (date) url.searchParams.set("date", date);
+            window.open(url.toString(), "_blank");
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <>
       <style>{`
@@ -3255,7 +3380,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="text-left">
                   <h4 className="font-black text-xs uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-                    <span>⚠️ Proxy-Modus Aktiv (Super-Admin)</span>
+                    <span>⚠️ Proxymodus Aktiv (Super-Admin)</span>
                   </h4>
                   <p className="text-xs font-bold text-slate-700">
                     Du agierst aktuell als Proxy für:{" "}
@@ -3297,7 +3422,7 @@ const App: React.FC = () => {
                   }}
                   className="px-4 py-2 bg-rose-600 hover:bg-slate-900 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all shadow-sm shrink-0 active:scale-95 flex items-center gap-1.5 cursor-pointer"
                 >
-                  <i className="fa-solid fa-right-from-bracket"></i> Proxy-Sitzung beenden
+                  <i className="fa-solid fa-right-from-bracket"></i> Proxysitzung beenden
                 </button>
               </div>
             </div>
@@ -3312,7 +3437,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="text-left">
                     <h4 className="font-black text-xs uppercase tracking-wider text-amber-800">
-                      Proxy-Modus Aktiv
+                      Proxymodus Aktiv
                     </h4>
                     <p className="text-xs font-bold text-slate-700">
                       Du agierst aktuell als{" "}
@@ -3623,9 +3748,12 @@ const App: React.FC = () => {
                       handleSetView("reservation");
                     }}
                     onSelectSlot={(court, time, date) => {
+                      if (!currentUser && !proxyUser) {
+                        setIsStartPageLoginModalOpen(true);
+                        return;
+                      }
                       setInitialBookingSlot({ court, time, date });
                       setMobileSelectedDate(date);
-                      handleSetView("reservation");
                     }}
                     onNavigateToEvents={() => handleSetView("tournaments")}
                     onNavigateToChampionship={() => handleSetView("championship")}
@@ -3648,6 +3776,36 @@ const App: React.FC = () => {
                     onToggleEventRegistration={handleToggleRegistration}
                     primaryColor={settings.primaryColor}
                   />
+                  <div className="hidden">
+                    <Dashboard
+                      bookings={anonymizedBookings}
+                      currentUser={proxyUser || currentUser}
+                      users={users}
+                      courts={settings.courts}
+                      reservationRules={settings.reservationRules}
+                      onBook={handleBook}
+                      onCancel={handleCancel}
+                      onLockRange={handleLockRange}
+                      settings={settings}
+                      userClubs={uniqueUserClubs}
+                      onSwitchClub={handleSwitchClub}
+                      mobileViewType={mobileViewType}
+                      onMobileViewTypeChange={setMobileViewType}
+                      desktopViewType={desktopViewType}
+                      onDesktopViewTypeChange={setDesktopViewType}
+                      mobileSelectedDate={mobileSelectedDate}
+                      onMobileSelectedDateChange={(d) => {
+                        setMobileSelectedDate(d);
+                      }}
+                      isPublicWochenplan={!currentUser}
+                      onPublicLoginSuccess={(loggedInUser) => {
+                        setCurrentUser(loggedInUser);
+                        setOnboardingDismissedForSession(false);
+                      }}
+                      initialBookingSlot={initialBookingSlot}
+                      onClearInitialBookingSlot={() => setInitialBookingSlot(null)}
+                    />
+                  </div>
                 </div>
               ) : view === "reports" && isAdmin ? (
                 <div className="w-full flex-grow flex flex-col min-h-0">
@@ -3804,6 +3962,7 @@ const App: React.FC = () => {
                     }}
                     onNavigateToChampionship={() => setView("championship")}
                     initialTab={adminInitialTab}
+                    onUpdateLandingPageConfig={(newCfg) => setLandingPageConfig(newCfg)}
                   />
                 </div>
               ) : view === "tournaments" ? (
@@ -3901,7 +4060,7 @@ const App: React.FC = () => {
                     <i className="fa-solid fa-lock text-4xl text-slate-300 mb-3"></i>
                     <h3 className="text-base font-bold text-slate-700">Meisterschaft nicht aktiv</h3>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                      Das Modul Meisterschaft ist aktuell für diesen Verein in den Vereins-Einstellungen nicht freigeschaltet.
+                      Das Modul Meisterschaft ist aktuell für diesen Verein in den Vereinseinstellungen nicht freigeschaltet.
                     </p>
                   </div>
                 )
@@ -4171,7 +4330,7 @@ const App: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Compact Collapsible Vereins-Switcher directly above Angemeldet als / Logout */}
+                    {/* Compact Collapsible Vereinsswitcher directly above Angemeldet als / Logout */}
                     {uniqueUserClubs && uniqueUserClubs.length > 1 && (
                       <div className="mt-3.5 pt-3 border-t border-slate-100">
                         <div className="flex flex-col gap-1.5">
@@ -4563,44 +4722,53 @@ const App: React.FC = () => {
 
       {isStartPageLoginModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 sm:p-7 animate-in zoom-in-95 duration-200 relative select-text">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 sm:p-8 animate-in zoom-in-95 duration-200 relative select-text">
             <button
               type="button"
               onClick={() => {
                 setIsStartPageLoginModalOpen(false);
                 setError("");
               }}
-              className="absolute right-4 top-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-700 transition-colors w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 cursor-pointer"
               title="Schließen"
             >
-              <i className="fa-solid fa-xmark text-sm"></i>
+              <i className="fa-solid fa-xmark text-lg"></i>
             </button>
 
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center shrink-0 border border-emerald-100 shadow-2xs">
-                <LogIn className="w-5 h-5" />
+            <div className="text-center space-y-2 pt-1 mb-5">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto shadow-md text-white text-xl"
+                style={{ backgroundColor: settings.primaryColor || "var(--color-primary)" }}
+              >
+                {settings.headerLogoUrl || settings.logoUrl || settings.customHeaderLogoUrl || settings.customLogoUrl ? (
+                  <img
+                    src={settings.customHeaderLogoUrl || settings.headerLogoUrl || settings.customLogoUrl || settings.logoUrl}
+                    alt="Logo"
+                    className="w-9 h-9 object-contain"
+                  />
+                ) : (
+                  <LogIn className="w-6 h-6 text-white" />
+                )}
               </div>
-              <div>
-                <h3 className="text-base font-black text-slate-900 tracking-tight">
-                  Mitglieder-Login erforderlich
-                </h3>
-                <p className="text-xs text-slate-500 font-medium">
-                  Bitte melde dich an, um auf diesen Bereich zugreifen zu können.
-                </p>
-              </div>
+              <h3 className="text-lg font-black uppercase tracking-tight text-slate-800">
+                Vereins-Login
+              </h3>
+              <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                Bitte melde dich an, um auf diesen Bereich zugreifen zu können.
+              </p>
             </div>
 
             {error && (
               <div className="mb-4 bg-rose-50 text-rose-800 border border-rose-200 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
-                <i className="fa-solid fa-circle-exclamation text-rose-600"></i>
+                <i className="fa-solid fa-circle-exclamation text-rose-600 shrink-0"></i>
                 <span>{error}</span>
               </div>
             )}
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1">
-                  Benutzername
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">
+                  Benutzername oder E-Mail
                 </label>
                 <div className="relative">
                   <i className="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
@@ -4608,15 +4776,15 @@ const App: React.FC = () => {
                     type="text"
                     value={loginForm.username}
                     onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                    className="w-full h-10 pl-9 pr-3 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] outline-none transition-all"
-                    placeholder="Benutzername"
+                    className="w-full h-11 pl-9 pr-3 text-sm font-medium bg-slate-50 border-2 border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
+                    placeholder="z. B. max.mustermann"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1">
+                <label className="block text-[10px] font-black uppercase text-slate-500 tracking-wider mb-1.5">
                   Passwort
                 </label>
                 <div className="relative">
@@ -4625,14 +4793,14 @@ const App: React.FC = () => {
                     type={showPassword ? "text" : "password"}
                     value={loginForm.password}
                     onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                    className="w-full h-10 pl-9 pr-10 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] outline-none transition-all"
+                    className="w-full h-11 pl-9 pr-10 text-sm font-medium bg-slate-50 border-2 border-slate-200 rounded-xl focus:bg-white focus:border-[var(--color-primary)] outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
                     placeholder="••••••••"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
                     <i className={`fa-solid ${showPassword ? "fa-eye-slash" : "fa-eye"} text-xs`}></i>
                   </button>
@@ -4643,7 +4811,8 @@ const App: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isLoggingIn}
-                  className="w-full h-10 rounded-xl bg-[var(--color-primary)] hover:brightness-95 text-white text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  style={{ backgroundColor: settings.primaryColor || "var(--color-primary)" }}
+                  className="w-full h-10 rounded-xl text-white hover:brightness-95 text-xs font-bold transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isLoggingIn ? (
                     <>
@@ -4652,23 +4821,13 @@ const App: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <LogIn className="w-4 h-4" />
+                      <LogIn className="w-4 h-4" strokeWidth={2} />
                       <span>Anmelden</span>
                     </>
                   )}
                 </button>
 
-                <div className="flex items-center justify-between text-[11px] pt-1 text-slate-500">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsStartPageLoginModalOpen(false);
-                      setTokenAuthModal({ token: "", userId: "", type: "initial" });
-                    }}
-                    className="hover:underline text-[var(--color-primary)] font-bold cursor-pointer"
-                  >
-                    Token einlösen
-                  </button>
+                <div className="flex items-center justify-end text-[11px] pt-1 text-slate-500">
                   <button
                     type="button"
                     onClick={() => {

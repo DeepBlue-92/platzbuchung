@@ -247,18 +247,32 @@ export function isClubAdmin(
     return user.role === Role.ADMIN || (user.role as any) === 'admin' || user.hauptAdmin === true;
   }
 
-  const normTarget = String(currentClubId).toLowerCase().replace(/\s/g, '');
+  const normTarget = getCanonicalClubId(currentClubId);
   const clubs = getUserClubs(user, systemClubs);
-  const matchedClub = clubs.find(c => String(c.vereinsId).toLowerCase().replace(/\s/g, '') === normTarget);
+  const matchedClub = clubs.find(c => getCanonicalClubId(c.vereinsId || (c as any).id) === normTarget);
 
   if (matchedClub) {
-    return matchedClub.role === Role.ADMIN || (matchedClub.role as any) === 'admin';
+    return (
+      matchedClub.role === Role.ADMIN ||
+      (matchedClub.role as any) === 'admin' ||
+      user.role === Role.ADMIN ||
+      (user.role as any) === 'admin' ||
+      user.hauptAdmin === true
+    );
   }
 
   // Fallback: check if user's singular vereinsId matches target and role is admin
   const singularId = user.vereinsId || (user as any).tenantId || (user as any).clubId || (user as any).vereinId;
-  if (singularId && String(singularId).toLowerCase().replace(/\s/g, '') === normTarget) {
+  if (singularId && getCanonicalClubId(singularId) === normTarget) {
     return user.role === Role.ADMIN || (user.role as any) === 'admin' || user.hauptAdmin === true;
+  }
+
+  // If user has top-level admin role
+  if (user.role === Role.ADMIN || (user.role as any) === 'admin' || user.hauptAdmin === true) {
+    if (!clubs || clubs.length === 0) return true;
+    if (clubs.some(c => getCanonicalClubId(c.vereinsId || (c as any).id) === normTarget)) return true;
+    // Direct club match on singular ID
+    if (!singularId || getCanonicalClubId(singularId) === normTarget) return true;
   }
 
   return false;

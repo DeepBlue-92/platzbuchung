@@ -67,7 +67,7 @@ function formatDateDe(isoStr?: string | null): string {
  */
 function describeConfigChanges(current: LeagueConfigVersion, previous?: LeagueConfigVersion): string {
   if (!previous) {
-    return "Initiales Basis-Regelwerk / Startkonfiguration";
+    return "Initiales Basisregelwerk / Startkonfiguration";
   }
 
   const changes: string[] = [];
@@ -102,15 +102,15 @@ function describeConfigChanges(current: LeagueConfigVersion, previous?: LeagueCo
     changes.push(`Inaktivitätsabzug/Woche: ${prevDecay} Pkt. → ${curDecay} Pkt.`);
   }
 
-  return changes.length > 0 ? changes.join(" | ") : "Keine Parameteränderungen (Stichtags-Bestätigung)";
+  return changes.length > 0 ? changes.join(" | ") : "Keine Parameteränderungen (Stichtagsbestätigung)";
 }
 
 /**
  * Generates and downloads an Excel (.xlsx) file containing:
  * 1. Abschlusstabelle & Rangliste
- * 2. Spiele & Punkte-Historie (mit nachvollziehbarem Rechenweg je Match)
- * 3. Regelwerk & Parameter-Historie (inkl. deutlicher Darstellung von Parameter-Änderungen)
- * 4. Berechnungs-Anleitung & Formeln
+ * 2. Spiele & Punktehistorie (mit nachvollziehbarem Rechenweg je Match)
+ * 3. Regelwerk & Parameterhistorie (inkl. deutlicher Darstellung von Parameteränderungen)
+ * 4. Berechnungsanleitung & Formeln
  */
 export async function exportLeagueToExcel(options: LeagueExportOptions): Promise<void> {
   const { leagueId, leagueName: customLeagueName, usersMap } = options;
@@ -228,7 +228,7 @@ export async function exportLeagueToExcel(options: LeagueExportOptions): Promise
     totalEarnedPointsMap[p.userId] = 0;
   }
 
-  // Row data for "Spiele & Punkte-Historie"
+  // Row data for "Spiele & Punktehistorie"
   const matchesSheetRows: any[] = [];
 
   let matchIndex = 1;
@@ -359,15 +359,15 @@ export async function exportLeagueToExcel(options: LeagueExportOptions): Promise
       "Punkte Sp. 2 (Vor Spiel)": match.isManualAdjustment ? "-" : Number(p2PrePoints.toFixed(1)),
       "Ergebnis (Sätze)": resultString,
       "Sieger": winnerName,
-      "Punkte-Zuwachs Sp. 1": (p1Awarded >= 0 ? `+${p1Awarded}` : `${p1Awarded}`),
-      "Punkte-Zuwachs Sp. 2": match.isManualAdjustment ? "-" : (p2Awarded >= 0 ? `+${p2Awarded}` : `${p2Awarded}`),
+      "Punktezuwachs Sp. 1": (p1Awarded >= 0 ? `+${p1Awarded}` : `${p1Awarded}`),
+      "Punktezuwachs Sp. 2": match.isManualAdjustment ? "-" : (p2Awarded >= 0 ? `+${p2Awarded}` : `${p2Awarded}`),
       "Punkte Sp. 1 (Nach Spiel)": Number(p1PostPoints.toFixed(1)),
       "Punkte Sp. 2 (Nach Spiel)": match.isManualAdjustment ? "-" : Number(p2PostPoints.toFixed(1)),
-      "Gültiges Regelwerk (Stichtag)": appliedVersion?.effective_date ? formatDateDe(appliedVersion.effective_date) : "Basis-Regelwerk",
+      "Gültiges Regelwerk (Stichtag)": appliedVersion?.effective_date ? formatDateDe(appliedVersion.effective_date) : "Basisregelwerk",
       "Angew. Basispunkte (Sieg/Nied.)": `${config.base_points_win ?? 5} / ${config.base_points_loss ?? 5}`,
       "Angew. Max-Bonus": config.maxBonusPoints,
       "Angew. k-Faktor": config.logisticSteepnessK,
-      "Erzielter Sieger-Bonus": match.isManualAdjustment ? "-" : `+${winnerBonus} Pkt.`,
+      "Erzielter Siegerbonus": match.isManualAdjustment ? "-" : `+${winnerBonus} Pkt.`,
       "Bemerkung / Begründung": match.isManualAdjustment 
         ? (match.manualAdjustmentReason || "Admin-Korrektur") 
         : (match.result?.notes || "Reguläres Spiel")
@@ -486,7 +486,7 @@ export async function exportLeagueToExcel(options: LeagueExportOptions): Promise
     });
   });
 
-  // Build "Regelwerk & Parameter-Historie" Sheet
+  // Build "Regelwerk & Parameterhistorie" Sheet
   // Filter versions for this league
   const relevantVersions = configVersionsList.filter(v => {
     if (leagueId === "all") return true;
@@ -516,10 +516,10 @@ export async function exportLeagueToExcel(options: LeagueExportOptions): Promise
     rulesSheetRows.push({
       "Version #": i + 1,
       "Gültig ab (Stichtag)": effDate,
-      "Status / Typ": cur.is_base_rule ? "System Basis-Regelwerk" : "Stichtag-Regelwerk",
+      "Status / Typ": cur.is_base_rule ? "System Basisregelwerk" : "Stichtagsregelwerk",
       "Basispunkte Sieg": cur.base_points_win ?? 5,
       "Basispunkte Niederlage": cur.base_points_loss ?? 5,
-      "Max. Match-Bonus (B_max)": cur.max_bonus ?? 45,
+      "Max. Matchbonus (B_max)": cur.max_bonus ?? 45,
       "Logistischer Faktor (k)": cur.logistic_factor ?? 0.05,
       "Inaktivitätsabzug pro Woche": `${cur.inactivity_deduction_per_week ?? 5} Pkt.`,
       "Austragene Matches unter dieser Regel": `${matchesUnderThisRule} Spiel(e)`,
@@ -527,13 +527,13 @@ export async function exportLeagueToExcel(options: LeagueExportOptions): Promise
     });
   }
 
-  // Build "Berechnungs-Anleitung & Formeln" Sheet
+  // Build "Berechnungsanleitung & Formeln" Sheet
   const guideRows = [
     ["Hobbyliga Punkte- & Auswertungssystem - Mathematische Dokumentation"],
     [""],
     ["1. GRUNDPRINZIP DER PUNKTEBERECHNUNG:"],
     ["Jeder Spieler startet mit 100 Initialpunkten."],
-    ["Bei jedem ausgetragenen Spiel erhalten beide Spieler eine garantierte Basis-Punktzahl für ihren Einsatz (Teilnahmepunkte)."],
+    ["Bei jedem ausgetragenen Spiel erhalten beide Spieler eine garantierte Basispunktzahl für ihren Einsatz (Teilnahmepunkte)."],
     ["Der Sieger erhält zusätzlich einen leistungsabhängigen Bonus, der mit einer logistischen Funktion (Elo-Prinzip) berechnet wird."],
     [""],
     ["2. DIE FORMELN IM DETAIL:"],
@@ -635,7 +635,7 @@ export async function exportLeagueToExcel(options: LeagueExportOptions): Promise
   XLSX.utils.book_append_sheet(wb, wsStandings, "Abschlusstabelle");
   XLSX.utils.book_append_sheet(wb, wsMatches, "Spiele & Punkte");
   XLSX.utils.book_append_sheet(wb, wsRules, "Regelwerk & Historie");
-  XLSX.utils.book_append_sheet(wb, wsGuide, "Berechnungs-Anleitung");
+  XLSX.utils.book_append_sheet(wb, wsGuide, "Berechnungsanleitung");
 
   // 3. Trigger Download
   const safeLeagueName = resolvedLeagueName.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, "_");

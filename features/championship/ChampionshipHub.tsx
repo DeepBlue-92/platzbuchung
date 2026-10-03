@@ -52,7 +52,7 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   onNavigateToReservations,
   onNavigateToAdmin,
   initialAdminView = false,
-  clubName = 'Tennis-Club',
+  clubName = 'Tennisclub',
   logoUrl,
 }) => {
   const [tournaments, setTournaments] = useState<TournamentInstance[]>([]);
@@ -337,7 +337,7 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-4 py-4 flex flex-col gap-3.5 sm:gap-4 w-full flex-grow lg:animate-in lg:fade-in lg:duration-500 min-h-0">
       {/* ======================================================== */}
-      {/* BENTO-CARD 1: Globaler Steuerungs-Header (Oben)          */}
+      {/* BENTO-CARD 1: Globaler Steuerungsheader (Oben)          */}
       {/* ======================================================== */}
       {currentTournament && (
         <ChampionshipBentoHeader
@@ -359,10 +359,10 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* BENTO-CARD 2: Dynamischer Inhalts-Container (Unten)      */}
+      {/* BENTO-CARD 2: Dynamischer Inhaltscontainer (Unten)      */}
       {/* ======================================================== */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 sm:p-6 min-h-[360px] space-y-4 sm:space-y-5 print:hidden">
-        {/* Phasen-Navigation (1: Gruppe, 2: HF, 3: Finale) */}
+        {/* Phasennavigation (1: Gruppe, 2: HF, 3: Finale) */}
         {currentTournament && (
           <div className="grid grid-cols-3 gap-1.5 sm:gap-3 pb-3 sm:pb-4 border-b border-slate-100">
             {phases.map((phase) => {
@@ -466,10 +466,10 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
                     <div className="py-12 text-center space-y-2">
                       <Clock className="w-9 h-9 text-slate-300 mx-auto" />
                       <h4 className="font-bold text-slate-800 text-sm">
-                        Noch keine Halbfinal-Partien eingeteilt
+                        Noch keine Halbfinalpartien eingeteilt
                       </h4>
                       <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                        Die Halbfinal-Paarungen (Halbfinale 1 & 2) werden nach Abschluss der vorangegangenen Gruppenphase automatisch ermittelt.
+                        Die Halbfinalpaarungen (Halbfinale 1 & 2) werden nach Abschluss der vorangegangenen Gruppenphase automatisch ermittelt.
                       </p>
                     </div>
                   ) : (
@@ -511,7 +511,7 @@ export const ChampionshipHub: React.FC<ChampionshipHubProps> = ({
                     <div className="py-12 text-center space-y-2">
                       <Trophy className="w-9 h-9 text-slate-300 mx-auto" />
                       <h4 className="font-bold text-slate-800 text-sm">
-                        Noch keine Endrunden-Partien eingeteilt
+                        Noch keine Endrundenpartien eingeteilt
                       </h4>
                       <p className="text-xs text-slate-500 max-w-sm mx-auto">
                         Großes Finale (Platz 1 & 2) und Kleines Finale (Platz 3) werden nach Abschluss der Halbfinals freigeschaltet.

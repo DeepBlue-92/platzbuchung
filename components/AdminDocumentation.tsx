@@ -174,7 +174,7 @@ export const AdminDocumentation: React.FC = () => {
             <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <span className="text-xs font-bold text-slate-700">
-                  Suchergebnisse im Admin-Wiki für <span className="text-[var(--color-primary)] font-black">„{searchQuery}“</span> ({searchResults.length})
+                  Suchergebnisse im Adminwiki für <span className="text-[var(--color-primary)] font-black">„{searchQuery}“</span> ({searchResults.length})
                 </span>
                 <button
                   type="button"
@@ -188,7 +188,7 @@ export const AdminDocumentation: React.FC = () => {
               {searchResults.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
                   <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm font-bold text-slate-600">Keine passenden Wiki-Einträge gefunden</p>
+                  <p className="text-sm font-bold text-slate-600">Keine passenden Wikieinträge gefunden</p>
                   <p className="text-xs mt-1">Versuche es mit Begriffen wie „Rollen“, „Plätze“, „Gastspiel“ oder „Timeline“.</p>
                 </div>
               ) : (

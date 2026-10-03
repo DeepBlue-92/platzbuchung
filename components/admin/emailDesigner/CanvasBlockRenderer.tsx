@@ -659,7 +659,7 @@ export const CanvasBlockRenderer: React.FC<CanvasBlockRendererProps> = ({
                         });
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      placeholder="Button-Beschriftung..."
+                      placeholder="Buttonbeschriftung..."
                       className="bg-transparent border-0 outline-none text-center font-bold text-sm focus:ring-0 p-0 m-0 w-auto min-w-[260px] whitespace-nowrap"
                       style={{
                         color: cfg.textColor || "#ffffff",

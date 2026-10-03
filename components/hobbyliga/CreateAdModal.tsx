@@ -278,7 +278,7 @@ export const CreateAdModal: React.FC<CreateAdModalProps> = ({
                 </div>
                 <div className="flex-1">
                   <span className="block text-sm font-bold text-slate-800 leading-snug">
-                    Meine Kontaktdaten (Telefon & E-Mail) in dieser Anzeige für Match-Absprachen anzeigen
+                    Meine Kontaktdaten (Telefon & E-Mail) in dieser Anzeige für Matchabsprachen anzeigen
                   </span>
                   <p className="text-[11px] font-medium text-slate-500 mt-1">
                     Wenn aktiviert, sehen andere Spieler direkt deine Kontaktinfos in der Anzeige. 

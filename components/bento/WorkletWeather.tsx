@@ -156,7 +156,7 @@ export const WorkletWeather: React.FC<WorkletWeatherProps> = ({
         <div className="pb-3 mb-3 border-b border-slate-100 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h3 className="text-lg font-semibold text-slate-900 tracking-tight truncate">
-              {item.title || "Wetter & Platz-Kondition"}
+              {item.title || "Wetter & Platzkondition"}
             </h3>
           </div>
 
@@ -194,7 +194,7 @@ export const WorkletWeather: React.FC<WorkletWeatherProps> = ({
                 </div>
               </div>
 
-              {/* Platz-Ampel Badge */}
+              {/* Platzampel Badge */}
               <div className="pt-2 border-t border-slate-200/60">
                 {!isRaining ? (
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs w-full">

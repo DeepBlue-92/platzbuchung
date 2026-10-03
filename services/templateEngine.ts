@@ -74,7 +74,7 @@ export function normalizePayload(payload: Record<string, any> = {}): Record<stri
 export function renderEmail(options: RenderTemplateOptions): RenderResult {
   const safeData = normalizePayload(options.payload);
 
-  // 1. Render Subject (clean plain text, strip HTML tags from badges so e.g. [Spieler-Name] appears)
+  // 1. Render Subject (clean plain text, strip HTML tags from badges so e.g. [Spielername] appears)
   let renderedSubject = "";
   try {
     const subjectData: Record<string, string> = {};

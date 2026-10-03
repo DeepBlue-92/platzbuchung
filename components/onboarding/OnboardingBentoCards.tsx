@@ -298,7 +298,7 @@ export const OnboardingBentoCards: React.FC<OnboardingBentoCardsProps> = ({
               />
               <div className="text-xs text-slate-500">
                 <p className="font-bold text-slate-700">Aktuelles Profilbild</p>
-                <p className="text-[10px]">Vom Club-Administrator verwaltet.</p>
+                <p className="text-[10px]">Vom Clubadministrator verwaltet.</p>
               </div>
             </div>
           ) : (

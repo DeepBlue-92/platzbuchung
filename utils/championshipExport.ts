@@ -58,7 +58,7 @@ export function exportChampionshipToExcel(
   // =========================================================================
   const sheet1Rows: any[][] = [];
 
-  // Titel-Header
+  // Titelheader
   sheet1Rows.push([`${tournament.title} - Endstand & Gruppenübersicht`]);
   sheet1Rows.push([
     'Verein:',
@@ -108,7 +108,7 @@ export function exportChampionshipToExcel(
     sheet1Rows.push([]); // Leerzeile
   }
 
-  // 2. Gruppen-Tabellen
+  // 2. Gruppentabellen
   const groups = tournament.groups || [];
   if (groups.length > 0) {
     sheet1Rows.push(['GRUPPENPHASE - TABELLEN']);

@@ -38,7 +38,7 @@ import AdminRankings from "./AdminRankings";
 import AdminChangelog from "./AdminChangelog";
 import { AdminDocumentation } from "./AdminDocumentation";
 import { motion, AnimatePresence } from "motion/react";
-import { Settings, Trophy } from "lucide-react";
+import { Settings, Trophy, SlidersHorizontal, Shield } from "lucide-react";
 import {
   findCandidateDuplicatesForAdmin,
   addExistingPersonToClub,
@@ -89,16 +89,17 @@ interface AdminSettingsProps {
   isSuperAdminImpersonating?: boolean;
   onNavigateToChampionship?: () => void;
   initialTab?: string;
+  onUpdateLandingPageConfig?: (config: LandingPageConfig) => void;
 }
 
 const TABS = [
   { id: "allgemein", label: "Allgemein", icon: "fa-cubes" },
   { id: "landing_page", label: "Startseite bearbeiten", icon: "fa-table-cells-large" },
-  { id: "rules", label: "Buchungs-Regeln", icon: "fa-clipboard-check" },
+  { id: "rules", label: "Buchungsregeln", icon: "fa-clipboard-check" },
   { id: "sperren", label: "Sperren", icon: "fa-ban" },
   { id: "layout", label: "Layout", icon: "fa-paint-roller" },
   { id: "users", label: "Benutzer", icon: "fa-users" },
-  { id: "onboarding", label: "Mitglieder-Onboarding", icon: "fa-user-check" },
+  { id: "onboarding", label: "Mitgliederonboarding", icon: "fa-user-check" },
   { id: "notifications", label: "Benachrichtigungen", icon: "fa-bell" },
   { id: "database", label: "Datenverwaltung", icon: "fa-database" },
   { id: "ranking", label: "Rangliste", icon: "fa-medal" },
@@ -141,6 +142,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   isSuperAdminImpersonating = false,
   onNavigateToChampionship,
   initialTab,
+  onUpdateLandingPageConfig,
 }) => {
   const currentClubId = settings?.vereinsId || settings?.id || currentUser.vereinsId || "sv-neuhausen";
   const [currentTab, setCurrentTab] = useState<
@@ -169,32 +171,38 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   }, [initialTab]);
   const [pendingTab, setPendingTab] = useState<typeof currentTab | null>(null);
 
-  const formatPlayerName = (name: string): string => {
+  const formatPlayerName = (name?: any): string => {
+    if (!name || typeof name !== "string") return "";
     const trimmed = name.trim();
+    if (!trimmed) return "";
     
     // Try finding the user by their ID / username in the users list
-    let foundUser = users[trimmed];
+    let foundUser = users && typeof users === "object" ? users[trimmed] : null;
     
-    if (!foundUser) {
+    if (!foundUser && users && typeof users === "object") {
       // Find user by scanning users values for matching username, klarname, or full name combinations
       foundUser = (Object.values(users) as User[]).find((u) => {
-        const full = `${u.firstName || ""} ${u.lastName || ""}`.trim();
-        const reverseFull = `${u.lastName || ""}, ${u.firstName || ""}`.trim().replace(/^, |,$/, "");
+        if (!u) return false;
+        const uName = (u.name || "").toLowerCase();
+        const uKlarname = (u.klarname || "").toLowerCase();
+        const full = `${u.firstName || ""} ${u.lastName || ""}`.trim().toLowerCase();
+        const reverseFull = `${u.lastName || ""}, ${u.firstName || ""}`.trim().replace(/^, |,$/, "").toLowerCase();
+        const target = trimmed.toLowerCase();
         return (
-          u.name.toLowerCase() === trimmed.toLowerCase() ||
-          (u.klarname && u.klarname.toLowerCase() === trimmed.toLowerCase()) ||
-          (full && full.toLowerCase() === trimmed.toLowerCase()) ||
-          (reverseFull && reverseFull.toLowerCase() === trimmed.toLowerCase())
+          uName === target ||
+          uKlarname === target ||
+          full === target ||
+          reverseFull === target
         );
       });
     }
 
     if (foundUser) {
       if (foundUser.firstName || foundUser.lastName) {
-        const first = foundUser.firstName || "";
-        const last = foundUser.lastName || "";
+        const first = (foundUser.firstName || "").trim();
+        const last = (foundUser.lastName || "").trim();
         if (first && last) return `${first} ${last}`;
-        return first || last || foundUser.name;
+        return first || last || foundUser.name || "";
       }
       if (foundUser.klarname) {
         if (foundUser.klarname.includes(",")) {
@@ -205,7 +213,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         }
         return foundUser.klarname;
       }
-      return foundUser.name;
+      return foundUser.name || "";
     }
 
     if (trimmed.includes(",")) {
@@ -420,13 +428,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       : (targetUser?.name || "Alexander Becker");
     const payload = {
       user_name: memberName,
-      club_name: settings.clubName || "Tennis-Club e.V.",
+      club_name: settings.clubName || "Tennisclub e.V.",
       activation_link: `${window.location.origin}/#activate?token=act_sample_token&userId=${encodeURIComponent(targetUser?.id || targetUser?.name || "user123")}`,
       password_reset_link: `${window.location.origin}/#reset-password?token=rst_sample_token&userId=${encodeURIComponent(targetUser?.id || targetUser?.name || "user123")}`,
       link_validity_hours: authMailModal.type === "activation" ? "24" : "1",
     };
     try {
-      return getLiveEmailPreview(authMailModal.activeTemplate, payload, settings.clubName || "Tennis-Club e.V.");
+      return getLiveEmailPreview(authMailModal.activeTemplate, payload, settings.clubName || "Tennisclub e.V.");
     } catch (e) {
       return {
         subject: authMailModal.activeTemplate.subject,
@@ -449,7 +457,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         if (authMailModal.type === "activation") {
           const res = await sendUserActivationApi(uid, {
             vereinsId: settings.vereinsId || "sv-neuhausen",
-            clubName: settings.clubName || "Tennis-Club e.V.",
+            clubName: settings.clubName || "Tennisclub e.V.",
             user: u,
           });
 
@@ -480,14 +488,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           // Password reset
           const res = await sendUserPasswordResetApi(uid, {
             vereinsId: settings.vereinsId || "sv-neuhausen",
-            clubName: settings.clubName || "Tennis-Club e.V.",
+            clubName: settings.clubName || "Tennisclub e.V.",
             user: u,
           });
 
           if (!res.success) {
             setNotification({
               type: "error",
-              text: res.message || "Fehler beim Versenden der Passwort-Reset-E-Mail.",
+              text: res.message || "Fehler beim Versenden der Passwortreset-E-Mail.",
             });
             return;
           }
@@ -505,14 +513,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
           setNotification({
             type: "success",
-            text: `Passwort-Reset-E-Mail erfolgreich an ${u.email} versendet!`,
+            text: `Passwortreset-E-Mail erfolgreich an ${u.email} versendet!`,
           });
         }
       } else if (authMailModal.mode === "bulk" && authMailModal.userIds) {
         const uids = authMailModal.userIds;
         const res = await bulkSendUserActivationApi(uids, {
           vereinsId: settings.vereinsId || "sv-neuhausen",
-          clubName: settings.clubName || "Tennis-Club e.V.",
+          clubName: settings.clubName || "Tennisclub e.V.",
           users,
         });
 
@@ -587,7 +595,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         isLocked: false,
         hasBallMachine: false,
         bookedBy: currentUserId,
-        comment: "Spitzenspiel der Herren-Mannschaft",
+        comment: "Spitzenspiel der Herrenmannschaft",
       },
       {
         id: `demo_today_2`,
@@ -598,7 +606,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         isLocked: false,
         hasBallMachine: false,
         bookedBy: currentUserId,
-        comment: "Spitzenspiel der Herren-Mannschaft",
+        comment: "Spitzenspiel der Herrenmannschaft",
       },
       {
         id: `demo_today_3`,
@@ -608,7 +616,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         players: [],
         isLocked: true,
         hasBallMachine: false,
-        reason: "Jugend-Clubtraining (Gesperrt)",
+        reason: "Jugendclubtraining (Gesperrt)",
         bookedBy: currentUserId,
       },
       {
@@ -619,7 +627,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         players: [],
         isLocked: true,
         hasBallMachine: false,
-        reason: "Jugend-Clubtraining (Gesperrt)",
+        reason: "Jugendclubtraining (Gesperrt)",
         bookedBy: currentUserId,
       },
       {
@@ -647,7 +655,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         isLocked: false,
         hasBallMachine: false,
         bookedBy: "demo_user_chris",
-        comment: "Senioren Doppel-Runde",
+        comment: "Senioren Doppelrunde",
       },
       {
         id: `demo_tomorrow_1`,
@@ -680,7 +688,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         isLocked: false,
         hasBallMachine: false,
         bookedBy: "demo_user_sabine",
-        comment: "Damen-Mannschaft Training",
+        comment: "Damenmannschaft Training",
       },
       {
         id: `demo_tomorrow_4`,
@@ -999,11 +1007,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     court: "all",
   });
 
-  // Export States
+  // Export & Embed Widget States
   const [exportStartDate, setExportStartDate] = useState("");
   const [exportEndDate, setExportEndDate] = useState("");
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [linkCopiedClear, setLinkCopiedClear] = useState(false);
+  const [widgetLinkCopied, setWidgetLinkCopied] = useState(false);
+  const [widgetIframeCopied, setWidgetIframeCopied] = useState(false);
 
   // Settings State Drafts
   const [clubName, setClubName] = useState(settings.clubName || "");
@@ -1127,7 +1135,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     settings.arbeitseinsaetzeSettings?.sollStunden ?? 10
   );
   const [aeCategories, setAeCategories] = useState<string[]>(
-    (settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheim-Reinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de"))
+    (settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheimreinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de"))
   );
   const [newAeCategory, setNewAeCategory] = useState("");
   const [editingCategoryIndex, setEditingCategoryIndex] = useState<number | null>(null);
@@ -1358,7 +1366,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       },
     });
     setMessage({
-      text: "Liga-Status erfolgreich aktualisiert.",
+      text: "Ligastatus erfolgreich aktualisiert.",
       type: "success",
     });
   };
@@ -1435,7 +1443,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       },
     });
     setMessage({
-      text: `Liga-Name auf "${trimmed}" geändert.`,
+      text: `Liganame auf "${trimmed}" geändert.`,
       type: "success",
     });
   };
@@ -1545,7 +1553,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     );
     setCourtsList(settings.courts || ["Platz 1", "Platz 2"]);
     setSollStunden(settings.arbeitseinsaetzeSettings?.sollStunden ?? 10);
-    setAeCategories((settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheim-Reinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de")));
+    setAeCategories((settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheimreinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de")));
     setCommentsRequired(settings.arbeitseinsaetzeSettings?.commentsRequired ?? false);
     setModules({
       events: settings.modules?.events !== false,
@@ -1614,7 +1622,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
           aeMaxDaysBack !== (settings.arbeitseinsaetzeSettings?.maxDaysBack ?? 14) ||
           commentsRequired !== (settings.arbeitseinsaetzeSettings?.commentsRequired ?? false) ||
           showPlannedShifts !== (settings.arbeitseinsaetzeSettings?.show_planned_shifts ?? settings.show_planned_shifts ?? true) ||
-          aeCategories.join(",") !== (settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheim-Reinigung", "Bewirtung", "Sonstiges"]).join(",")
+          aeCategories.join(",") !== (settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheimreinigung", "Bewirtung", "Sonstiges"]).join(",")
         );
       }
       if (tab === "rules") {
@@ -1807,7 +1815,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         nav_order: navOrder,
       }, currentUser.name || currentUser.id).catch(console.warn);
       setMessage({
-        text: "Allgemeine Einstellungen & Modul-Reihenfolge erfolgreich gespeichert.",
+        text: "Allgemeine Einstellungen & Modulreihenfolge erfolgreich gespeichert.",
         type: "success",
       });
     } else if (tab === "arbeitseinsaetze") {
@@ -1854,7 +1862,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       const feeValidation = validateFeeSettings(feeSettings);
       if (!feeValidation.isValid) {
         setMessage({
-          text: "Speichern fehlgeschlagen: Bitte überprüfe die unvollständigen Gastgebühr-Regeln.",
+          text: "Speichern fehlgeschlagen: Bitte überprüfe die unvollständigen Gastgebührregeln.",
           type: "error",
         });
         return;
@@ -1881,7 +1889,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         courts: newCourts,
       });
       setMessage({
-        text: "Buchungs-Regeln erfolgreich gespeichert.",
+        text: "Buchungsregeln erfolgreich gespeichert.",
         type: "success",
       });
     } else if (tab === "layout") {
@@ -1943,7 +1951,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       }
     } else if (tab === "arbeitseinsaetze") {
       setSollStunden(settings.arbeitseinsaetzeSettings?.sollStunden ?? 10);
-      setAeCategories((settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheim-Reinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de")));
+      setAeCategories((settings.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheimreinigung", "Bewirtung", "Sonstiges"]).slice().sort((a, b) => a.localeCompare(b, "de")));
       setAeVisibility(settings.arbeitseinsaetzeSettings?.visibility ?? "full");
       setAeInterval(settings.arbeitseinsaetzeSettings?.interval ?? "0.5");
       setAeMaxDaysBack(settings.arbeitseinsaetzeSettings?.maxDaysBack ?? 14);
@@ -2109,7 +2117,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
         text:
           lockContext === "event"
             ? `Termin-Bereich "${newLockTitle}" erfolgreich hinzugefügt.`
-            : `Zeitbereichs-Sperre "${newLockTitle}" erfolgreich hinzugefügt.`,
+            : `Zeitbereichssperre "${newLockTitle}" erfolgreich hinzugefügt.`,
       });
     }
 
@@ -2249,7 +2257,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     });
     setMessage({
       type: "success",
-      text: "Zeitbereichs-Sperre erfolgreich gelöscht.",
+      text: "Zeitbereichssperre erfolgreich gelöscht.",
     });
   };
 
@@ -3145,7 +3153,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       const list = getAnonymizedBookingsList();
       await savePublicBookings(currentClubId, list);
       setMessage({
-        text: "Der anonymisierte, öffentliche Feed wurde erfolgreich in die Cloud-Datenbank geladen!",
+        text: "Der anonymisierte, öffentliche Feed wurde erfolgreich in die Clouddatenbank geladen!",
         type: "success",
       });
     } catch (err: any) {
@@ -3162,7 +3170,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
       const list = getClearBookingsList();
       await saveClearBookings(currentClubId, list);
       setMessage({
-        text: "Der öffentliche Feed mit Klarnamen wurde erfolgreich in die Cloud-Datenbank geladen!",
+        text: "Der öffentliche Feed mit Klarnamen wurde erfolgreich in die Clouddatenbank geladen!",
         type: "success",
       });
     } catch (err: any) {
@@ -3220,16 +3228,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
     });
   };
 
-  const getPublicFeedURL = () => {
+  const getEmbedWidgetURL = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const clubId = currentClubId;
-    return `${origin}/api/public/feeds/bookings?type=anonymisiert&clubId=${clubId}`;
+    return `${origin}/?embed=courts&tenant=${encodeURIComponent(clubId)}`;
   };
 
-  const getClearFeedURL = () => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const clubId = currentClubId;
-    return `${origin}/api/public/feeds/bookings?type=klarnamen&clubId=${clubId}`;
+  const getEmbedIframeCode = () => {
+    const url = getEmbedWidgetURL();
+    return `<iframe src="${url}" width="100%" height="720" style="border:none;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.06);width:100%;min-height:680px;" loading="lazy" title="Tennis Platzbelegung"></iframe>`;
   };
 
   const editPlayerSuggestions = useMemo(() => {
@@ -3255,17 +3262,23 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
   const filteredAppointments = useMemo(() => {
     const todayStr = new Date().toISOString().split("T")[0];
 
-    return bookings
+    return (bookings || [])
       .filter((b) => {
+        if (!b) return false;
+        const bDate = b.date || "";
+        const bCourt = b.court || "";
+        const bReason = b.reason || "";
+        const bComment = b.comment || "";
+        const bPlayers = Array.isArray(b.players) ? b.players : [];
+
         // 1. Search Query filter (matches Date, Court, Player name, Comment, or Reason)
         if (bookingSearchQuery.trim()) {
           const q = bookingSearchQuery.toLowerCase();
-          const matchesDate = b.date.includes(q);
-          const matchesCourt = b.court.toLowerCase().includes(q);
-          const matchesReason = (b.reason || "").toLowerCase().includes(q);
-          const matchesComment = (b.comment || "").toLowerCase().includes(q);
-          const matchesPlayers =
-            b.players && b.players.some((p) => p.toLowerCase().includes(q));
+          const matchesDate = bDate.toLowerCase().includes(q);
+          const matchesCourt = bCourt.toLowerCase().includes(q);
+          const matchesReason = bReason.toLowerCase().includes(q);
+          const matchesComment = bComment.toLowerCase().includes(q);
+          const matchesPlayers = bPlayers.some((p) => typeof p === "string" && p.toLowerCase().includes(q));
 
           if (
             !matchesDate &&
@@ -3280,9 +3293,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
         // 2. Type filter
         if (bookingFilterType === "future") {
-          if (b.date < todayStr) return false;
+          if (bDate < todayStr) return false;
         } else if (bookingFilterType === "past") {
-          if (b.date >= todayStr) return false;
+          if (bDate >= todayStr) return false;
         } else if (bookingFilterType === "bookings") {
           if (b.isLocked) return false;
         } else if (bookingFilterType === "locks") {
@@ -3291,16 +3304,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
         // 3. Court filter
         if (bookingFilterCourt !== "all") {
-          if (b.court !== bookingFilterCourt) return false;
+          if (bCourt !== bookingFilterCourt) return false;
         }
 
         return true;
       })
       .sort((a, b) => {
         // Sort by Date desc, then Time desc (newest/most recent first)
-        const dateCompare = b.date.localeCompare(a.date);
+        const aDate = a.date || "";
+        const bDate = b.date || "";
+        const dateCompare = bDate.localeCompare(aDate);
         if (dateCompare !== 0) return dateCompare;
-        return b.time.localeCompare(a.time);
+        const aTime = a.time || "";
+        const bTime = b.time || "";
+        return bTime.localeCompare(aTime);
       });
   }, [bookings, bookingSearchQuery, bookingFilterType, bookingFilterCourt]);
 
@@ -3477,15 +3494,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
             >
               {/* TAB 1: ALLGEMEIN */}
               {currentTab === "allgemein" && (
-                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
                     {/* Modules Segment */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-toggle-on"></i> Module
-                      </h3>
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-toggle-on text-[var(--color-primary)]"></i> Module
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Aktiviere oder deaktiviere Funktionen und passe ihre Anzeigereihenfolge an.
+                        </p>
+                      </div>
 
-                      <div className="space-y-4">
+                      <div className="space-y-2.5">
                         {navOrder.map((id, index) => {
                           const isStartPage = id === "landing_page";
                           const isReservation = id === "reservation";
@@ -3503,7 +3525,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                           if (isStartPage) {
                             label = "Startseite";
-                            desc = "Öffentliche Startseite mit Vereins-News & Schnellzugriff.";
+                            desc = "Öffentliche Startseite mit Vereinsnews & Schnellzugriff.";
                             isChecked = modules.landing_page !== false;
                             onToggle = (val) => setModules({ ...modules, landing_page: val });
                           } else if (isReservation) {
@@ -3545,13 +3567,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           return (
                             <div
                               key={id}
-                              className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 hover:border-[var(--color-primary)] transition-colors shadow-2xs"
+                              className="flex items-center justify-between p-3.5 bg-slate-50/70 rounded-xl border border-slate-200/80 hover:border-slate-300 transition-colors"
                             >
                               <div className="flex-1 min-w-0 pr-4">
-                                <div className="font-black text-xs text-slate-800 uppercase">
+                                <div className="font-semibold text-xs text-slate-800">
                                   {label}
                                 </div>
-                                <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
+                                <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
                                   {desc}
                                 </div>
                               </div>
@@ -3563,7 +3585,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     type="button"
                                     disabled={index === 0}
                                     onClick={() => handleMoveNavModule(index, "up")}
-                                    className="w-6 h-6 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-[10px]"
+                                    className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-xs"
                                     title="Nach oben verschieben"
                                   >
                                     <i className="fa-solid fa-arrow-up"></i>
@@ -3572,7 +3594,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     type="button"
                                     disabled={index === navOrder.length - 1}
                                     onClick={() => handleMoveNavModule(index, "down")}
-                                    className="w-6 h-6 rounded-md border border-slate-200 hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-[10px]"
+                                    className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-xs"
                                     title="Nach unten verschieben"
                                   >
                                     <i className="fa-solid fa-arrow-down"></i>
@@ -3585,7 +3607,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     type="checkbox"
                                     checked={true}
                                     disabled
-                                    className="w-5 h-5 accent-[var(--color-primary)] opacity-70 cursor-not-allowed shrink-0"
+                                    className="w-4 h-4 accent-[var(--color-primary)] opacity-70 cursor-not-allowed shrink-0 rounded"
                                   />
                                 ) : (
                                   <input
@@ -3593,7 +3615,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     checked={isChecked}
                                     disabled={isLeague && !isSuperAdmin}
                                     onChange={(e) => onToggle && onToggle(e.target.checked)}
-                                    className="w-5 h-5 accent-[var(--color-primary)] shrink-0 cursor-pointer"
+                                    className="w-4 h-4 accent-[var(--color-primary)] shrink-0 cursor-pointer rounded"
                                   />
                                 )}
                               </div>
@@ -3604,14 +3626,19 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     </div>
 
                     {/* Club Context / Basic Configurations */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-circle-info"></i> Allgemeine
-                        Einstellungen
-                      </h3>
-                      <div className="space-y-5">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-circle-info text-[var(--color-primary)]"></i> Allgemeine Einstellungen
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Grundlegende Stammdaten und Standortinformationen des Vereins.
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
                         <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Vereinsname
                           </label>
                           <input 
@@ -3619,63 +3646,63 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={clubName || ""}
                             onChange={(e) => setClubName(e.target.value)}
                             placeholder="z. B. SV Neuhausen"
-                            className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal placeholder:text-slate-400"
                           />
                         </div>
 
                         {/* Standort der Platzanlage (Strukturierte Adressfelder) */}
-                        <div className="pt-2 border-t border-slate-200/60">
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                        <div className="pt-3 border-t border-slate-200/60 space-y-3.5">
+                          <div className="text-xs font-semibold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
                             <i className="fa-solid fa-location-dot text-[var(--color-primary)]"></i>
                             Standort der Platzanlage
-                          </label>
+                          </div>
                           <div className="space-y-3">
                             <div>
-                              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                              <label className="block text-xs font-medium text-slate-600 mb-1">
                                 Straße & Hausnummer
-                              </span>
+                              </label>
                               <input 
                                 type="text"
                                 value={street || ""}
                                 onChange={(e) => setStreet(e.target.value)}
                                 placeholder="z. B. Sportweg 4"
-                                className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal placeholder:text-slate-400"
                               />
                             </div>
                             <div className="grid grid-cols-3 gap-3">
                               <div className="col-span-1">
-                                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                <label className="block text-xs font-medium text-slate-600 mb-1">
                                   PLZ
-                                </span>
+                                </label>
                                 <input 
                                   type="text"
                                   value={zip || ""}
                                   onChange={(e) => setZip(e.target.value)}
                                   placeholder="z. B. 84030"
-                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal placeholder:text-slate-400"
                                 />
                               </div>
                               <div className="col-span-2">
-                                <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                <label className="block text-xs font-medium text-slate-600 mb-1">
                                   Ort
-                                </span>
+                                </label>
                                 <input 
                                   type="text"
                                   value={city || ""}
                                   onChange={(e) => setCity(e.target.value)}
                                   placeholder="z. B. Ergolding"
-                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal placeholder:text-slate-400"
                                 />
                               </div>
                             </div>
                             
                             <div className="pt-2">
-                              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                              <label className="block text-xs font-medium text-slate-600 mb-1.5">
                                 Anlagen-Foto (Für Liga & Buchung)
-                              </span>
-                              <div className="flex flex-col gap-2">
+                              </label>
+                              <div className="flex flex-col gap-2.5">
                                 {(customFacilityPhotoUrl || headerLogoUrl) ? (
-                                  <div className="relative h-20 w-32 rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                                  <div className="relative h-24 w-40 rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
                                     <img 
                                       src={customFacilityPhotoUrl || headerLogoUrl} 
                                       alt="Anlagen Vorschau" 
@@ -3688,7 +3715,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           setFacilityPhotoUrl("");
                                           setCustomFacilityPhotoUrl("");
                                         }}
-                                        className="absolute top-1 right-1 w-6 h-6 bg-white/90 rounded-full flex items-center justify-center text-red-500 shadow-sm hover:bg-red-50 transition-colors"
+                                        className="absolute top-1.5 right-1.5 w-6 h-6 bg-white/90 rounded-full flex items-center justify-center text-red-500 shadow-xs hover:bg-red-50 transition-colors"
                                         title="Anlagen-Foto entfernen"
                                       >
                                         <i className="fa-solid fa-xmark text-xs"></i>
@@ -3696,17 +3723,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     )}
                                   </div>
                                 ) : null}
-                                <div className="flex flex-col gap-2 relative">
-                                  <label className="cursor-pointer flex items-center justify-center gap-2 w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all border border-slate-200 active:scale-95">
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="cursor-pointer flex items-center justify-center gap-2 w-full h-10 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl transition-all border border-slate-200 shadow-2xs">
                                     <i className="fa-solid fa-upload"></i> Foto hochladen
-                                    <input className="hidden placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    <input 
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
                                       onChange={(e) => {
                                         const file = e.target.files?.[0];
                                         if (file) handleImageUpload(e as any, "facilityPhoto");
                                       }}
                                     />
                                   </label>
-                                  <p className="text-[10px] text-slate-400 leading-tight">
+                                  <p className="text-xs text-slate-400 leading-normal">
                                     Optional. Wenn leer, wird das Logo/Banner als Fallback für die Austragungsort-Karte genutzt.
                                   </p>
                                 </div>
@@ -3720,15 +3750,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   </div>
 
                   {/* Tab Category Actions */}
-                  <div className="border-t border-slate-100 pt-6 flex justify-end">
+                  <div className="border-t border-slate-200/80 pt-5 flex justify-end">
                     <button
                       type="button"
                       disabled={!isTabDirty("allgemein")}
                       onClick={() => handleSaveTab("allgemein")}
-                      className={`font-black uppercase text-xs tracking-wider px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 ${
+                      className={`h-10 px-6 rounded-xl font-semibold text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
                         isTabDirty("allgemein")
-                          ? "bg-[var(--color-primary)] text-white hover:bg-black shadow-lg hover:shadow-xl"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          ? "bg-[var(--color-primary)] text-white hover:brightness-110"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                       }`}
                     >
                       <i className="fa-solid fa-floppy-disk"></i> Speichern
@@ -3743,100 +3773,119 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   <LandingPageEditor
                     vereinsId={currentClubId}
                     authorName={currentUser.name || currentUser.id}
+                    clubName={settings?.clubName || "Verein"}
+                    primaryColor={settings?.primaryColor}
+                    onSaved={(newCfg) => {
+                      if (onUpdateLandingPageConfig) {
+                        onUpdateLandingPageConfig(newCfg);
+                      }
+                    }}
                   />
                 </div>
               )}
 
               {/* TAB: ARBEITSEINSÄTZE */}
               {currentTab === "arbeitseinsaetze" && (
-                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6">
                     {/* Einstellungen */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-briefcase"></i> Modul-Parameter
-                      </h3>
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-briefcase text-[var(--color-primary)]"></i> Modul-Parameter
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Konfiguriere Sichtbarkeiten, Zeitintervalle und Pflichtfelder für Arbeitsstunden.
+                        </p>
+                      </div>
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Sichtbarkeit der Mitgliederliste (für normale Mitglieder)
                           </label>
                           <div className="relative">
                             <select
                               value={aeVisibility}
                               onChange={(e) => setAeVisibility(e.target.value as any)}
-                              className="w-full h-10 px-4 pr-10 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none font-sans font-medium"
+                              className="w-full h-10 px-3.5 pr-10 bg-white text-sm text-slate-800 rounded-xl border border-slate-200 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none outline-none font-normal"
                             >
                               <option value="full">Vollständig sichtbar</option>
                               <option value="active_only">Nur aktive Helfer sichtbar (0-Stunden ausblenden)</option>
                               <option value="hidden">Komplett ausgeblendet</option>
                             </select>
-                            <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                            <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
                           </div>
                         </div>
 
                         <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Buchungs-Intervall (Taktung)
                           </label>
                           <div className="relative">
                             <select
                               value={aeInterval}
                               onChange={(e) => setAeInterval(e.target.value as any)}
-                              className="w-full h-10 px-4 pr-10 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none font-sans font-medium"
+                              className="w-full h-10 px-3.5 pr-10 bg-white text-sm text-slate-800 rounded-xl border border-slate-200 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none outline-none font-normal"
                             >
                               <option value="0.25">0,25-Stunden-Schritte</option>
                               <option value="0.5">0,5-Stunden-Schritte</option>
                               <option value="1.0">1-Stunde-Schritte</option>
                             </select>
-                            <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                            <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
                           </div>
                         </div>
 
-                        <div className="flex items-start gap-3 pt-2">
-                          <input
-                            type="checkbox"
-                            id="aeCommentsRequired"
-                            checked={commentsRequired}
-                            onChange={(e) => setCommentsRequired(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                          <div className="flex flex-col">
-                            <label htmlFor="aeCommentsRequired" className="text-xs font-bold text-slate-700 uppercase tracking-wide cursor-pointer select-none">
-                              Beschreibung / Kommentar ist Pflichtfeld
-                            </label>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              Mitglieder müssen eine Beschreibung eingeben, wenn sie einen Arbeitseinsatz eintragen.
-                            </p>
-                          </div>
-                        </div>
+                        <div className="pt-2 border-t border-slate-100 space-y-3">
+                          <label className="flex items-start gap-3 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              id="aeCommentsRequired"
+                              checked={commentsRequired}
+                              onChange={(e) => setCommentsRequired(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                                Beschreibung / Kommentar ist Pflichtfeld
+                              </span>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Mitglieder müssen eine Beschreibung eingeben, wenn sie einen Arbeitseinsatz erfassen.
+                              </p>
+                            </div>
+                          </label>
 
-                        <div className="flex items-start gap-3 pt-2">
-                          <input
-                            type="checkbox"
-                            id="aeShowPlannedShifts"
-                            checked={showPlannedShifts}
-                            onChange={(e) => setShowPlannedShifts(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                          <div className="flex flex-col">
-                            <label htmlFor="aeShowPlannedShifts" className="text-xs font-bold text-slate-700 uppercase tracking-wide cursor-pointer select-none">
-                              Geplante Arbeitseinsätze anzeigen
-                            </label>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              Aktiviert den Bereich "GEPLANTE ARBEITSEINSÄTZE" (Putzplan & Arbeitsdienste) in der Arbeitseinsatz-Übersicht für Mitglieder.
-                            </p>
-                          </div>
+                          <label className="flex items-start gap-3 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              id="aeShowPlannedShifts"
+                              checked={showPlannedShifts}
+                              onChange={(e) => setShowPlannedShifts(e.target.checked)}
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                                Geplante Arbeitseinsätze anzeigen
+                              </span>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Aktiviert den Bereich für geplante Arbeitsdienste & Putzpläne in der Helferübersicht.
+                              </p>
+                            </div>
+                          </label>
                         </div>
                       </div>
                     </div>
 
                     {/* Kategorien CRUD */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-tags"></i> Kategorien verwalten
-                      </h3>
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-tags text-[var(--color-primary)]"></i> Kategorien verwalten
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Definiere Kategorien zur Klassifizierung von Arbeitsstunden.
+                        </p>
+                      </div>
                       
                       <div className="space-y-4">
                         <div className="flex gap-2">
@@ -3854,7 +3903,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 setNewAeCategory("");
                               }
                             }}
-                            className="flex-1 h-10 px-4 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all outline-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="flex-1 h-10 px-3.5 bg-white text-sm text-slate-800 rounded-xl border border-slate-200 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all font-normal placeholder:text-slate-400"
                           />
                           <button
                             type="button"
@@ -3865,20 +3914,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               }
                             }}
                             disabled={!newAeCategory.trim()}
-                            className="h-10 px-6 bg-[var(--color-primary)] hover:bg-black text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                            className="h-10 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white text-xs font-semibold rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           >
-                            Hinzufügen
+                            <i className="fa-solid fa-plus text-xs"></i> Hinzufügen
                           </button>
                         </div>
 
-                        <div className="flex flex-col gap-2 mt-4 bg-white border border-slate-200 rounded-2xl p-2 max-h-[300px] overflow-y-auto">
+                        <div className="flex flex-col gap-1.5 bg-slate-50/70 border border-slate-200/80 rounded-xl p-2 max-h-[300px] overflow-y-auto">
                           {aeCategories.length === 0 ? (
-                            <div className="p-4 text-center text-sm font-medium text-slate-400">
+                            <div className="p-4 text-center text-xs font-normal text-slate-400">
                               Keine Kategorien vorhanden.
                             </div>
                           ) : (
                             aeCategories.map((cat, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl group transition-colors min-h-[44px]">
+                              <div key={idx} className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-200/60 hover:border-slate-300 group transition-colors">
                                 {editingCategoryIndex === idx ? (
                                   <div className="flex items-center gap-2 w-full">
                                     <input
@@ -3899,7 +3948,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           setEditingCategoryIndex(null);
                                         }
                                       }}
-                                      className="flex-1 h-8 px-2 bg-white text-xs text-slate-700 rounded-lg border border-slate-300 focus:outline-none focus:border-[var(--color-primary)] outline-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                      className="flex-1 h-8 px-2.5 bg-white text-xs text-slate-800 rounded-lg border border-slate-300 focus:border-[var(--color-primary)] outline-none font-normal"
                                       autoFocus
                                     />
                                     <button
@@ -3913,7 +3962,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           setEditingCategoryIndex(null);
                                         }
                                       }}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
                                       title="Speichern"
                                     >
                                       <i className="fa-solid fa-check text-[10px]"></i>
@@ -3921,7 +3970,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     <button
                                       type="button"
                                       onClick={() => setEditingCategoryIndex(null)}
-                                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors"
+                                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors cursor-pointer"
                                       title="Abbrechen"
                                     >
                                       <i className="fa-solid fa-xmark text-[10px]"></i>
@@ -3929,7 +3978,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   </div>
                                 ) : (
                                   <>
-                                    <span className="text-sm font-bold text-slate-700">{cat}</span>
+                                    <span className="text-xs font-semibold text-slate-700">{cat}</span>
                                     <div className="flex items-center gap-1">
                                       <button
                                         type="button"
@@ -3937,7 +3986,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           setEditingCategoryIndex(idx);
                                           setEditingCategoryValue(cat);
                                         }}
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-[var(--color-primary)] hover:bg-slate-100 transition-colors"
+                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-[var(--color-primary)] hover:bg-slate-100 transition-colors cursor-pointer"
                                         title="Umbenennen"
                                       >
                                         <i className="fa-solid fa-pen-to-square text-xs"></i>
@@ -3961,7 +4010,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             }
                                           }
                                         }}
-                                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can text-xs"></i>
@@ -3979,8 +4028,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                   {categoryToDelete && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-[100]">
-                      <div className="border-none outline-none bg-white rounded-2xl -200 shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
-                        <h3 className="text-base font-black text-slate-800 uppercase tracking-wide flex items-center gap-2 mb-3">
+                      <div className="border-none outline-none bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-3">
                           <i className="fa-solid fa-triangle-exclamation text-amber-500 text-lg"></i>
                           Kategorie kann nicht gelöscht werden
                         </h3>
@@ -3988,8 +4037,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           Die Kategorie <span className="font-bold text-slate-800">"{categoryToDelete}"</span> kann nicht direkt gelöscht werden, da ihr aktuell <span className="font-bold text-slate-800">{aeEntries.filter(e => e.category.trim().toLowerCase() === categoryToDelete.trim().toLowerCase()).length} Arbeitseinsatz-Einträge</span> zugeordnet sind.
                         </p>
 
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4">
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-4 mb-4">
+                          <label className="block text-xs font-semibold text-slate-700 mb-2">
                             Einträge umgruppieren in andere Kategorie:
                           </label>
                           {aeCategories.filter(c => c !== categoryToDelete).length > 0 ? (
@@ -3997,18 +4046,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <select
                                 value={remapTargetCategory}
                                 onChange={(e) => setRemapTargetCategory(e.target.value)}
-                                className="w-full h-10 px-4 pr-10 bg-white text-sm text-slate-700 rounded-xl border border-slate-200 focus:outline-none focus:border-[var(--color-primary)] transition-all appearance-none outline-none cursor-pointer font-sans font-medium"
+                                className="w-full h-10 px-3.5 pr-10 bg-white text-sm text-slate-800 rounded-xl border border-slate-200 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none outline-none cursor-pointer font-normal"
                               >
                                 {aeCategories
                                   .filter(c => c !== categoryToDelete)
                                   .map(c => (
                                     <option key={c} value={c}>
-                                      {c.toUpperCase()}
+                                      {c}
                                     </option>
                                   ))
                                 }
                               </select>
-                              <i className="fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                              <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
                             </div>
                           ) : (
                             <p className="text-xs text-rose-600 font-medium">
@@ -4021,7 +4070,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           <button
                             type="button"
                             onClick={() => setCategoryToDelete(null)}
-                            className="flex-1 h-10 border border-slate-200 rounded-xl font-bold uppercase tracking-wider text-[11px] text-slate-500 hover:bg-slate-50 transition-all active:scale-95 cursor-pointer"
+                            className="flex-1 h-10 border border-slate-200 bg-white hover:bg-slate-50 rounded-xl font-semibold text-xs text-slate-700 transition-all cursor-pointer"
                           >
                             Abbrechen
                           </button>
@@ -4058,7 +4107,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   setIsRemapping(false);
                                 }
                               }}
-                              className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold uppercase tracking-wider text-[11px] transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                              className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                             >
                               {isRemapping ? (
                                 <>
@@ -4079,12 +4128,12 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   )}
 
                   {/* Save/Discard Actions */}
-                  <div className="flex items-center justify-end gap-4 pt-4 border-t border-slate-200">
+                  <div className="flex items-center justify-end gap-3 pt-5 border-t border-slate-200/80">
                     {isTabDirty("arbeitseinsaetze") && (
                       <button
                         type="button"
                         onClick={() => handleDiscardTab("arbeitseinsaetze")}
-                        className="text-[11px] font-black uppercase tracking-wider text-slate-400 hover:text-slate-600 transition-colors px-4 py-2"
+                        className="h-10 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all cursor-pointer"
                       >
                         Abbrechen
                       </button>
@@ -4093,10 +4142,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       type="button"
                       disabled={!isTabDirty("arbeitseinsaetze")}
                       onClick={() => handleSaveTab("arbeitseinsaetze")}
-                      className={`font-black uppercase text-xs tracking-wider px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 ${
+                      className={`h-10 px-6 rounded-xl font-semibold text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
                         isTabDirty("arbeitseinsaetze")
-                          ? "bg-[var(--color-primary)] text-white hover:bg-black shadow-lg hover:shadow-xl"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          ? "bg-[var(--color-primary)] text-white hover:brightness-110"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                       }`}
                     >
                       <i className="fa-solid fa-floppy-disk"></i> Speichern
@@ -4107,231 +4156,223 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB 2: BUCHUNGS-REGELN */}
               {currentTab === "rules" && (
-                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
                     {/* Rule Limits Segment */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-shield-halved"></i>{" "}
-                        Reservierungsschranken
-                      </h3>
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <SlidersHorizontal className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                          <span>Reservierungsschranken</span>
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Kontingente, Stornofristen und Buchungsbeschränkungen für Mitglieder.
+                        </p>
+                      </div>
+
                       <div className="space-y-4">
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Max. aktive Buchungen pro Spieler (0 = keine Beschränkung)
-                          </label>
-                          <input 
-                            type="number"
-                            min="0"
-                            value={reservationRules.maxActiveBookings}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              setReservationRules({
-                                ...reservationRules,
-                                maxActiveBookings: isNaN(val) ? 0 : val,
-                              });
-                            }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Max. aktive Buchungen
+                            </label>
+                            <input 
+                              type="number"
+                              min="0"
+                              value={reservationRules.maxActiveBookings}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setReservationRules({
+                                  ...reservationRules,
+                                  maxActiveBookings: isNaN(val) ? 0 : val,
+                                });
+                              }}
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">0 = unbegrenzt</p>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Max. Buchungen je Tag
+                            </label>
+                            <input 
+                              type="number"
+                              min="0"
+                              value={reservationRules.maxBookingsPerDay ?? 2}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setReservationRules({
+                                  ...reservationRules,
+                                  maxBookingsPerDay: isNaN(val) ? 0 : val,
+                                });
+                              }}
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">0 = unbegrenzt</p>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Max. Buchungen pro Spieler je Tag (0 = keine Beschränkung)
-                          </label>
-                          <input 
-                            type="number"
-                            min="0"
-                            value={reservationRules.maxBookingsPerDay ?? 2}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              setReservationRules({
-                                ...reservationRules,
-                                maxBookingsPerDay: isNaN(val) ? 0 : val,
-                              });
-                            }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Max. Buchungen je Woche
+                            </label>
+                            <input 
+                              type="number"
+                              min="0"
+                              value={reservationRules.maxBookingsPerWeek ?? 0}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setReservationRules({
+                                  ...reservationRules,
+                                  maxBookingsPerWeek: isNaN(val) ? 0 : val,
+                                });
+                              }}
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">0 = unbegrenzt</p>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Stornierungsfrist (Min.)
+                            </label>
+                            <input 
+                              type="number"
+                              min="0"
+                              value={
+                                reservationRules.cancellationDeadlineMinutes ?? 30
+                              }
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setReservationRules({
+                                  ...reservationRules,
+                                  cancellationDeadlineMinutes: isNaN(val) ? 0 : val,
+                                });
+                              }}
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">Vor Spielbeginn</p>
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Max. Buchungen pro Spieler je Woche (0 = keine Beschränkung)
-                          </label>
-                          <input 
-                            type="number"
-                            min="0"
-                            value={reservationRules.maxBookingsPerWeek ?? 0}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              setReservationRules({
-                                ...reservationRules,
-                                maxBookingsPerWeek: isNaN(val) ? 0 : val,
-                              });
-                            }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Vorausbuchung (Wochen)
+                            </label>
+                            <input 
+                              type="number"
+                              min="0"
+                              max="52"
+                              value={reservationRules.maxAdvanceWeeks ?? 2}
+                              onChange={(e) => {
+                                const val = isNaN(parseInt(e.target.value)) ? 0 : parseInt(e.target.value);
+                                setReservationRules({
+                                  ...reservationRules,
+                                  maxAdvanceWeeks: val,
+                                  maxAdvanceDays: val * 7,
+                                });
+                              }}
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">0 = unbegrenzt</p>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Verfügbare Ballmaschinen
+                            </label>
+                            <input 
+                              type="number"
+                              min="0"
+                              max="10"
+                              value={reservationRules.availableBallMachines ?? 1}
+                              onChange={(e) =>
+                                setReservationRules({
+                                  ...reservationRules,
+                                  availableBallMachines:
+                                    parseInt(e.target.value) || 0,
+                                })
+                              }
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">Gleichzeitig buchbar</p>
+                          </div>
                         </div>
                         
-                        <div className="pt-2">
+                        <div className="pt-2 border-t border-slate-100 space-y-3">
                           <label className="flex items-start gap-3 cursor-pointer group">
-                            <div className="relative flex items-center justify-center mt-0.5">
-                              <input
-                                type="checkbox"
-                                checked={reservationRules.bypassRestrictionsForLeagueGames ?? false}
-                                onChange={(e) =>
-                                  setReservationRules({
-                                    ...reservationRules,
-                                    bypassRestrictionsForLeagueGames: e.target.checked,
-                                  })
-                                }
-                                className="peer appearance-none w-5 h-5 border-2 border-slate-300 rounded-lg checked:bg-[var(--color-primary)] checked:border-[var(--color-primary)] transition-all cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                              />
-                              <i className="fa-solid fa-check absolute text-white text-[10px] opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none"></i>
-                            </div>
+                            <input
+                              type="checkbox"
+                              checked={reservationRules.bypassRestrictionsForLeagueGames ?? false}
+                              onChange={(e) =>
+                                setReservationRules({
+                                  ...reservationRules,
+                                  bypassRestrictionsForLeagueGames: e.target.checked,
+                                })
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                            />
                             <div className="flex flex-col">
-                              <span className="text-sm font-bold text-slate-800 group-hover:text-[var(--color-primary)] transition-colors">
-                                Ligaspiele von Standard-Buchungsbeschränkungen ausnehmen
+                              <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                                Ligaspiele von Buchungsbeschränkungen ausnehmen
                               </span>
-                              <span className="text-[11px] text-slate-500 font-medium">
-                                Umgeht Tages- und Wochenlimits für Hobbyliga-Matches (nur auf Verfügbarkeit geprüft).
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Umgeht Tages- und Wochenlimits für Hobbyligamatches (nur auf Platzverfügbarkeit geprüft).
+                              </p>
+                            </div>
+                          </label>
+
+                          <label className="flex items-start gap-3 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={reservationRules.allowPastBookings ?? true}
+                              onChange={(e) =>
+                                setReservationRules({
+                                  ...reservationRules,
+                                  allowPastBookings: e.target.checked,
+                                })
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                                Buchungen in der Vergangenheit erlauben
                               </span>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Ermöglicht das nachträgliche Eintragen von gespielten Matches.
+                              </p>
+                            </div>
+                          </label>
+
+                          <label className="flex items-start gap-3 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={reservationRules.requireCoplayer ?? false}
+                              onChange={(e) =>
+                                setReservationRules({
+                                  ...reservationRules,
+                                  requireCoplayer: e.target.checked,
+                                })
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                            />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                                Mitspieler erforderlich (für normale Spieler)
+                              </span>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                Spieler müssen bei der Buchung mindestens einen Partner, Gast oder die Ballmaschine angeben.
+                              </p>
                             </div>
                           </label>
                         </div>
 
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Stornierungsfrist (Minuten vor Spielbeginn) (0 = sofort stornierbar / keine Frist)
-                          </label>
-                          <input 
-                            type="number"
-                            min="0"
-                            value={
-                              reservationRules.cancellationDeadlineMinutes ?? 30
-                            }
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              setReservationRules({
-                                ...reservationRules,
-                                cancellationDeadlineMinutes: isNaN(val) ? 0 : val,
-                              });
-                            }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </div>
-                        <div className="pt-2 border-t border-slate-100">
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Verfügbare Ballmaschinen
-                          </label>
-                          <input 
-                            type="number"
-                            min="0"
-                            max="10"
-                            value={reservationRules.availableBallMachines ?? 1}
-                            onChange={(e) =>
-                              setReservationRules({
-                                ...reservationRules,
-                                availableBallMachines:
-                                  parseInt(e.target.value) || 0,
-                              })
-                            }
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </div>
-                        {modules.guests !== false && (
-                          <div className="pt-2 border-t border-slate-100">
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                              Gastspiel-Tarifordnung
-                            </label>
-                            <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center justify-between gap-2">
-                              <div>
-                                <span className="font-bold text-slate-800">
-                                  {feeSettings.fee_calculation_mode === "ADVANCED"
-                                    ? "Erweiterter Regel-Builder"
-                                    : "Einfaches Standardmodell"}
-                                </span>
-                                <div className="text-[11px] text-slate-400 mt-0.5">
-                                  {feeSettings.fee_calculation_mode === "ADVANCED"
-                                    ? `${(feeSettings.advanced_config?.rules || []).length} aktive Regeln konfiguriert`
-                                    : `${((feeSettings.simple_config?.amount_cents ?? 250) / 100).toFixed(2).replace(".", ",")} € (${feeSettings.simple_config?.rate_type === "PER_COURT_HOUR" ? "pro Platzstunde" : "pro Gast/Std."})`}
-                                </div>
-                              </div>
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-150">
-                                Siehe unten
-                              </span>
-                            </div>
+                        {/* Opening Hours */}
+                        <div className="pt-3 border-t border-slate-100">
+                          <div className="text-xs font-semibold uppercase text-slate-500 tracking-wider mb-3 flex items-center gap-1.5">
+                            <i className="fa-solid fa-clock text-[var(--color-primary)]"></i> Öffnungszeiten je Wochentag
                           </div>
-                        )}
-                        <div className="pt-2 border-t border-slate-100">
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Vorausbuchungsfrist für Spieler (Wochen) (0 = keine Beschränkung)
-                          </label>
-                          <input 
-                            type="number"
-                            min="0"
-                            max="52"
-                            value={reservationRules.maxAdvanceWeeks ?? 2}
-                            onChange={(e) => {
-                              const val = isNaN(parseInt(e.target.value)) ? 0 : parseInt(e.target.value);
-                              setReservationRules({
-                                ...reservationRules,
-                                maxAdvanceWeeks: val,
-                                maxAdvanceDays: val * 7,
-                              });
-                            }}
-                            className="w-full max-w-[200px] px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </div>
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors mt-2">
-                          <div>
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Buchungen in Vergangenheit erlauben
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
-                              Ermöglicht das Eintragen von Buchungen
-                              rückwirkend.
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={reservationRules.allowPastBookings ?? true}
-                            onChange={(e) =>
-                              setReservationRules({
-                                ...reservationRules,
-                                allowPastBookings: e.target.checked,
-                              })
-                            }
-                            className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </label>
-                        <label className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 cursor-pointer hover:border-[var(--color-primary)] transition-colors mt-2">
-                          <div>
-                            <div className="font-black text-xs text-slate-800 uppercase">
-                              Mitspieler erforderlich (nur für Spieler)
-                            </div>
-                            <div className="text-[9px] text-slate-400 font-bold uppercase mt-0.5 max-w-[450px] leading-relaxed">
-                              Wenn aktiviert, muss ein regulärer Spieler bei der
-                              Buchung mindestens einen Mitspieler, einen Gast
-                              oder die Ballmaschine auswählen. Admins sind von
-                              dieser Regel ausgenommen.
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={reservationRules.requireCoplayer ?? false}
-                            onChange={(e) =>
-                              setReservationRules({
-                                ...reservationRules,
-                                requireCoplayer: e.target.checked,
-                              })
-                            }
-                            className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                          />
-                        </label>
-                        <div className="pt-4 border-t border-slate-100">
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">
-                            Öffnungszeiten je Wochentag
-                          </label>
-                          <div className="space-y-3 bg-white p-4 rounded-2xl border-none shadow-md">
+                          <div className="space-y-2 bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-200/80">
                             {[
                               { value: 1, label: "Montag" },
                               { value: 2, label: "Dienstag" },
@@ -4352,13 +4393,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               return (
                                 <div
                                   key={key}
-                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 last:border-b-0 last:pb-0"
+                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 last:border-b-0 last:pb-0"
                                 >
-                                  <span className="font-black text-xs text-slate-700 min-w-[100px]">
+                                  <span className="font-semibold text-xs text-slate-700 min-w-[90px]">
                                     {day.label}
                                   </span>
-                                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                                    <label className="flex items-center gap-1.5 cursor-pointer mr-2">
+                                  <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                                    <label className="flex items-center gap-1.5 cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={dayConfig.closed ?? false}
@@ -4376,14 +4417,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             openingHours: updatedHours,
                                           });
                                         }}
-                                        className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
                                       />
-                                      <span className="text-[10px] font-black uppercase text-slate-500">
+                                      <span className="text-xs font-medium text-slate-500">
                                         Geschlossen
                                       </span>
                                     </label>
                                     {!dayConfig.closed && (
-                                      <div className="flex items-center gap-1">
+                                      <div className="flex items-center gap-1.5">
                                         <select 
                                           value={dayConfig.start || "08:00"}
                                           onChange={(e) => {
@@ -4400,7 +4441,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                               openingHours: updatedHours,
                                             });
                                           }}
-                                          className="px-1.5 border border-slate-200 rounded-lg bg-white text-xs text-slate-700 py-2 font-sans font-medium"
+                                          className="h-8 px-2 border border-slate-200 rounded-lg bg-white text-xs text-slate-700 outline-none font-normal"
                                         >
                                           {TIME_SLOTS.slice(0, -1).map((t) => (
                                             <option key={t} value={t}>
@@ -4427,7 +4468,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                               openingHours: updatedHours,
                                             });
                                           }}
-                                          className="px-1.5 border border-slate-200 rounded-lg bg-white text-xs text-slate-700 py-2 font-sans font-medium"
+                                          className="h-8 px-2 border border-slate-200 rounded-lg bg-white text-xs text-slate-700 outline-none font-normal"
                                         >
                                           {TIME_SLOTS.slice(1).map((t) => (
                                             <option key={t} value={t}>
@@ -4447,16 +4488,22 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     </div>
 
                     {/* Courts/Tennisplätze segments */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-list-ol"></i> Plätze Verwalten
-                      </h3>
-                      <div className="bg-white p-6 rounded-2xl border-none space-y-4 shadow-md">
-                        <div className="flex flex-col gap-2">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-list-ol text-[var(--color-primary)]"></i> Plätze verwalten
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Erstelle, benenne um und sortiere die Tennisplätze der Anlage.
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-2 bg-slate-50/70 p-3 sm:p-4 rounded-xl border border-slate-200/80">
                           {courtsList.map((c, i) => (
                             <div
                               key={i}
-                              className="flex items-center gap-3 bg-slate-50 py-2 px-4 rounded-xl border border-slate-200 shadow-sm"
+                              className="flex items-center gap-2.5 bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs"
                             >
                               <input 
                                 type="text"
@@ -4466,51 +4513,61 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   updated[i] = e.target.value;
                                   setCourtsList(updated);
                                 }}
-                                className="text-xs text-[var(--color-primary)] flex-1 bg-transparent border-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 rounded px-2 transition-all py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="text-xs font-semibold text-slate-800 flex-1 bg-transparent border-none outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 rounded px-2 py-1 transition-all"
                               />
-                              <div className="flex bg-white rounded border border-slate-200 overflow-hidden shadow-sm shrink-0">
+                              <div className="flex items-center gap-1 border-r border-slate-200 pr-2">
                                 <button
                                   type="button"
                                   onClick={() => handleMoveCourt(i, "up")}
                                   disabled={i === 0}
-                                  className="px-2 py-1.5 text-slate-400 hover:text-[var(--color-primary)] hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                  className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-xs"
+                                  title="Nach oben"
                                 >
-                                  <i className="fa-solid fa-chevron-up text-[10px]"></i>
+                                  <i className="fa-solid fa-arrow-up"></i>
                                 </button>
-                                <div className="w-[1px] bg-slate-200"></div>
                                 <button
                                   type="button"
                                   onClick={() => handleMoveCourt(i, "down")}
                                   disabled={i === courtsList.length - 1}
-                                  className="px-2 py-1.5 text-slate-400 hover:text-[var(--color-primary)] hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                                  className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-slate-600 transition-colors cursor-pointer text-xs"
+                                  title="Nach unten"
                                 >
-                                  <i className="fa-solid fa-chevron-down text-[10px]"></i>
+                                  <i className="fa-solid fa-arrow-down"></i>
                                 </button>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveCourt(i)}
-                                className="text-slate-400 hover:text-red-500 transition-colors"
+                                className="w-7 h-7 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors flex items-center justify-center cursor-pointer"
+                                title="Platz entfernen"
                               >
-                                <i className="fa-solid fa-times"></i>
+                                <i className="fa-solid fa-trash-can text-xs"></i>
                               </button>
                             </div>
                           ))}
                         </div>
-                        <div className="flex gap-2 isolate pt-2">
+
+                        <div className="flex gap-2 pt-1">
                           <input 
                             type="text"
                             value={newCourtName}
                             onChange={(e) => setNewCourtName(e.target.value)}
-                            placeholder="Z.B. Platz 3 Oder Halle..."
-                            className="flex-1 px-3 border-2 border-slate-200 rounded-xl text-xs focus:border-[var(--color-primary)] outline-none bg-slate-50 focus:bg-white transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && newCourtName.trim()) {
+                                e.preventDefault();
+                                handleAddCourt();
+                              }
+                            }}
+                            placeholder="z. B. Platz 4 oder Halle 1..."
+                            className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal placeholder:text-slate-400"
                           />
                           <button
                             type="button"
                             onClick={handleAddCourt}
-                            className="bg-[var(--color-primary)] text-white hover:bg-black px-6 rounded-xl uppercase transition-all py-2.5 text-sm font-medium"
+                            disabled={!newCourtName.trim()}
+                            className="h-10 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white font-semibold text-xs rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           >
-                            <i className="fa-solid fa-plus"></i>
+                            <i className="fa-solid fa-plus text-xs"></i> Hinzufügen
                           </button>
                         </div>
                       </div>
@@ -4543,15 +4600,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   )}
 
                   {/* Tab Category Actions */}
-                  <div className="border-t border-slate-100 pt-6 flex justify-end">
+                  <div className="border-t border-slate-200/80 pt-5 flex justify-end">
                     <button
                       type="button"
                       disabled={!isTabDirty("rules") || !isFeeSettingsValid}
                       onClick={() => handleSaveTab("rules")}
-                      className={`font-black uppercase text-xs tracking-wider px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 ${
+                      className={`h-10 px-6 rounded-xl font-semibold text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
                         isTabDirty("rules") && isFeeSettingsValid
-                          ? "bg-[var(--color-primary)] text-white hover:bg-black shadow-lg hover:shadow-xl"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          ? "bg-[var(--color-primary)] text-white hover:brightness-110"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                       }`}
                     >
                       <i className="fa-solid fa-floppy-disk"></i> Speichern
@@ -4562,30 +4619,26 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB: SPERREN */}
               {currentTab === "sperren" && (
-                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-slate-200/80 gap-4 shadow-sm">
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 gap-4 shadow-xs">
                     <div className="flex-1 flex flex-col justify-center">
-                      <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2 text-[var(--color-primary)]">
-                        <i className="fa-solid fa-ban"></i> Platz-Sperren
-                        verwalten
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <i className="fa-solid fa-ban text-[var(--color-primary)]"></i> Platz-Sperren verwalten
                       </h3>
-                      <p className="text-xs text-slate-500 font-medium mt-1">
-                        Definieren Sie hier Turniere, wöchentliche
-                        Trainingszeiten (Freitagsdoppel etc.) oder Wintersperren
-                        (Winterpause ganztätig).
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
+                        Definiere Turniere, wöchentliche Trainingszeiten, Serientermine oder saisonale Wintersperren.
                       </p>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
                       <button
                         type="button"
                         onClick={() => {
                           setLockContext("lock");
                           setIsLockDrawerOpen(true);
                         }}
-                        className="bg-slate-500 text-white hover:bg-slate-600 px-4 sm:px-6 py-3.5 rounded-xl font-black uppercase text-xs tracking-widest shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                        className="h-10 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold text-xs transition-all shadow-2xs flex items-center gap-2 cursor-pointer"
                       >
-                        <i className="fa-solid fa-plus"></i>{" "}
-                        <span className="hidden sm:inline">Neue</span> Sperre
+                        <i className="fa-solid fa-plus text-xs"></i> Neue Sperre
                       </button>
                       <button
                         type="button"
@@ -4593,24 +4646,26 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           setLockContext("event");
                           setIsLockDrawerOpen(true);
                         }}
-                        className="bg-[var(--color-primary)] text-white hover:bg-black px-4 sm:px-6 py-3.5 rounded-xl font-black uppercase text-xs tracking-widest shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                        className="h-10 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white rounded-xl font-semibold text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                       >
-                        <i className="fa-solid fa-plus"></i>{" "}
-                        <span className="hidden sm:inline">Neuer</span>{" "}
-                        Serientermin
+                        <i className="fa-solid fa-plus text-xs"></i> Neuer Serientermin
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-4 lg:gap-5 w-full">
+                  <div className="flex flex-col gap-6 w-full">
                     {/* LISTING COLUMN */}
                     <div className="space-y-6 w-full">
                       {/* Category 1: Sperren & Öffnungszeiten */}
-                      <div className="bg-white p-6 rounded-2xl border-none shadow-md space-y-4">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                          <i className="fa-solid fa-ban"></i> Sperren &
-                          Öffnungszeiten
-                        </h4>
+                      <div className="bg-white p-5 sm:p-6 lg:p-7 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                        <div>
+                          <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                            <i className="fa-solid fa-ban text-rose-500"></i> Sperren & Platzblockierungen
+                          </h4>
+                          <p className="text-xs text-slate-500 font-normal mt-0.5">
+                            Einzelne oder dauerhafte Schließzeiten für die Platzbelegung.
+                          </p>
+                        </div>
 
                         {(
                           [
@@ -4625,12 +4680,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               .map((b) => ({ ...b, _type: "calendar" })),
                           ] as any[]
                         ).length === 0 ? (
-                          <p className="text-xs text-slate-500 py-4 italic">
-                            Keine manuellen Einzelsperren oder Schließzeiten
-                            konfiguriert.
-                          </p>
+                          <div className="p-4 text-center text-xs font-normal text-slate-400 bg-slate-50/70 rounded-xl border border-slate-200/60">
+                            Keine manuellen Einzelsperren oder Schließzeiten konfiguriert.
+                          </div>
                         ) : (
-                          <div className="space-y-3">
+                          <div className="space-y-2.5">
                             {/* Render Recurring Locks (not Events) */}
                             {(settings.recurringLocks || [])
                               .filter((l) => !l.isEvent)
@@ -4647,32 +4701,32 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 return (
                                   <div
                                     key={lock.id}
-                                    className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center hover:bg-slate-100 transition-colors"
+                                    className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center hover:border-slate-300 transition-colors"
                                   >
                                     <div>
-                                      <h5 className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                                      <h5 className="text-xs font-semibold text-slate-800">
                                         {lock.title}
                                       </h5>
-                                      <div className="text-[10px] text-slate-500 font-bold mt-1.5 flex flex-wrap gap-2 items-center">
-                                        <span className="bg-slate-200 px-2 py-0.5 rounded text-slate-700 uppercase tracking-widest text-[8px] font-black">
+                                      <div className="text-[11px] text-slate-500 font-normal mt-1 flex flex-wrap gap-2 items-center">
+                                        <span className="bg-slate-200/80 px-2 py-0.5 rounded-md text-slate-700 text-[10px] font-semibold">
                                           {weekdayLabel}
                                         </span>
                                         <span>
-                                          <i className="fa-regular fa-clock mr-1"></i>
-                                          {lock.startTime} - {lock.endTime}
+                                          <i className="fa-regular fa-clock mr-1 text-slate-400"></i>
+                                          {lock.startTime} – {lock.endTime}
                                         </span>
                                         <span>
-                                          <i className="fa-solid fa-circle-nodes mr-1 font-black"></i>
+                                          <i className="fa-solid fa-circle-nodes mr-1 text-slate-400"></i>
                                           {lock.courts.join(", ")}
                                         </span>
                                         {lock.isOngoing ? (
                                           <span className="text-slate-600">
-                                            <i className="fa-solid fa-calendar-check mr-1"></i>
+                                            <i className="fa-solid fa-calendar-check mr-1 text-slate-400"></i>
                                             Dauerhaft
                                           </span>
                                         ) : (
                                           <span className="text-slate-600">
-                                            <i className="fa-solid fa-calendar-days mr-1"></i>
+                                            <i className="fa-solid fa-calendar-days mr-1 text-slate-400"></i>
                                             {lock.startDate
                                               ? `${new Date(lock.startDate).toLocaleDateString("de-DE")} bis ${lock.endDate ? new Date(lock.endDate).toLocaleDateString("de-DE") : ""}`
                                               : ""}
@@ -4680,13 +4734,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t sm:border-0 border-slate-200 sm:pt-0 pt-3">
+                                    <div className="flex items-center gap-1.5 sm:shrink-0 w-full sm:w-auto justify-end border-t sm:border-0 border-slate-200 sm:pt-0 pt-2.5">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           handleStartEditRecurring(lock)
                                         }
-                                        className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Bearbeiten"
                                       >
                                         <i className="fa-solid fa-pen"></i>
@@ -4696,7 +4750,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onClick={() =>
                                           handleDeleteRecurringLock(lock.id)
                                         }
-                                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can"></i>
@@ -4719,35 +4773,34 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 return (
                                   <div
                                     key={lock.id}
-                                    className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center hover:bg-slate-100 transition-colors"
+                                    className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center hover:border-slate-300 transition-colors"
                                   >
                                     <div>
-                                      <h5 className="text-xs font-black text-rose-800 uppercase tracking-wide flex items-center gap-1.5">
-                                        <i className="fa-solid fa-snowflake"></i>
+                                      <h5 className="text-xs font-semibold text-rose-800 flex items-center gap-1.5">
+                                        <i className="fa-solid fa-snowflake text-rose-500"></i>
                                         {lock.title}
                                       </h5>
-                                      <div className="text-[10px] text-slate-500 font-bold mt-1 flex flex-wrap gap-3 items-center">
+                                      <div className="text-[11px] text-slate-500 font-normal mt-1 flex flex-wrap gap-2.5 items-center">
                                         <span>
-                                          <i className="fa-regular fa-calendar-days mr-1"></i>
+                                          <i className="fa-regular fa-calendar-days mr-1 text-slate-400"></i>
                                           {start} bis {end}
                                         </span>
                                         <span>
-                                          <i className="fa-solid fa-circle-nodes mr-1"></i>
+                                          <i className="fa-solid fa-circle-nodes mr-1 text-slate-400"></i>
                                           {lock.courts.join(", ")}
                                         </span>
-                                        <span className="text-orange-600 uppercase text-[8px] font-black tracking-wider">
-                                          <i className="fa-solid fa-ban"></i>{" "}
-                                          GANZTÄGIG GESPERRT
+                                        <span className="text-rose-600 font-semibold text-[10px] bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200/60">
+                                          Ganztägig gesperrt
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-slate-200 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex items-center gap-1.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-slate-200 sm:border-0 sm:pt-0 pt-2.5">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           handleStartEditRange(lock)
                                         }
-                                        className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Bearbeiten"
                                       >
                                         <i className="fa-solid fa-pen"></i>
@@ -4757,7 +4810,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onClick={() =>
                                           handleDeleteRangeLock(lock.id)
                                         }
-                                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can"></i>
@@ -4782,34 +4835,34 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 return (
                                   <div
                                     key={lock.id}
-                                    className="p-4 rounded-2xl bg-rose-50 border border-red-100 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center hover:bg-rose-100 transition-colors"
+                                    className="p-3.5 rounded-xl bg-rose-50/50 border border-rose-100 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center hover:bg-rose-50 transition-colors"
                                   >
                                     <div>
-                                      <h5 className="text-xs font-black text-rose-700 uppercase tracking-wide">
+                                      <h5 className="text-xs font-semibold text-rose-800">
                                         {lock.reason || "Sperre"}
                                       </h5>
-                                      <div className="text-[10px] text-slate-500 font-bold mt-1 flex flex-wrap gap-3 items-center">
+                                      <div className="text-[11px] text-slate-500 font-normal mt-1 flex flex-wrap gap-2.5 items-center">
                                         <span>
-                                          <i className="fa-regular fa-calendar-day mr-1"></i>
+                                          <i className="fa-regular fa-calendar mr-1 text-slate-400"></i>
                                           {dateFmt}
                                         </span>
                                         <span>
-                                          <i className="fa-regular fa-clock mr-1"></i>
+                                          <i className="fa-regular fa-clock mr-1 text-slate-400"></i>
                                           {lock.time}
                                         </span>
                                         <span>
-                                          <i className="fa-solid fa-circle-nodes mr-1"></i>
+                                          <i className="fa-solid fa-circle-nodes mr-1 text-slate-400"></i>
                                           {lock.court}
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-rose-100 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex items-center gap-1.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-rose-100 sm:border-0 sm:pt-0 pt-2.5">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           handleDeleteCalendarLock(lock.id)
                                         }
-                                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-red-100/70 text-red-600 hover:bg-red-200 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can"></i>
@@ -4823,11 +4876,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </div>
 
                       {/* Category 2: Regelmäßige Serientermine */}
-                      <div className="bg-white p-6 rounded-2xl border-none shadow-md space-y-4">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-[#f97316] flex items-center gap-2">
-                          <i className="fa-solid fa-calendar-check"></i>{" "}
-                          Regelmäßige Serientermine
-                        </h4>
+                      <div className="bg-white p-5 sm:p-6 lg:p-7 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                        <div>
+                          <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                            <i className="fa-solid fa-calendar-check text-[var(--color-primary)]"></i> Regelmäßige Serientermine
+                          </h4>
+                          <p className="text-xs text-slate-500 font-normal mt-0.5">
+                            Wiederkehrende Mannschaftstrainings, Treffs oder feste Spielzeiten.
+                          </p>
+                        </div>
 
                         {(
                           [
@@ -4842,11 +4899,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               .map((b) => ({ ...b, _type: "calendar" })),
                           ] as any[]
                         ).length === 0 ? (
-                          <p className="text-xs text-slate-500 py-4 italic">
+                          <div className="p-4 text-center text-xs font-normal text-slate-400 bg-slate-50/70 rounded-xl border border-slate-200/60">
                             Keine Serientermine konfiguriert.
-                          </p>
+                          </div>
                         ) : (
-                          <div className="space-y-3">
+                          <div className="space-y-2.5">
                             {/* Render Recurring Locks (Events) */}
                             {(settings.recurringLocks || [])
                               .filter((l) => l.isEvent)
@@ -4863,10 +4920,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 return (
                                   <div
                                     key={lock.id}
-                                    className="p-4 rounded-2xl bg-orange-50/50 border border-orange-200 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center hover:bg-orange-50 transition-colors"
+                                    className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center hover:border-slate-300 transition-colors"
                                   >
                                     <div>
-                                      <h5 className="text-xs font-black text-orange-800 uppercase tracking-wide flex items-center gap-2">
+                                      <h5 className="text-xs font-semibold text-slate-800 flex items-center gap-2">
                                         {lock.color && (
                                           <span
                                             className="w-2.5 h-2.5 rounded-full inline-block border border-black/10 shrink-0"
@@ -4875,28 +4932,27 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         )}
                                         <span>{lock.title}</span>
                                       </h5>
-                                      <div className="text-[10px] text-slate-500 font-bold mt-1.5 flex flex-wrap gap-2 items-center">
-                                        <span className="bg-orange-200 text-orange-800 px-2 py-0.5 rounded uppercase tracking-widest text-[8px] font-black">
+                                      <div className="text-[11px] text-slate-500 font-normal mt-1 flex flex-wrap gap-2 items-center">
+                                        <span className="bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded-md text-[10px] font-semibold">
                                           {weekdayLabel}
                                         </span>
                                         <span>
-                                          <i className="fa-regular fa-clock mr-1"></i>
-                                          {lock.startTime} - {lock.endTime}
+                                          <i className="fa-regular fa-clock mr-1 text-slate-400"></i>
+                                          {lock.startTime} – {lock.endTime}
                                         </span>
                                         <span>
-                                          <i className="fa-solid fa-circle-nodes mr-1 font-black"></i>
+                                          <i className="fa-solid fa-circle-nodes mr-1 text-slate-400"></i>
                                           {lock.courts.join(", ")}
                                         </span>
-
                                       </div>
                                     </div>
-                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex items-center gap-1.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-slate-200 sm:border-0 sm:pt-0 pt-2.5">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           handleStartEditRecurring(lock)
                                         }
-                                        className="w-8 h-8 rounded-full bg-white text-orange-600 hover:bg-orange-100 shadow flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Bearbeiten"
                                       >
                                         <i className="fa-solid fa-pen"></i>
@@ -4906,7 +4962,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onClick={() =>
                                           handleDeleteRecurringLock(lock.id)
                                         }
-                                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can"></i>
@@ -4929,31 +4985,31 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 return (
                                   <div
                                     key={lock.id}
-                                    className="p-4 rounded-2xl bg-orange-50/50 border border-orange-200 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center hover:bg-orange-50 transition-colors"
+                                    className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center hover:border-slate-300 transition-colors"
                                   >
                                     <div>
-                                      <h5 className="text-xs font-black text-orange-800 uppercase tracking-wide flex items-center gap-1.5">
-                                        <i className="fa-solid fa-calendar-week"></i>
+                                      <h5 className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                                        <i className="fa-solid fa-calendar-week text-[var(--color-primary)]"></i>
                                         {lock.title}
                                       </h5>
-                                      <div className="text-[10px] text-slate-500 font-bold mt-1 flex flex-wrap gap-3 items-center">
+                                      <div className="text-[11px] text-slate-500 font-normal mt-1 flex flex-wrap gap-2.5 items-center">
                                         <span>
-                                          <i className="fa-regular fa-calendar-days mr-1"></i>
+                                          <i className="fa-regular fa-calendar-days mr-1 text-slate-400"></i>
                                           {start} bis {end}
                                         </span>
                                         <span>
-                                          <i className="fa-solid fa-circle-nodes mr-1"></i>
+                                          <i className="fa-solid fa-circle-nodes mr-1 text-slate-400"></i>
                                           {lock.courts.join(", ")}
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex items-center gap-1.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-slate-200 sm:border-0 sm:pt-0 pt-2.5">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           handleStartEditRange(lock)
                                         }
-                                        className="w-8 h-8 rounded-full bg-white text-orange-600 hover:bg-orange-100 shadow flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Bearbeiten"
                                       >
                                         <i className="fa-solid fa-pen"></i>
@@ -4963,7 +5019,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onClick={() =>
                                           handleDeleteRangeLock(lock.id)
                                         }
-                                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can"></i>
@@ -4988,34 +5044,34 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 return (
                                   <div
                                     key={lock.id}
-                                    className="p-4 rounded-2xl bg-orange-50/50 border border-orange-200 flex flex-col sm:flex-row gap-4 sm:justify-between sm:items-center hover:bg-orange-50 transition-colors"
+                                    className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center hover:border-slate-300 transition-colors"
                                   >
                                     <div>
-                                      <h5 className="text-xs font-black text-orange-800 uppercase tracking-wide">
+                                      <h5 className="text-xs font-semibold text-slate-800">
                                         {lock.reason || "Sperre"}
                                       </h5>
-                                      <div className="text-[10px] text-slate-500 font-bold mt-1 flex flex-wrap gap-3 items-center">
+                                      <div className="text-[11px] text-slate-500 font-normal mt-1 flex flex-wrap gap-2.5 items-center">
                                         <span>
-                                          <i className="fa-regular fa-calendar-day mr-1"></i>
+                                          <i className="fa-regular fa-calendar mr-1 text-slate-400"></i>
                                           {dateFmt}
                                         </span>
                                         <span>
-                                          <i className="fa-regular fa-clock mr-1"></i>
+                                          <i className="fa-regular fa-clock mr-1 text-slate-400"></i>
                                           {lock.time}
                                         </span>
                                         <span>
-                                          <i className="fa-solid fa-circle-nodes mr-1"></i>
+                                          <i className="fa-solid fa-circle-nodes mr-1 text-slate-400"></i>
                                           {lock.court}
                                         </span>
                                       </div>
                                     </div>
-                                    <div className="flex gap-3 sm:shrink-0 w-full sm:w-auto justify-end border-t border-orange-200/50 sm:border-0 sm:pt-0 pt-3">
+                                    <div className="flex items-center gap-1.5 sm:shrink-0 w-full sm:w-auto justify-end border-t border-slate-200 sm:border-0 sm:pt-0 pt-2.5">
                                       <button
                                         type="button"
                                         onClick={() =>
                                           handleDeleteCalendarLock(lock.id)
                                         }
-                                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 flex items-center justify-center transition-colors text-xs"
+                                        className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition-colors text-xs cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can"></i>
@@ -5035,62 +5091,73 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     <div className="fixed inset-0 z-[99999] flex justify-end">
                       {/* Backdrop */}
                       <div
-                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+                        className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
                         onClick={() => setIsLockDrawerOpen(false)}
                       ></div>
 
                       {/* Drawer Panel */}
                       <div className="relative w-full md:max-w-md h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 z-10">
                         {/* Header */}
-                        <div
-                          className={`${lockContext === "event" ? "bg-[var(--color-primary)]" : "bg-slate-500"} px-4 py-4 flex items-center justify-between text-white shrink-0`}
-                        >
-                          <h3 className="font-black tracking-widest uppercase text-xs sm:text-sm flex items-center gap-2">
-                            <i
-                              className={`fa-solid ${lockContext === "event" ? "fa-calendar-check" : "fa-ban"} text-white/50`}
-                            ></i>
-                            {editingLockId
-                              ? lockContext === "event"
-                                ? "Serientermin bearbeiten"
-                                : "Sperre bearbeiten"
-                              : lockContext === "event"
-                                ? "Neuer Serientermin"
-                                : "Neue Sperre"}
-                          </h3>
+                        <div className="p-5 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+                          <div>
+                            <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                              <i
+                                className={`fa-solid ${lockContext === "event" ? "fa-calendar-check text-[var(--color-primary)]" : "fa-ban text-rose-500"}`}
+                              ></i>
+                              {editingLockId
+                                ? lockContext === "event"
+                                  ? "Serientermin bearbeiten"
+                                  : "Sperre bearbeiten"
+                                : lockContext === "event"
+                                  ? "Neuer Serientermin"
+                                  : "Neue Sperre"}
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {lockContext === "event" ? "Termindetails und Zeiten für Serientermine" : "Zeitraum und Plätze für die Sperre"}
+                            </p>
+                          </div>
                           <button
                             type="button"
                             onClick={() => setIsLockDrawerOpen(false)}
-                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 transition-all outline-none flex items-center justify-center border border-white/10 shrink-0"
+                            className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors flex items-center justify-center text-slate-500 cursor-pointer"
                           >
-                            <i className="fa-solid fa-xmark"></i>
+                            <i className="fa-solid fa-xmark text-sm"></i>
                           </button>
                         </div>
 
                         {/* Body / Scrollable Form */}
-                        <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-4 bg-slate-50">
+                        <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/50">
                           {/* Lock Type buttons (only show if creating new) */}
                           {!editingLockId && (
-                            <div className="flex flex-col sm:flex-row p-0.5 gap-0.5 bg-slate-200 rounded-xl border border-slate-200 shrink-0">
+                            <div className="flex p-1 gap-1 bg-slate-200/80 rounded-xl">
                               <button
                                 type="button"
                                 onClick={() => setNewLockType("range")}
-                                className={`flex-[1.2] py-2 px-2 text-[9px] font-black rounded-lg uppercase tracking-wider transition-all ${newLockType === "range" ? (lockContext === "event" ? "bg-[var(--color-primary)] text-white shadow" : "bg-slate-500 text-white shadow") : "text-slate-600 hover:bg-slate-300"}`}
+                                className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                                  newLockType === "range"
+                                    ? "bg-white text-slate-900 shadow-xs"
+                                    : "text-slate-600 hover:text-slate-900"
+                                }`}
                               >
                                 Einmaliger Zeitraum
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setNewLockType("regular")}
-                                className={`flex-[1.8] py-2 px-2 text-[9px] font-black rounded-lg uppercase tracking-wider transition-all ${newLockType === "regular" ? (lockContext === "event" ? "bg-[var(--color-primary)] text-white shadow" : "bg-slate-500 text-white shadow") : "text-slate-600 hover:bg-slate-300"}`}
+                                className={`flex-1 py-2 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                                  newLockType === "regular"
+                                    ? "bg-white text-slate-900 shadow-xs"
+                                    : "text-slate-600 hover:text-slate-900"
+                                }`}
                               >
-                                Wöchentliche Wiederholung
+                                Wöchentliche Serie
                               </button>
                             </div>
                           )}
 
                           {/* Title */}
-                          <div className="space-y-1">
-                            <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                               Bezeichnung / Titel
                             </label>
                             <input 
@@ -5099,18 +5166,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               onChange={(e) => setNewLockTitle(e.target.value)}
                               placeholder={
                                 lockContext === "event"
-                                  ? "z.B. Freitagsdoppel, Training"
-                                  : "z.B. Platzpflege, Regen..."
+                                  ? "z. B. Freitagsdoppel, Mannschaftstraining..."
+                                  : "z. B. Platzpflege, Turnier, Regen..."
                               }
-                              className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal placeholder:text-slate-400"
                             />
                           </div>
 
                           {/* Farbe (Hex-Code, optional) */}
                           {lockContext === "event" && newLockType === "regular" && (
-                            <div className="space-y-1">
-                              <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
-                                Farbe (Hex-Code, optional)
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                                Farbe (optional)
                               </label>
                               <div className="flex gap-2">
                                 <input 
@@ -5118,14 +5185,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   value={newLockColor}
                                   onChange={(e) => setNewLockColor(e.target.value)}
                                   placeholder={settings.primaryColor || "#1b4332"}
-                                  className="flex-1 px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors uppercase py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-sm text-slate-800 outline-none transition-all font-normal placeholder:text-slate-400 uppercase"
                                 />
-                                <div className="relative flex items-center justify-center w-10 h-10 border border-slate-200 rounded-xl overflow-hidden cursor-pointer hover:border-slate-400 bg-white">
+                                <div className="relative flex items-center justify-center w-10 h-10 border border-slate-200 rounded-xl overflow-hidden cursor-pointer hover:border-slate-400 bg-white shadow-2xs">
                                   <input
                                     type="color"
                                     value={newLockColor && /^#[0-9A-F]{6}$/i.test(newLockColor) ? newLockColor : (settings.primaryColor || "#1b4332")}
                                     onChange={(e) => setNewLockColor(e.target.value.toLowerCase())}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer animate-none font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                                   />
                                   <div 
                                     className="w-6 h-6 rounded-lg shadow-inner border border-black/10"
@@ -5135,9 +5202,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               </div>
                             </div>
                           )}
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center px-1">
-                              <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+
+                          <div>
+                            <div className="flex justify-between items-center mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700">
                                 Betroffene Plätze
                               </label>
                               <button
@@ -5153,7 +5221,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     setNewLockCourts([...all]);
                                   }
                                 }}
-                                className="text-[9px] font-black text-[var(--color-accent)] uppercase tracking-wider hover:underline"
+                                className="text-xs font-medium text-[var(--color-primary)] hover:underline cursor-pointer"
                               >
                                 {newLockCourts.length ===
                                 (settings.courts || []).length
@@ -5189,10 +5257,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         ]);
                                       }
                                     }}
-                                    className={`h-10 px-3 flex items-center justify-center rounded-xl border text-xs font-bold uppercase tracking-wider transition-all ${
+                                    className={`h-10 px-3 flex items-center justify-center rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
                                       isSel
-                                        ? "bg-[color-mix(in_srgb,_var(--color-primary)_12%,_white)] border-[var(--color-primary)] text-[var(--color-primary)] font-black"
-                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                                        ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)] font-bold"
+                                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                                     }`}
                                   >
                                     {court}
@@ -5204,89 +5272,97 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                           {/* Type specific fields */}
                           {newLockType === "regular" ? (
-                            <div className="space-y-4 pt-3 border-t border-slate-200">
-                              <p className="text-[10px] text-slate-500 leading-relaxed bg-white p-3 rounded-xl border border-slate-100">
-                                Verwende dies für alle echten Serien
-                                (wöchentlich wiederkehrende Slots, z.B.
-                                Vereinstraining jeden Freitag).
+                            <div className="space-y-4 pt-3 border-t border-slate-200/80">
+                              <p className="text-xs text-slate-500 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/60">
+                                Wiederkehrende Termine werden wöchentlich für den gewählten Wochentag im Kalender geblockt.
                               </p>
+                              
                               {/* Wochentag */}
-                              <div className="space-y-1">
-                                <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                   Wochentag
                                 </label>
-                                <select 
-                                  value={newLockDay}
-                                  onChange={(e) =>
-                                    setNewLockDay(parseInt(e.target.value))
-                                  }
-                                  className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
-                                >
-                                  <option value={1}>Montag</option>
-                                  <option value={2}>Dienstag</option>
-                                  <option value={3}>Mittwoch</option>
-                                  <option value={4}>Donnerstag</option>
-                                  <option value={5}>Freitag</option>
-                                  <option value={6}>Samstag</option>
-                                  <option value={0}>Sonntag</option>
-                                </select>
+                                <div className="relative">
+                                  <select 
+                                    value={newLockDay}
+                                    onChange={(e) =>
+                                      setNewLockDay(parseInt(e.target.value))
+                                    }
+                                    className="w-full h-10 px-3.5 pr-10 border border-slate-200 rounded-xl bg-white text-sm text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none font-normal"
+                                  >
+                                    <option value={1}>Montag</option>
+                                    <option value={2}>Dienstag</option>
+                                    <option value={3}>Mittwoch</option>
+                                    <option value={4}>Donnerstag</option>
+                                    <option value={5}>Freitag</option>
+                                    <option value={6}>Samstag</option>
+                                    <option value={0}>Sonntag</option>
+                                  </select>
+                                  <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                                </div>
                               </div>
 
                               {/* Uhrzeiten */}
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                     Von
                                   </label>
-                                  <select 
-                                    value={newLockStartTime}
-                                    onChange={(e) => {
-                                      setNewLockStartTime(e.target.value);
-                                      const idx = TIME_SLOTS.indexOf(
-                                        e.target.value,
-                                      );
-                                      if (
-                                        TIME_SLOTS.indexOf(newLockEndTime) <=
-                                        idx
-                                      ) {
-                                        setNewLockEndTime(
-                                          TIME_SLOTS[idx + 1] || e.target.value,
+                                  <div className="relative">
+                                    <select 
+                                      value={newLockStartTime}
+                                      onChange={(e) => {
+                                        setNewLockStartTime(e.target.value);
+                                        const idx = TIME_SLOTS.indexOf(
+                                          e.target.value,
                                         );
-                                      }
-                                    }}
-                                    className="w-full px-3 border border-slate-200 rounded-xl font-bold text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2"
-                                  >
-                                    {TIME_SLOTS.slice(0, -1).map((h) => (
-                                      <option key={h} value={h}>
-                                        {h} Uhr
-                                      </option>
-                                    ))}
-                                  </select>
+                                        if (
+                                          TIME_SLOTS.indexOf(newLockEndTime) <=
+                                          idx
+                                        ) {
+                                          setNewLockEndTime(
+                                            TIME_SLOTS[idx + 1] || e.target.value,
+                                          );
+                                        }
+                                      }}
+                                      className="w-full h-10 px-3.5 pr-10 border border-slate-200 rounded-xl text-sm bg-white text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none font-normal"
+                                    >
+                                      {TIME_SLOTS.slice(0, -1).map((h) => (
+                                        <option key={h} value={h}>
+                                          {h} Uhr
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                                  </div>
                                 </div>
                                 <div>
-                                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                     Bis
                                   </label>
-                                  <select 
-                                    value={newLockEndTime}
-                                    onChange={(e) =>
-                                      setNewLockEndTime(e.target.value)
-                                    }
-                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
-                                  >
-                                    {TIME_SLOTS.slice(
-                                      TIME_SLOTS.indexOf(newLockStartTime) + 1,
-                                    ).map((h) => (
-                                      <option key={h} value={h}>
-                                        {h} Uhr
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <div className="relative">
+                                    <select 
+                                      value={newLockEndTime}
+                                      onChange={(e) =>
+                                        setNewLockEndTime(e.target.value)
+                                      }
+                                      className="w-full h-10 px-3.5 pr-10 border border-slate-200 rounded-xl text-sm bg-white text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none font-normal"
+                                    >
+                                      {TIME_SLOTS.slice(
+                                        TIME_SLOTS.indexOf(newLockStartTime) + 1,
+                                      ).map((h) => (
+                                        <option key={h} value={h}>
+                                          {h} Uhr
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                                  </div>
                                 </div>
                               </div>
 
                               {/* Dauerhaft oder Datum */}
-                              <div className="space-y-3 pt-3 border-t border-slate-200">
+                              <div className="space-y-3 pt-3 border-t border-slate-200/80">
                                 <label className="flex items-center gap-3 cursor-pointer bg-white p-3 rounded-xl border border-slate-200 hover:border-slate-300">
                                   <input
                                     type="checkbox"
@@ -5294,17 +5370,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewLockIsOngoing(e.target.checked)
                                     }
-                                    className="h-4 w-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] flex-shrink-0 accent-[var(--color-primary)] cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
                                   />
-                                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                                  <span className="text-xs font-semibold text-slate-700">
                                     Dauerhaft (Unbegrenzt)
                                   </span>
                                 </label>
 
                                 {!newLockIsOngoing && (
-                                  <div className="grid grid-cols-2 gap-4">
+                                  <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Gültig von
                                       </label>
                                       <input 
@@ -5313,11 +5389,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onChange={(e) =>
                                           setNewLockStartDate(e.target.value)
                                         }
-                                        className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-full h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] transition-all font-normal"
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Gültig bis
                                       </label>
                                       <input 
@@ -5326,7 +5402,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onChange={(e) =>
                                           setNewLockEndDate(e.target.value)
                                         }
-                                        className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-full h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] transition-all font-normal"
                                       />
                                     </div>
                                   </div>
@@ -5334,16 +5410,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               </div>
                             </div>
                           ) : (
-                            <div className="space-y-4 pt-3 border-t border-slate-200">
-                              {/* Date Range Fields */}
-                              <p className="text-[10px] text-slate-500 leading-relaxed bg-white p-3 rounded-xl border border-slate-100">
-                                Sperrt die gewählten Plätze für den gesamten
-                                angegebenen Zeitraum (z.B. Starkregen für 3
-                                Stunden, oder Winterpause für mehrere Monate).
+                            <div className="space-y-4 pt-3 border-t border-slate-200/80">
+                              <p className="text-xs text-slate-500 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/60">
+                                Sperrt die ausgewählten Plätze im angegebenen Zeitraum durchgehend oder zu bestimmten Uhrzeiten.
                               </p>
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                     Start-Datum
                                   </label>
                                   <input 
@@ -5352,11 +5425,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewRangeStartDate(e.target.value)
                                     }
-                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="w-full h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white text-slate-800 outline-none focus:border-[var(--color-primary)] transition-all font-normal"
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                     Ende-Datum
                                   </label>
                                   <input 
@@ -5365,60 +5438,64 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     onChange={(e) =>
                                       setNewRangeEndDate(e.target.value)
                                     }
-                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="w-full h-10 px-3 border border-slate-200 rounded-xl text-sm bg-white text-slate-800 outline-none focus:border-[var(--color-primary)] transition-all font-normal"
                                   />
                                 </div>
                               </div>
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                     Von (Uhrzeit)
                                   </label>
-                                  <select 
-                                    value={newRangeStartTime}
-                                    onChange={(e) =>
-                                      setNewRangeStartTime(e.target.value)
-                                    }
-                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
-                                  >
-                                    {TIME_SLOTS.map((t) => (
-                                      <option key={t} value={t}>
-                                        {t} Uhr
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <div className="relative">
+                                    <select 
+                                      value={newRangeStartTime}
+                                      onChange={(e) =>
+                                        setNewRangeStartTime(e.target.value)
+                                      }
+                                      className="w-full h-10 px-3.5 pr-10 border border-slate-200 rounded-xl text-sm bg-white text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none font-normal"
+                                    >
+                                      {TIME_SLOTS.map((t) => (
+                                        <option key={t} value={t}>
+                                          {t} Uhr
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                                  </div>
                                 </div>
                                 <div>
-                                  <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                     Bis (Uhrzeit)
                                   </label>
-                                  <select 
-                                    value={newRangeEndTime}
-                                    onChange={(e) =>
-                                      setNewRangeEndTime(e.target.value)
-                                    }
-                                    className="w-full px-3 border border-slate-200 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-slate-800 transition-colors py-2 font-sans font-medium"
-                                  >
-                                    {TIME_SLOTS.map((t) => (
-                                      <option key={t} value={t}>
-                                        {t} Uhr
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <div className="relative">
+                                    <select 
+                                      value={newRangeEndTime}
+                                      onChange={(e) =>
+                                        setNewRangeEndTime(e.target.value)
+                                      }
+                                      className="w-full h-10 px-3.5 pr-10 border border-slate-200 rounded-xl text-sm bg-white text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all appearance-none font-normal"
+                                    >
+                                      {TIME_SLOTS.map((t) => (
+                                        <option key={t} value={t}>
+                                          {t} Uhr
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <i className="fa-solid fa-chevron-down absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs"></i>
+                                  </div>
                                 </div>
                               </div>
-
-                               {/* Option removed by request - all events are open offers */}
                             </div>
                           )}
                         </div>
 
                         {/* Footer / Buttons */}
-                        <div className="p-6 border-t border-slate-200 bg-white shrink-0 flex gap-3 shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+                        <div className="p-4 sm:p-5 border-t border-slate-200 bg-white shrink-0 flex gap-3">
                           <button
                             type="button"
                             onClick={handleCancelLockEdit}
-                            className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl uppercase tracking-wider transition-colors py-2.5 text-sm font-medium"
+                            className="flex-1 h-10 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
                           >
                             Abbrechen
                           </button>
@@ -5426,17 +5503,25 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <button
                               type="button"
                               onClick={handleSaveLockEdit}
-                              className={`w-2/3 text-sm font-medium${lockContext === "event font-medium" ? "bg-[var(--color-primary)] hover:bg-black focus:ring-[var(--color-primary)]/20 font-medium" : "bg-slate-500 hover:bg-slate-600 focus:ring-slate-500/20 font-medium"}text-white rounded-xl uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 py-2.5 text-sm font-medium`}
+                              className={`flex-1 h-10 ${
+                                lockContext === "event"
+                                  ? "bg-[var(--color-primary)] hover:brightness-110"
+                                  : "bg-slate-800 hover:bg-slate-900"
+                              } text-white rounded-xl font-semibold text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer`}
                             >
-                              <i className="fa-solid fa-check"></i> Speichern
+                              <i className="fa-solid fa-check text-xs"></i> Speichern
                             </button>
                           ) : (
                             <button
                               type="button"
                               onClick={handleAddLock}
-                              className={`w-2/3 text-sm font-medium${lockContext === "event font-medium" ? "bg-[var(--color-primary)] hover:bg-black focus:ring-[var(--color-primary)]/20 font-medium" : "bg-slate-500 hover:bg-slate-600 focus:ring-slate-500/20 font-medium"}text-white rounded-xl uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 py-2.5 text-sm font-medium`}
+                              className={`flex-1 h-10 ${
+                                lockContext === "event"
+                                  ? "bg-[var(--color-primary)] hover:brightness-110"
+                                  : "bg-slate-800 hover:bg-slate-900"
+                              } text-white rounded-xl font-semibold text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer`}
                             >
-                              <i className="fa-solid fa-plus-circle"></i> {lockContext === "event" ? "Serie anlegen" : "Sperre anlegen"}
+                              <i className="fa-solid fa-plus text-xs"></i> {lockContext === "event" ? "Serie anlegen" : "Sperre anlegen"}
                             </button>
                           )}
                         </div>
@@ -5449,24 +5534,29 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB 3: LAYOUT & NEWS */}
               {currentTab === "layout" && (
-                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
                     {/* Branding configuration fields */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-palette"></i> Erscheinungsbild
-                      </h3>
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-palette text-[var(--color-primary)]"></i> Erscheinungsbild
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Passe Vereinsfarben, Logos und Branding-Elemente an.
+                        </p>
+                      </div>
 
                       <div className="space-y-4">
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
                               Farben
-                            </label>
+                            </span>
                             <label className="cursor-pointer select-none inline-flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
+                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-normal"
                                 checked={!isCustomColors}
                                 onChange={(e) => {
                                   if (e.target.checked) {
@@ -5490,104 +5580,128 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   }
                                 }}
                               />
-                              <span className="text-[10px] font-bold text-slate-600 uppercase">
+                              <span className="text-xs font-medium text-slate-600">
                                 Standard verwenden
                               </span>
                             </label>
                           </div>
 
                           <div
-                            className={`space-y-4 transition-opacity ${!isCustomColors ? "opacity-50 pointer-events-none" : ""}`}
+                            className={`space-y-3.5 transition-opacity ${!isCustomColors ? "opacity-50 pointer-events-none" : ""}`}
                           >
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Primärfarbe (HEX-Code)
                               </label>
-                              <div className="flex gap-3">
-                                <input
-                                  type="color"
-                                  value={primaryColor}
-                                  onChange={(e) =>
-                                    setPrimaryColor(e.target.value)
-                                  }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                />
+                              <div className="flex gap-2.5">
+                                <div className="relative flex items-center justify-center w-10 h-10 border border-slate-200 rounded-xl overflow-hidden cursor-pointer bg-white shrink-0 shadow-2xs">
+                                  <input
+                                    type="color"
+                                    value={primaryColor}
+                                    onChange={(e) =>
+                                      setPrimaryColor(e.target.value)
+                                    }
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  />
+                                  <div 
+                                    className="w-6 h-6 rounded-lg shadow-inner border border-black/10"
+                                    style={{ backgroundColor: primaryColor }}
+                                  />
+                                </div>
                                 <input 
                                   type="text"
                                   value={primaryColor}
                                   onChange={(e) =>
                                     setPrimaryColor(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all uppercase text-sm font-normal text-slate-800"
                                 />
                               </div>
                             </div>
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Akzentfarbe (HEX-Code)
                               </label>
-                              <div className="flex gap-3">
-                                <input
-                                  type="color"
-                                  value={accentColor}
-                                  onChange={(e) =>
-                                    setAccentColor(e.target.value)
-                                  }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                />
+                              <div className="flex gap-2.5">
+                                <div className="relative flex items-center justify-center w-10 h-10 border border-slate-200 rounded-xl overflow-hidden cursor-pointer bg-white shrink-0 shadow-2xs">
+                                  <input
+                                    type="color"
+                                    value={accentColor}
+                                    onChange={(e) =>
+                                      setAccentColor(e.target.value)
+                                    }
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  />
+                                  <div 
+                                    className="w-6 h-6 rounded-lg shadow-inner border border-black/10"
+                                    style={{ backgroundColor: accentColor }}
+                                  />
+                                </div>
                                 <input 
                                   type="text"
                                   value={accentColor}
                                   onChange={(e) =>
                                     setAccentColor(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all uppercase text-sm font-normal text-slate-800"
                                 />
                               </div>
                             </div>
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                                Akzentfarbe 2 (z.B. Dunkelblau)
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                                Akzentfarbe 2 (z. B. Dunkelblau)
                               </label>
-                              <div className="flex gap-3">
-                                <input
-                                  type="color"
-                                  value={accentColor2}
-                                  onChange={(e) =>
-                                    setAccentColor2(e.target.value)
-                                  }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                />
+                              <div className="flex gap-2.5">
+                                <div className="relative flex items-center justify-center w-10 h-10 border border-slate-200 rounded-xl overflow-hidden cursor-pointer bg-white shrink-0 shadow-2xs">
+                                  <input
+                                    type="color"
+                                    value={accentColor2}
+                                    onChange={(e) =>
+                                      setAccentColor2(e.target.value)
+                                    }
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  />
+                                  <div 
+                                    className="w-6 h-6 rounded-lg shadow-inner border border-black/10"
+                                    style={{ backgroundColor: accentColor2 }}
+                                  />
+                                </div>
                                 <input 
                                   type="text"
                                   value={accentColor2}
                                   onChange={(e) =>
                                     setAccentColor2(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all uppercase text-sm font-normal text-slate-800"
                                 />
                               </div>
                             </div>
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                                Akzentfarbe 3 (z.B. Hellgrün)
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                                Akzentfarbe 3 (z. B. Hellgrün)
                               </label>
-                              <div className="flex gap-3">
-                                <input
-                                  type="color"
-                                  value={accentColor3}
-                                  onChange={(e) =>
-                                    setAccentColor3(e.target.value)
-                                  }
-                                  className="w-10 h-10 rounded-xl cursor-pointer border border-slate-200/80 p-1 bg-white hover:border-[var(--color-primary)] transition-colors font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                />
+                              <div className="flex gap-2.5">
+                                <div className="relative flex items-center justify-center w-10 h-10 border border-slate-200 rounded-xl overflow-hidden cursor-pointer bg-white shrink-0 shadow-2xs">
+                                  <input
+                                    type="color"
+                                    value={accentColor3}
+                                    onChange={(e) =>
+                                      setAccentColor3(e.target.value)
+                                    }
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  />
+                                  <div 
+                                    className="w-6 h-6 rounded-lg shadow-inner border border-black/10"
+                                    style={{ backgroundColor: accentColor3 }}
+                                  />
+                                </div>
                                 <input 
                                   type="text"
                                   value={accentColor3}
                                   onChange={(e) =>
                                     setAccentColor3(e.target.value)
                                   }
-                                  className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all uppercase text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all uppercase text-sm font-normal text-slate-800"
                                 />
                               </div>
                             </div>
@@ -5596,15 +5710,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         <div className="flex flex-col gap-4">
                           {/* Logo Anmelde- und Ladebildschirm */}
-                          <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
                                 Logo Anmelde- und Ladebildschirm
                               </label>
                               <label className="cursor-pointer select-none inline-flex items-center gap-2">
                                 <input
                                   type="checkbox"
-                                  className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
+                                  className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-normal"
                                   checked={logoUrl === DEFAULT_SETTINGS.logoUrl}
                                   onChange={(e) => {
                                     if (e.target.checked) {
@@ -5623,7 +5737,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     }
                                   }}
                                 />
-                                <span className="text-[10px] font-bold text-slate-600 uppercase">
+                                <span className="text-xs font-medium text-slate-600">
                                   Standard verwenden
                                 </span>
                               </label>
@@ -5641,16 +5755,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setLogoUrl(e.target.value);
                                       setCustomLogoUrl(e.target.value);
                                     }}
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all text-sm font-normal text-slate-800 placeholder:text-slate-400"
                                     placeholder="https://example.com/logo.png"
                                   />
-                                  <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
+                                  <label className="bg-white border border-slate-200 hover:bg-slate-50 rounded-xl px-4 flex items-center justify-center cursor-pointer transition-colors h-10 shrink-0 shadow-2xs">
                                     {uploadingImage.logo ? (
-                                      <i className="fa-solid fa-spinner fa-spin text-sm"></i>
+                                      <i className="fa-solid fa-spinner fa-spin text-sm text-[var(--color-primary)]"></i>
                                     ) : (
                                       <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                     )}
-                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    <input 
+                                      type="file"
+                                      className="hidden"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "logo")
@@ -5660,17 +5776,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   </label>
                                 </div>
                               ) : (
-                                <div className="relative group w-[100px] aspect-square rounded-xl border border-slate-200/80 overflow-hidden bg-white flex items-center justify-center">
+                                <div className="relative group w-24 h-24 rounded-xl border border-slate-200 overflow-hidden bg-white flex items-center justify-center shadow-2xs">
                                   <img
                                     src={customLogoUrl}
                                     alt="Logo"
                                     className="w-full h-full object-contain p-2"
                                   />
-                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                                    <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md">
-                                      <i className="fa-solid fa-upload mr-1"></i>
-                                      Ändern
-                                      <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5">
+                                    <label className="bg-white text-slate-800 px-2.5 py-1 rounded-lg font-semibold text-xs cursor-pointer hover:bg-slate-100 shadow-xs">
+                                      <i className="fa-solid fa-upload mr-1"></i> Ändern
+                                      <input 
+                                        type="file"
+                                        className="hidden"
                                         accept="image/*"
                                         onChange={(e) =>
                                           handleImageUpload(e, "logo")
@@ -5683,7 +5800,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         setLogoUrl("");
                                         setCustomLogoUrl("");
                                       }}
-                                      className="text-white text-[8px] uppercase font-bold tracking-widest hover:underline"
+                                      className="text-white text-[10px] font-medium hover:underline cursor-pointer"
                                     >
                                       URL
                                     </button>
@@ -5699,15 +5816,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
 
                           {/* Logo Kopfzeile */}
-                          <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
                                 Logo Kopfzeile
                               </label>
                               <label className="cursor-pointer select-none inline-flex items-center gap-2">
                                 <input
                                   type="checkbox"
-                                  className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
+                                  className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-normal"
                                   checked={
                                     headerLogoUrl ===
                                     (DEFAULT_SETTINGS.headerLogoUrl ||
@@ -5735,7 +5852,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     }
                                   }}
                                 />
-                                <span className="text-[10px] font-bold text-slate-600 uppercase">
+                                <span className="text-xs font-medium text-slate-600">
                                   Standard verwenden
                                 </span>
                               </label>
@@ -5753,16 +5870,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setHeaderLogoUrl(e.target.value);
                                       setCustomHeaderLogoUrl(e.target.value);
                                     }}
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all text-sm font-normal text-slate-800 placeholder:text-slate-400"
                                     placeholder="https://example.com/header-logo.png"
                                   />
-                                  <label className="bg-slate-100 border border-slate-200/80 hover:border-[var(--color-primary)] rounded-xl px-4 flex items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors h-10 shrink-0">
+                                  <label className="bg-white border border-slate-200 hover:bg-slate-50 rounded-xl px-4 flex items-center justify-center cursor-pointer transition-colors h-10 shrink-0 shadow-2xs">
                                     {uploadingImage.headerLogo ? (
-                                      <i className="fa-solid fa-spinner fa-spin text-sm"></i>
+                                      <i className="fa-solid fa-spinner fa-spin text-sm text-[var(--color-primary)]"></i>
                                     ) : (
                                       <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                     )}
-                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    <input 
+                                      type="file"
+                                      className="hidden"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "headerLogo")
@@ -5772,17 +5891,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   </label>
                                 </div>
                               ) : (
-                                <div className="relative group w-[100px] aspect-square rounded-xl border border-slate-200/80 overflow-hidden bg-white flex items-center justify-center bg-slate-50">
+                                <div className="relative group w-24 h-24 rounded-xl border border-slate-200 overflow-hidden bg-white flex items-center justify-center shadow-2xs">
                                   <img
                                     src={customHeaderLogoUrl}
                                     alt="Header Logo"
-                                    className="w-full h-full object-contain p-2 drop-shadow-md"
+                                    className="w-full h-full object-contain p-2 drop-shadow-xs"
                                   />
-                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                                    <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md">
-                                      <i className="fa-solid fa-upload mr-1"></i>
-                                      Ändern
-                                      <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5">
+                                    <label className="bg-white text-slate-800 px-2.5 py-1 rounded-lg font-semibold text-xs cursor-pointer hover:bg-slate-100 shadow-xs">
+                                      <i className="fa-solid fa-upload mr-1"></i> Ändern
+                                      <input 
+                                        type="file"
+                                        className="hidden"
                                         accept="image/*"
                                         onChange={(e) =>
                                           handleImageUpload(e, "headerLogo")
@@ -5795,7 +5915,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         setHeaderLogoUrl("");
                                         setCustomHeaderLogoUrl("");
                                       }}
-                                      className="text-white text-[8px] uppercase font-bold tracking-widest hover:underline"
+                                      className="text-white text-[10px] font-medium hover:underline cursor-pointer"
                                     >
                                       URL
                                     </button>
@@ -5811,20 +5931,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                         </div>
 
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-4">
+                        {/* Favicon */}
+                        <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3.5">
                           <div className="flex items-center justify-between">
                             <div>
-                              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">
-                                Favicon (Browser-Tab Symbol)
+                              <label className="text-xs font-semibold uppercase text-slate-500 tracking-wider block">
+                                Favicon (Browsertab-Symbol)
                               </label>
-                              <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5 block">
-                                Symbol für den Browser-Tab
-                              </span>
                             </div>
                             <label className="cursor-pointer select-none inline-flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
+                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-normal"
                                 checked={
                                   faviconUrl ===
                                   (DEFAULT_SETTINGS.faviconUrl ||
@@ -5852,19 +5970,19 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   }
                                 }}
                               />
-                              <span className="text-[10px] font-bold text-slate-600 uppercase">
+                              <span className="text-xs font-medium text-slate-600">
                                 Standard verwenden
                               </span>
                             </label>
                           </div>
 
-                          {/* Explicit Interactive Browser Tab Preview */}
-                          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                          {/* Live Tab Preview */}
+                          <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2.5">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                                Live-Vorschau (Browser-Tab)
+                              <span className="text-[11px] font-semibold text-slate-500">
+                                Live-Vorschau (Browsertab)
                               </span>
-                              <span className="text-[9px] font-bold text-slate-500 bg-slate-200/50 px-2.5 py-0.5 rounded-full uppercase">
+                              <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                                 {faviconUrl ===
                                 (DEFAULT_SETTINGS.faviconUrl || "/favicon.svg")
                                   ? "Standard aktiv"
@@ -5872,16 +5990,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               </span>
                             </div>
 
-                            <div className="bg-slate-200 rounded-xl p-3 flex items-center gap-1.5 h-14 overflow-hidden select-none relative shadow-sm">
-                              {/* Browser Window Control Dots / Window actions decoration */}
-                              <div className="flex gap-1 pr-3 pl-1">
+                            <div className="bg-slate-100 rounded-xl p-2.5 flex items-center gap-2 h-12 overflow-hidden select-none">
+                              <div className="flex gap-1 pr-2 pl-1">
                                 <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
                                 <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
                                 <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>
                               </div>
 
-                              {/* Simulated active browser tab */}
-                              <div className="bg-white px-3.5 py-2 rounded-lg flex items-center gap-2 max-w-[170px] shadow-sm border border-slate-300/40 animate-in fade-in duration-200">
+                              <div className="bg-white px-3 py-1.5 rounded-lg flex items-center gap-2 max-w-[170px] shadow-xs border border-slate-200/60">
                                 <img
                                   src={faviconUrl || "/favicon.svg"}
                                   alt="Favicon Tab Vorschau"
@@ -5891,93 +6007,67 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       "/favicon.svg";
                                   }}
                                 />
-                                <span className="text-[10px] font-extrabold text-slate-700 truncate">
-                                  {clubName || "Tennis-Club"}
+                                <span className="text-xs font-semibold text-slate-700 truncate">
+                                  {clubName || "Tennisclub"}
                                 </span>
-                                <i className="fa-solid fa-xmark text-[9px] text-slate-400 ml-1.5 hover:text-slate-600 transition-colors cursor-pointer"></i>
                               </div>
-
-                              {/* Accent background filler */}
-                              <div className="flex-1 bg-slate-200/20 h-full rounded-r"></div>
                             </div>
                           </div>
 
-                          {/* Custom Icon Settings (only functional if Standard is unchecked) */}
                           <div
                             className={`transition-all duration-300 ${faviconUrl === (DEFAULT_SETTINGS.faviconUrl || "/favicon.svg") ? "opacity-40 pointer-events-none" : ""}`}
                           >
-                            {/* Selector Tabs for custom input method */}
-                            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mb-4">
+                            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/80 rounded-xl mb-3">
                               <button
                                 type="button"
                                 onClick={() => setFaviconInputMode("upload")}
-                                disabled={
-                                  faviconUrl ===
-                                  (DEFAULT_SETTINGS.faviconUrl ||
-                                    "/favicon.svg")
-                                }
-                                className={`py-2 text-[10px] uppercase tracking-wider font-extrabold rounded-lg flex items-center justify-center gap-2 transition-all ${
+                                className={`py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
                                   faviconInputMode === "upload"
-                                    ? "bg-white text-[var(--color-primary)] shadow-sm"
-                                    : "text-slate-500 hover:text-slate-800"
+                                    ? "bg-white text-slate-900 shadow-xs"
+                                    : "text-slate-600 hover:text-slate-900"
                                 }`}
                               >
-                                <i className="fa-solid fa-cloud-arrow-up"></i>
-                                <span>Grafik direkt hochladen</span>
+                                <i className="fa-solid fa-cloud-arrow-up text-xs"></i>
+                                <span>Bild hochladen</span>
                               </button>
 
                               <button
                                 type="button"
                                 onClick={() => setFaviconInputMode("url")}
-                                disabled={
-                                  faviconUrl ===
-                                  (DEFAULT_SETTINGS.faviconUrl ||
-                                    "/favicon.svg")
-                                }
-                                className={`py-2 text-[10px] uppercase tracking-wider font-extrabold rounded-lg flex items-center justify-center gap-2 transition-all ${
+                                className={`py-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
                                   faviconInputMode === "url"
-                                    ? "bg-white text-[var(--color-primary)] shadow-sm"
-                                    : "text-slate-500 hover:text-slate-800"
+                                    ? "bg-white text-slate-900 shadow-xs"
+                                    : "text-slate-600 hover:text-slate-900"
                                 }`}
                               >
-                                <i className="fa-solid fa-link"></i>
-                                <span>Über Web-Link verlinken</span>
+                                <i className="fa-solid fa-link text-xs"></i>
+                                <span>Über URL</span>
                               </button>
                             </div>
 
                             {faviconInputMode === "upload" ? (
-                              <div className="space-y-4">
-                                {/* Drag / Drop Upload Zone or Active Upload State */}
+                              <div>
                                 {customFaviconUrl &&
                                 customFaviconUrl.startsWith("data:") ? (
-                                  <div className="flex items-center gap-4 bg-slate-50 border border-slate-200/80 p-4 rounded-xl">
-                                    <div className="w-14 h-14 shrink-0 rounded-lg border border-slate-200/80 bg-white shadow-sm flex items-center justify-center relative overflow-hidden group">
+                                  <div className="flex items-center gap-3 bg-white border border-slate-200 p-3 rounded-xl shadow-2xs">
+                                    <div className="w-12 h-12 shrink-0 rounded-lg border border-slate-200 bg-white flex items-center justify-center">
                                       <img
                                         src={customFaviconUrl}
-                                        alt="Custom Uploaded Favicon"
-                                        className="w-full h-full object-contain p-1.5"
+                                        alt="Favicon"
+                                        className="w-full h-full object-contain p-1"
                                       />
-                                      {uploadingImage.favicon && (
-                                        <div className="absolute inset-0 bg-white/85 flex items-center justify-center">
-                                          <i className="fa-solid fa-spinner fa-spin text-xl text-[var(--color-primary)]"></i>
-                                        </div>
-                                      )}
                                     </div>
 
                                     <div className="flex-1 min-w-0">
-                                      <div className="text-[11px] font-black text-slate-700 uppercase truncate">
+                                      <div className="text-xs font-semibold text-slate-800 truncate">
                                         Eigenes Favicon hochgeladen
                                       </div>
-                                      <div className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">
-                                        Optimiertes WebP Bildformat im
-                                        Web-Speicher
-                                      </div>
-
-                                      <div className="flex items-center gap-3 mt-2.5">
-                                        <label className="text-[9px] font-black uppercase tracking-wider text-white bg-[var(--color-primary)] hover:bg-black px-3.5 py-2 rounded-lg cursor-pointer transition-colors shadow-sm inline-flex items-center gap-1.5">
-                                          <i className="fa-solid fa-arrows-rotate"></i>
-                                          <span>Anderes Bild hochladen</span>
-                                          <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                      <div className="flex items-center gap-2 mt-1.5">
+                                        <label className="text-xs font-semibold text-[var(--color-primary)] hover:underline cursor-pointer">
+                                          Ändern
+                                          <input 
+                                            type="file"
+                                            className="hidden"
                                             accept="image/*"
                                             onChange={(e) =>
                                               handleImageUpload(e, "favicon")
@@ -5985,89 +6075,63 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             disabled={uploadingImage.favicon}
                                           />
                                         </label>
-
+                                        <span className="text-slate-300">•</span>
                                         <button
                                           type="button"
                                           onClick={() => {
                                             setFaviconUrl("");
                                             setCustomFaviconUrl("");
                                           }}
-                                          className="text-[9px] font-black uppercase tracking-wider text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2.5 py-2 rounded-lg transition-colors"
+                                          className="text-xs font-semibold text-red-600 hover:underline cursor-pointer"
                                         >
-                                          <i className="fa-solid fa-trash-can mr-1"></i>
-                                          <span>Grafik löschen</span>
+                                          Löschen
                                         </button>
                                       </div>
                                     </div>
                                   </div>
                                 ) : (
-                                  <label className="border border-dashed border-slate-300 hover:border-[var(--color-primary)] bg-slate-50 hover:bg-slate-100/50 rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 relative group">
-                                    <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  <label className="border border-dashed border-slate-300 hover:border-[var(--color-primary)] bg-white hover:bg-slate-50/70 rounded-xl p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all shadow-2xs">
+                                    <input 
+                                      type="file"
+                                      className="hidden"
                                       accept="image/*"
                                       onChange={(e) =>
                                         handleImageUpload(e, "favicon")
                                       }
                                       disabled={uploadingImage.favicon}
                                     />
-                                    {uploadingImage.favicon ? (
-                                      <div className="py-2 flex flex-col items-center gap-2">
-                                        <i className="fa-solid fa-circle-notch fa-spin text-2xl text-[var(--color-primary)]"></i>
-                                        <span className="text-[10px] font-extrabold text-slate-600 uppercase tracking-widest">
-                                          Wird verarbeitet...
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <div className="flex flex-col items-center gap-2">
-                                        <div className="w-10 h-10 rounded-full bg-slate-200/80 group-hover:bg-white flex items-center justify-center transition-colors shadow-sm">
-                                          <i className="fa-solid fa-cloud-arrow-up text-lg text-slate-600 group-hover:text-[var(--color-primary)] transition-colors"></i>
-                                        </div>
-                                        <div className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
-                                          Wähle ein quadratisches Bild aus
-                                        </div>
-                                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider max-w-xs leading-relaxed">
-                                          Zulässige Formate: PNG, SVG, JPG, ICO,
-                                          WEBP.
-                                          <br />
-                                          Das Bild wird im System für dich
-                                          optimiert.
-                                        </div>
-                                      </div>
-                                    )}
+                                    <i className="fa-solid fa-cloud-arrow-up text-lg text-slate-500 mb-1"></i>
+                                    <span className="text-xs font-semibold text-slate-700">Quadratisches Bild auswählen (PNG, SVG, ICO)</span>
                                   </label>
                                 )}
                               </div>
                             ) : (
-                              <div className="space-y-4">
-                                <div className="flex gap-2">
-                                  <input 
-                                    type="text"
-                                    value={customFaviconUrl}
-                                    onChange={(e) => {
-                                      setFaviconUrl(e.target.value);
-                                      setCustomFaviconUrl(e.target.value);
-                                    }}
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-xs py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                    placeholder="Z.B. https://ihre-website.de/favicon.png"
-                                  />
-                                </div>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                                  Geben Sie einen direkten HTTPS-Link zu einem
-                                  Icon ein (z.B. PNG, ICO).
-                                </span>
+                              <div>
+                                <input 
+                                  type="text"
+                                  value={customFaviconUrl}
+                                  onChange={(e) => {
+                                    setFaviconUrl(e.target.value);
+                                    setCustomFaviconUrl(e.target.value);
+                                  }}
+                                  className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all text-sm font-normal text-slate-800 placeholder:text-slate-400"
+                                  placeholder="z. B. https://example.com/favicon.png"
+                                />
                               </div>
                             )}
                           </div>
                         </div>
 
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        {/* Banner */}
+                        <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-semibold uppercase text-slate-500 tracking-wider">
                               Vereinsbanner
                             </label>
                             <label className="cursor-pointer select-none inline-flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
+                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-normal"
                                 checked={Boolean(
                                   useDefaultBanner ||
                                   !bannerUrl ||
@@ -6089,7 +6153,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   }
                                 }}
                               />
-                              <span className="text-[10px] font-bold text-slate-600 uppercase">
+                              <span className="text-xs font-medium text-slate-600">
                                 Standard verwenden
                               </span>
                             </label>
@@ -6109,7 +6173,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     setCustomBannerUrl(e.target.value);
                                     if (useDefaultBanner) setUseDefaultBanner(false);
                                   }}
-                                  className={`flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400 ${
+                                  className={`flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all text-sm font-normal text-slate-800 placeholder:text-slate-400 ${
                                     useDefaultBanner
                                       ? "opacity-50 cursor-not-allowed bg-slate-50"
                                       : ""
@@ -6121,20 +6185,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   }
                                 />
                                 <label
-                                  className={`border border-slate-200/80 rounded-xl px-4 flex items-center justify-center h-10 shrink-0 ${
+                                  className={`border border-slate-200 rounded-xl px-4 flex items-center justify-center h-10 shrink-0 shadow-2xs ${
                                     useDefaultBanner
                                       ? "bg-slate-100 opacity-50 cursor-not-allowed pointer-events-none"
-                                      : "bg-slate-100 hover:border-[var(--color-primary)] cursor-pointer hover:bg-slate-200 transition-colors"
+                                      : "bg-white hover:bg-slate-50 cursor-pointer transition-colors"
                                   }`}
                                 >
                                   {uploadingImage.banner ? (
-                                    <i className="fa-solid fa-spinner fa-spin text-sm"></i>
+                                    <i className="fa-solid fa-spinner fa-spin text-sm text-[var(--color-primary)]"></i>
                                   ) : (
                                     <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
                                   )}
                                   <input
                                     type="file"
-                                    className="hidden p-2 font-sans font-medium"
+                                    className="hidden"
                                     accept="image/*"
                                     onChange={(e) =>
                                       handleImageUpload(e, "banner")
@@ -6144,47 +6208,33 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 </label>
                               </div>
                             ) : (
-                              <div className="relative group w-full h-24 rounded-xl border border-slate-200/80 overflow-hidden bg-slate-100 flex items-center justify-center">
+                              <div className="relative group w-full h-28 rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center shadow-2xs">
                                 <img
                                   src={customBannerUrl}
                                   alt="Banner"
                                   className="w-full h-full object-cover"
                                   style={{ objectPosition: bannerPosition }}
                                 />
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                                  <div className="flex gap-2">
-                                    <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md flex items-center">
-                                      <i className="fa-solid fa-upload mr-1.5"></i>
-                                      Bild ändern
-                                      <input
-                                        type="file"
-                                        className="hidden p-2 font-sans font-medium"
-                                        accept="image/*"
-                                        onChange={(e) =>
-                                          handleImageUpload(e, "banner")
-                                        }
-                                      />
-                                    </label>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setShowBannerPositionModal(true)
+                                <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                  <label className="bg-white text-slate-800 px-3 py-1.5 rounded-lg font-semibold text-xs cursor-pointer hover:bg-slate-100 shadow-xs flex items-center gap-1.5">
+                                    <i className="fa-solid fa-upload"></i> Bild ändern
+                                    <input
+                                      type="file"
+                                      className="hidden"
+                                      accept="image/*"
+                                      onChange={(e) =>
+                                        handleImageUpload(e, "banner")
                                       }
-                                      className="bg-[var(--color-accent)] text-white px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer shadow-md hover:brightness-110 flex items-center"
-                                    >
-                                      <i className="fa-solid fa-crop-simple mr-1.5"></i>
-                                      Ausschnitt wählen
-                                    </button>
-                                  </div>
+                                    />
+                                  </label>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setBannerUrl("");
-                                      setCustomBannerUrl("");
-                                    }}
-                                    className="text-white text-[8px] uppercase font-bold tracking-widest hover:underline"
+                                    onClick={() =>
+                                      setShowBannerPositionModal(true)
+                                    }
+                                    className="bg-white text-slate-800 px-3 py-1.5 rounded-lg font-semibold text-xs cursor-pointer shadow-xs hover:bg-slate-100 flex items-center gap-1.5"
                                   >
-                                    URL eingeben
+                                    <i className="fa-solid fa-crop-simple"></i> Ausschnitt
                                   </button>
                                 </div>
                                 {uploadingImage.banner && (
@@ -6197,167 +6247,34 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                         </div>
 
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                              Anmelde-Hintergrund (Grafik)
-                            </label>
-                            <label className="cursor-pointer select-none inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded cursor-pointer accent-[var(--color-primary)] font-sans font-medium"
-                                checked={Boolean(
-                                  useDefaultLoginBanner ||
-                                  !loginBannerUrl ||
-                                  loginBannerUrl === defaultLoginBannerImg ||
-                                  loginBannerUrl === defaultBannerImg
-                                )}
-                                onChange={(e) => {
-                                  const isChecked = e.target.checked;
-                                  setUseDefaultLoginBanner(isChecked);
-                                  if (isChecked) {
-                                    setLoginBannerUrl(defaultLoginBannerImg);
-                                  } else {
-                                    const fallback =
-                                      customLoginBannerUrl &&
-                                      customLoginBannerUrl !== defaultLoginBannerImg &&
-                                      customLoginBannerUrl !== defaultBannerImg
-                                        ? customLoginBannerUrl
-                                        : "";
-                                    setLoginBannerUrl(fallback);
-                                    setCustomLoginBannerUrl(fallback);
-                                  }
-                                }}
-                              />
-                              <span className="text-[10px] font-bold text-slate-600 uppercase">
-                                Standard verwenden
-                              </span>
-                            </label>
-                          </div>
-
-                          <div
-                            className={`transition-opacity ${useDefaultLoginBanner ? "opacity-60" : ""}`}
-                          >
-                            {useDefaultLoginBanner || !customLoginBannerUrl ? (
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  disabled={useDefaultLoginBanner}
-                                  value={useDefaultLoginBanner ? "" : customLoginBannerUrl}
-                                  onChange={(e) => {
-                                    setLoginBannerUrl(e.target.value);
-                                    setCustomLoginBannerUrl(e.target.value);
-                                    if (useDefaultLoginBanner) setUseDefaultLoginBanner(false);
-                                  }}
-                                  className={`flex-1 px-2.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400 ${
-                                    useDefaultLoginBanner
-                                      ? "opacity-50 cursor-not-allowed bg-slate-50"
-                                      : ""
-                                  }`}
-                                  placeholder={
-                                    useDefaultLoginBanner
-                                      ? "Standard-Anmeldehintergrund aktiv"
-                                      : "https://example.com/login-banner.jpg"
-                                  }
-                                />
-                                <label
-                                  className={`border border-slate-200/80 rounded-xl px-4 flex items-center justify-center h-10 shrink-0 ${
-                                    useDefaultLoginBanner
-                                      ? "bg-slate-100 opacity-50 cursor-not-allowed pointer-events-none"
-                                      : "bg-slate-100 hover:border-[var(--color-primary)] cursor-pointer hover:bg-slate-200 transition-colors"
-                                  }`}
-                                >
-                                  {uploadingImage.loginBanner ? (
-                                    <i className="fa-solid fa-spinner fa-spin text-sm"></i>
-                                  ) : (
-                                    <i className="fa-solid fa-cloud-arrow-up text-sm text-slate-600"></i>
-                                  )}
-                                  <input
-                                    type="file"
-                                    className="hidden p-2 font-sans font-medium"
-                                    accept="image/*"
-                                    onChange={(e) =>
-                                      handleImageUpload(e, "loginBanner")
-                                    }
-                                    disabled={useDefaultLoginBanner || uploadingImage.loginBanner}
-                                  />
-                                </label>
-                              </div>
-                            ) : (
-                              <div className="relative group w-full h-24 rounded-xl border border-slate-200/80 overflow-hidden bg-slate-100 flex items-center justify-center">
-                                <img
-                                  src={customLoginBannerUrl}
-                                  alt="Login Banner"
-                                  className="w-full h-full object-cover"
-                                />
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                                  <label className="bg-white text-[var(--color-primary)] px-2.5 py-1 rounded-lg font-bold text-[10px] cursor-pointer hover:bg-slate-100 shadow-md flex items-center">
-                                    <i className="fa-solid fa-upload mr-1.5"></i>
-                                    Bild ändern
-                                    <input
-                                      type="file"
-                                      className="hidden p-2 font-sans font-medium"
-                                      accept="image/*"
-                                      onChange={(e) =>
-                                        handleImageUpload(e, "loginBanner")
-                                      }
-                                    />
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setLoginBannerUrl("");
-                                      setCustomLoginBannerUrl("");
-                                    }}
-                                    className="text-white text-[8px] uppercase font-bold tracking-widest hover:underline"
-                                  >
-                                    URL eingeben
-                                  </button>
-                                </div>
-                                {uploadingImage.loginBanner && (
-                                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                                    <i className="fa-solid fa-spinner fa-spin text-2xl text-[var(--color-primary)]"></i>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mt-2">
-                              Hintergrundgrafik für den Anmeldebildschirm. Da
-                              die Anmeldeseite auf Desktop-Monitoren zweispaltig
-                              geteilt ist, wird hierfür eine quadratische oder
-                              hochformatige Grafik empfohlen (z.B. Foto der
-                              Hallenplätze/Anlage).
-                            </span>
-                          </div>
-                        </div>
-
+                        {/* Webseiten-Link */}
                         <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Webseiten-Link
                           </label>
-                          <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-4 shadow-sm">
+                          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3">
                             <input 
                               type="text"
                               value={websiteUrl}
                               onChange={(e) => setWebsiteUrl(e.target.value)}
                               disabled={hideWebsiteLink}
-                              className="w-full px-2.5 border border-slate-200/80 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none transition-all disabled:opacity-50 text-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                              placeholder="https://www.tennis-club.local"
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all disabled:opacity-50 text-sm font-normal text-slate-800 placeholder:text-slate-400"
+                              placeholder="https://www.tennis-club.de"
                             />
                             <label
-                              className="flex items-center gap-3 cursor-pointer group"
+                              className="flex items-center gap-3 cursor-pointer group select-none"
                               onClick={() =>
                                 setHideWebsiteLink(!hideWebsiteLink)
                               }
                             >
                               <div
-                                className={`w-10 h-6 rounded-full p-1 transition-colors ${hideWebsiteLink ? "bg-[var(--color-primary)]" : "bg-slate-200"}`}
+                                className={`w-9 h-5 rounded-full p-0.5 transition-colors ${hideWebsiteLink ? "bg-[var(--color-primary)]" : "bg-slate-300"}`}
                               >
                                 <div
-                                  className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${hideWebsiteLink ? "translate-x-4" : ""}`}
+                                  className={`w-4 h-4 bg-white rounded-full shadow-xs transition-transform ${hideWebsiteLink ? "translate-x-4" : ""}`}
                                 ></div>
                               </div>
-                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-black">
+                              <span className="text-xs font-medium text-slate-600 group-hover:text-slate-900">
                                 Website-Link ganz verbergen
                               </span>
                             </label>
@@ -6366,121 +6283,132 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </div>
                     </div>
 
-                    {/* Embedded News-Zentrale (Layout & News) */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-bullhorn"></i> Vereins-News
-                      </h3>
-                      <div className="space-y-4">
+                    {/* Right column: News, Welcome message, Impressum */}
+                    <div className="space-y-6">
+                      {/* Vereinsnews */}
+                      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
                         <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Aktuelle Meldung (Im Header Sichtbar)
-                          </label>
-                          <textarea
-                            value={localNews}
-                            onChange={(e) => setLocalNews(e.target.value)}
-                            placeholder="Z.B. Die Plätze sind eröffnet!..."
-                            className="w-full h-8 px-3 py-1 rounded-xl bg-white border border-slate-200 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[120px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
-                          />
-                        </div>
-
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md space-y-3">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                            Meldungs-Vorschau
-                          </p>
-                          {localNews.trim() ? (
-                            <div className="bg-[var(--color-accent)] py-2 px-4 rounded-xl text-center text-white text-[10px] font-black uppercase tracking-wider">
-                              <i className="fa-solid fa-bullhorn mr-2"></i>{" "}
-                              {localNews}
-                            </div>
-                          ) : (
-                            <div className="py-4 text-center bg-slate-50 border border-dashed rounded-xl ">
-                              <span className="text-slate-400 text-[9px] font-bold uppercase tracking-widest italic">
-                                Keine aktive Meldung
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Willkommensnachricht (Anmeldescreen) */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-comment-dots"></i>{" "}
-                        Willkommensnachricht (Anmeldescreen)
-                      </h3>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Text für den Begrüßungsbildschirm
-                          </label>
-                          <RichTextEditorToolbar
-                            textareaRef={welcomeTextRef}
-                            value={welcomeMessage}
-                            onChange={setWelcomeMessage}
-                          />
-                          <textarea
-                            ref={welcomeTextRef}
-                            value={welcomeMessage}
-                            onChange={(e) => setWelcomeMessage(e.target.value)}
-                            placeholder="Herzlich willkommen..."
-                            className="w-full h-8 px-3 py-1 rounded-b-xl bg-white border border-slate-200 border-t-0 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[120px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
-                          />
-                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
-                            Dieser Text wird auf dem Loginbildschirm angezeigt.
-                            Formatiere den Text mit der Leiste oder verwende
-                            Markdown (z.B. **fett**, *kursiv*, ### Überschrift,
-                            - Liste).
+                          <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                            <i className="fa-solid fa-bullhorn text-[var(--color-primary)]"></i> Vereinsnews
+                          </h3>
+                          <p className="text-xs text-slate-500 font-normal mt-0.5">
+                            Aktuelle Kurzmeldung für die obere Kopfzeile.
                           </p>
                         </div>
 
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                            Live-Vorschau
-                          </p>
-                          <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 max-h-[150px] overflow-y-auto">
-                            <RichTextRenderer text={welcomeMessage} />
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Aktuelle Meldung (im Header sichtbar)
+                            </label>
+                            <textarea
+                              value={localNews}
+                              onChange={(e) => setLocalNews(e.target.value)}
+                              placeholder="z. B. Die Plätze sind ab heute für die Saison eröffnet!..."
+                              className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 min-h-[100px] resize-y placeholder:text-slate-400 font-normal"
+                            />
+                          </div>
+
+                          <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80 space-y-2">
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              Meldungs-Vorschau
+                            </span>
+                            {localNews.trim() ? (
+                              <div className="bg-[var(--color-accent)] py-2.5 px-4 rounded-xl text-center text-white text-xs font-semibold shadow-2xs">
+                                <i className="fa-solid fa-bullhorn mr-2"></i> {localNews}
+                              </div>
+                            ) : (
+                              <div className="py-3 text-center bg-white border border-dashed border-slate-200 rounded-xl">
+                                <span className="text-slate-400 text-xs font-normal">
+                                  Keine aktive Meldung eingetragen
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Impressum-Zentrale (Layout & Impressum) */}
-                    <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
-                      <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2 mb-4">
-                        <i className="fa-solid fa-scale-balanced"></i> Impressum
-                        (Rechtliche Angaben)
-                      </h3>
-                      <div className="space-y-4">
+                      {/* Willkommensnachricht */}
+                      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
                         <div>
-                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
-                            Inhalt des Impressums (Text oder HTML)
-                          </label>
-                          <RichTextEditorToolbar
-                            textareaRef={impressumTextRef}
-                            value={impressum}
-                            onChange={setImpressum}
-                          />
-                          <textarea
-                            ref={impressumTextRef}
-                            value={impressum}
-                            onChange={(e) => setImpressum(e.target.value)}
-                            placeholder="Angaben gemäß § 5 TMG..."
-                            className="w-full h-8 px-3 py-1 rounded-b-xl bg-white border border-slate-200 border-t-0 text-xs outline-none focus:border-[var(--color-primary)] shadow-sm min-h-[160px] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
-                          />
-                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
-                            Dieser Text wird unten in der Fußzeile (Impressum
-                            Link) angezeigt.
+                          <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                            <i className="fa-solid fa-comment-dots text-[var(--color-primary)]"></i> Willkommensnachricht (Anmeldescreen)
+                          </h3>
+                          <p className="text-xs text-slate-500 font-normal mt-0.5">
+                            Begrüßungstext und Hinweise für Besucher auf dem Login-Bildschirm.
                           </p>
                         </div>
 
-                        <div className="bg-white p-4 rounded-2xl border-none shadow-md">
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                            Live-Vorschau
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Text für den Begrüßungsbildschirm
+                            </label>
+                            <RichTextEditorToolbar
+                              textareaRef={welcomeTextRef}
+                              value={welcomeMessage}
+                              onChange={setWelcomeMessage}
+                            />
+                            <textarea
+                              ref={welcomeTextRef}
+                              value={welcomeMessage}
+                              onChange={(e) => setWelcomeMessage(e.target.value)}
+                              placeholder="Herzlich willkommen..."
+                              className="w-full p-3 rounded-b-xl bg-white border border-slate-200 border-t-0 text-sm text-slate-800 outline-none focus:border-[var(--color-primary)] min-h-[120px] resize-y placeholder:text-slate-400 font-normal"
+                            />
+                            <p className="text-xs text-slate-400 mt-1">
+                              Wird auf dem Login-Screen angezeigt. Unterstützt Markdown wie **fett**, *kursiv* und Listen.
+                            </p>
+                          </div>
+
+                          <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80 space-y-2">
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              Live-Vorschau
+                            </span>
+                            <div className="p-3 bg-white rounded-xl border border-slate-200/80 max-h-[140px] overflow-y-auto text-xs text-slate-700">
+                              <RichTextRenderer text={welcomeMessage} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Impressum */}
+                      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                            <i className="fa-solid fa-scale-balanced text-[var(--color-primary)]"></i> Impressum (Rechtliche Angaben)
+                          </h3>
+                          <p className="text-xs text-slate-500 font-normal mt-0.5">
+                            Angaben gemäß § 5 TMG für die Vereinsfußzeile.
                           </p>
-                          <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 max-h-[150px] overflow-y-auto">
-                            <RichTextRenderer text={impressum} />
+                        </div>
+
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                              Inhalt des Impressums
+                            </label>
+                            <RichTextEditorToolbar
+                              textareaRef={impressumTextRef}
+                              value={impressum}
+                              onChange={setImpressum}
+                            />
+                            <textarea
+                              ref={impressumTextRef}
+                              value={impressum}
+                              onChange={(e) => setImpressum(e.target.value)}
+                              placeholder="Angaben gemäß § 5 TMG..."
+                              className="w-full p-3 rounded-b-xl bg-white border border-slate-200 border-t-0 text-sm text-slate-800 outline-none focus:border-[var(--color-primary)] min-h-[140px] resize-y placeholder:text-slate-400 font-normal"
+                            />
+                          </div>
+
+                          <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80 space-y-2">
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              Live-Vorschau
+                            </span>
+                            <div className="p-3 bg-white rounded-xl border border-slate-200/80 max-h-[140px] overflow-y-auto text-xs text-slate-700">
+                              <RichTextRenderer text={impressum} />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -6488,15 +6416,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   </div>
 
                   {/* Tab Category Actions */}
-                  <div className="border-t border-slate-100 pt-6 flex justify-end">
+                  <div className="border-t border-slate-200/80 pt-5 flex justify-end">
                     <button
                       type="button"
                       disabled={!isTabDirty("layout")}
                       onClick={() => handleSaveTab("layout")}
-                      className={`font-black uppercase text-xs tracking-wider px-6 py-2.5 rounded-xl transition-all flex items-center gap-2 ${
+                      className={`h-10 px-6 rounded-xl font-semibold text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
                         isTabDirty("layout")
-                          ? "bg-[var(--color-primary)] text-white hover:bg-black shadow-lg hover:shadow-xl"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
+                          ? "bg-[var(--color-primary)] text-white hover:brightness-110"
+                          : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                       }`}
                     >
                       <i className="fa-solid fa-floppy-disk"></i> Speichern
@@ -6509,14 +6437,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
               {currentTab === "users" && (
                 <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
                   {/* Member List & Search */}
-                  <div className="bg-slate-50 p-6 sm:p-8 rounded-[1rem] border border-slate-100 space-y-6 shadow-sm">
+                  <div className="bg-white p-5 sm:p-6 lg:p-7 rounded-2xl border border-slate-200/80 space-y-6 shadow-xs">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
                       <div>
-                        <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2">
-                          <i className="fa-solid fa-users"></i>{" "}
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-users text-[var(--color-primary)]"></i>{" "}
                           Mitgliederverwaltung
                         </h3>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
                           {Object.keys(users).length}{" "}
                           {Object.keys(users).length === 1
                             ? "Mitglied"
@@ -6543,7 +6471,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           setInlineEditingUserId(null);
                           setShowUserForm(!showUserForm);
                         }}
-                        className="bg-[var(--color-primary)] hover:bg-black text-white font-black text-[10px] uppercase tracking-widest px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
+                        className="h-10 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white font-semibold text-xs rounded-xl transition-all shadow-xs active:scale-95 flex items-center gap-2 cursor-pointer"
                       >
                         <i
                           className={`fa-solid ${showUserForm ? "fa-xmark" : "fa-user-plus"}`}
@@ -6556,10 +6484,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                     {/* Inline Add Form */}
                     {showUserForm && (
-                      <div className="bg-white p-6 rounded-2xl border-none space-y-6 shadow-sm animate-in fade-in slide-in-from-top-4 mb-6 text-left">
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                          <div className="flex items-center gap-2 text-[var(--color-primary)] font-black text-xs uppercase tracking-wider">
-                            <i className="fa-solid fa-user-plus text-sm"></i>
+                      <div className="bg-slate-50/70 p-5 sm:p-6 rounded-2xl border border-slate-200/80 space-y-6 shadow-2xs animate-in fade-in slide-in-from-top-3 mb-6 text-left">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-200/60">
+                          <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                            <i className="fa-solid fa-user-plus text-[var(--color-primary)]"></i>
                             <span>Neues Mitglied hinzufügen</span>
                           </div>
                         </div>
@@ -6583,13 +6511,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {/* 1. PERSÖNLICHE DATEN */}
                         <div className="space-y-3">
-                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
-                            <i className="fa-solid fa-address-card text-[11px]"></i>
+                          <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-address-card text-xs"></i>
                             1. Persönliche Daten (Pflichtfelder)
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Vorname <span className="text-red-500">*</span>
                               </label>
                               <input
@@ -6601,13 +6529,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     firstName: e.target.value,
                                   })
                                 }
-                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm outline-none text-slate-800 font-normal placeholder:text-slate-400"
                                 placeholder="Z.B. Max"
                                 required
                               />
                             </div>
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Nachname <span className="text-red-500">*</span>
                               </label>
                               <input
@@ -6619,13 +6547,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     lastName: e.target.value,
                                   })
                                 }
-                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm outline-none text-slate-800 font-normal placeholder:text-slate-400"
                                 placeholder="Z.B. Mustermann"
                                 required
                               />
                             </div>
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Geschlecht <span className="text-red-500">*</span>
                               </label>
                               <select
@@ -6636,17 +6564,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     gender: e.target.value as "m" | "w",
                                   })
                                 }
-                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-slate-50 focus:bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                                className="w-full h-10 px-3.5 border border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all cursor-pointer text-sm text-slate-800 font-normal"
                               >
                                 <option value="m">männlich</option>
                                 <option value="w">weiblich</option>
                               </select>
                             </div>
                             <div>
-                              <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
                                 <span>Geburtsdatum</span>
                                 {editingUser.birthDate && calculateAge(editingUser.birthDate) !== null && (
-                                  <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                  <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
                                     {calculateAge(editingUser.birthDate)} J. {calculateAge(editingUser.birthDate)! < 18 ? "(Jugend/U18)" : "(Erwachsen)"}
                                   </span>
                                 )}
@@ -6665,7 +6593,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     });
                                   }
                                 }}
-                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm text-slate-800"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm text-slate-800 font-normal"
                               />
                             </div>
                           </div>
@@ -6673,14 +6601,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {/* 2. KONTAKTINFORMATIONEN */}
                         <div className="space-y-3">
-                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
-                            <i className="fa-solid fa-address-book text-[11px]"></i>
+                          <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-address-book text-xs"></i>
                             2. Kontaktinformationen (Optional)
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <div className="flex justify-between items-center mb-1.5">
-                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                <label className="block text-xs font-semibold text-slate-700">
                                   E-Mail-Adresse {!editingUser.is_placeholder_email && <span className="text-red-500">*</span>}
                                 </label>
                                 <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -6697,7 +6625,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     }}
                                     className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                   />
-                                  <span className="text-[10px] font-bold text-slate-600">
+                                  <span className="text-xs font-medium text-slate-600">
                                     Keine E-Mail vorhanden
                                   </span>
                                 </label>
@@ -6714,16 +6642,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   })
                                 }
                                 required={!editingUser.is_placeholder_email}
-                                className={`w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold outline-none focus:border-[var(--color-primary)] transition-all text-sm ${
+                                className={`w-full h-10 px-3.5 border border-slate-200 rounded-xl outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm ${
                                   editingUser.is_placeholder_email
                                     ? "bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
-                                    : "bg-slate-50 focus:bg-white text-slate-800"
+                                    : "bg-white text-slate-800"
                                 }`}
                                 placeholder={editingUser.is_placeholder_email ? "[Keine E-Mail hinterlegt]" : "name@beispiel.de"}
                               />
                             </div>
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Telefonnummer <span className="text-slate-400 font-normal normal-case">(optional)</span>
                               </label>
                               <input
@@ -6735,7 +6663,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     phone: e.target.value,
                                   })
                                 }
-                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm text-slate-800 font-normal placeholder:text-slate-400"
                                 placeholder="+49 170 1234567"
                               />
                             </div>
@@ -6744,13 +6672,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {/* 3. ZUGANGSDATEN & PASSWORT */}
                         <div className="space-y-3">
-                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
-                            <i className="fa-solid fa-key text-[11px]"></i>
-                            3. Zugangsdaten & Passwort
+                          <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-key text-xs"></i>
+                            3. Zugangsdaten &amp; Passwort
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Benutzername (Login) <span className="text-red-500">*</span>
                               </label>
                               <input
@@ -6762,13 +6690,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     name: e.target.value,
                                   })
                                 }
-                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm text-slate-800 font-normal placeholder:text-slate-400"
                                 placeholder="z. B. maxmustermann"
                                 required
                               />
                             </div>
                             <div>
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Rolle <span className="text-red-500">*</span>
                               </label>
                               <select
@@ -6779,14 +6707,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     role: e.target.value as Role,
                                   })
                                 }
-                                className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-slate-50 focus:bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                                className="w-full h-10 px-3.5 border border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all cursor-pointer text-sm text-slate-800 font-normal"
                               >
                                 <option value={Role.MITGLIED}>Mitglied (Standard)</option>
-                                <option value={Role.ADMIN}>Vereins-Administrator</option>
+                                <option value={Role.ADMIN}>Vereinsadministrator</option>
                               </select>
                             </div>
                             <div className="md:col-span-2">
-                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                 Passwort <span className="text-red-500">*</span>
                               </label>
                               <div className="flex items-center gap-2">
@@ -6800,7 +6728,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       mustChangePassword: false,
                                     })
                                   }
-                                  className="flex-1 h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-[var(--color-primary)] focus:bg-white transition-all text-sm font-mono text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                  className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm font-mono text-slate-800 placeholder:font-sans placeholder:text-slate-400"
                                   placeholder="Passwort eingeben..."
                                   required
                                 />
@@ -6818,16 +6746,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       mustChangePassword: true,
                                     });
                                   }}
-                                  className="h-10 px-4 bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold text-xs rounded-xl hover:bg-[var(--color-primary)]/20 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
-                                  title="Einmal-Passwort generieren"
+                                  className="h-10 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+                                  title="Einmalpasswort generieren"
                                 >
                                   <i className="fa-solid fa-key"></i>
                                   <span>Generieren</span>
                                 </button>
                               </div>
                               {editingUser.mustChangePassword && (
-                                <p className="text-[10px] text-amber-600 mt-1.5 font-bold flex items-center gap-1">
-                                  <i className="fa-solid fa-circle-info text-[9px]"></i>
+                                <p className="text-xs text-amber-700 mt-1.5 font-medium flex items-center gap-1">
+                                  <i className="fa-solid fa-circle-info text-[11px]"></i>
                                   Benutzer wird beim nächsten Login zur Passwortänderung aufgefordert.
                                 </p>
                               )}
@@ -6837,11 +6765,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {/* 4. PRIVATSPHÄRE & APP-ANZEIGE */}
                         <div className="space-y-3">
-                          <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
-                            <i className="fa-solid fa-user-shield text-[11px]"></i>
-                            4. Privatsphäre & App-Anzeige
+                          <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                            <i className="fa-solid fa-user-shield text-xs"></i>
+                            4. Privatsphäre &amp; App-Anzeige
                           </h4>
-                          <div className="space-y-3 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/60">
+                          <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80">
                             <label className="flex items-center gap-3 cursor-pointer group select-none">
                               <input
                                 type="checkbox"
@@ -6852,13 +6780,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     showContactInfo: e.target.checked,
                                   })
                                 }
-                                className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)]"
                               />
                               <div>
-                                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
+                                <span className="text-xs font-semibold text-slate-800 group-hover:text-slate-900 block">
                                   Kontaktdaten freigeben
                                 </span>
-                                <span className="text-[10px] text-slate-400 block font-medium">
+                                <span className="text-xs text-slate-500 block font-normal">
                                   Meine E-Mail und Telefonnummer in Börse/Rangliste für Vereinsmitglieder anzeigen
                                 </span>
                               </div>
@@ -6877,7 +6805,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)]"
                               />
                               <div>
-                                <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block flex items-center gap-1.5">
+                                <span className="text-xs font-semibold text-slate-800 group-hover:text-slate-900 flex items-center gap-1.5">
                                   <span>Onboarding ausstehend</span>
                                   {editingUser.onboarding_pending && (
                                     <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
@@ -6885,8 +6813,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     </span>
                                   )}
                                 </span>
-                                <span className="text-[10px] text-slate-400 block font-medium">
-                                  Beim nächsten Login des Mitglieds wird das Onboarding-Modal automatisch angezeigt
+                                <span className="text-xs text-slate-500 block font-normal">
+                                  Beim nächsten Login des Mitglieds wird das Onboardingmodal automatisch angezeigt
                                 </span>
                               </div>
                             </label>
@@ -6895,16 +6823,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {/* Background Duplicate Check Info Box */}
                         {liveDuplicateCandidates.length > 0 && !inlineEditingUserId && (
-                          <div className="bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-4 space-y-3 shadow-xs animate-in fade-in duration-200 my-2">
+                          <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 space-y-3 shadow-xs animate-in fade-in duration-200 my-2">
                             <div className="flex items-start gap-3">
                               <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 text-sm font-bold shadow-xs">
                                 <i className="fa-solid fa-user-shield"></i>
                               </div>
                               <div className="space-y-0.5">
-                                <h5 className="font-extrabold text-amber-950 text-xs sm:text-sm leading-tight">
+                                <h5 className="font-bold text-amber-950 text-xs sm:text-sm leading-tight">
                                   Ein Benutzer mit diesem Namen / dieser E-Mail existiert bereits im Ligasystem.
                                 </h5>
-                                <p className="text-[11px] text-amber-800 font-medium">
+                                <p className="text-xs text-amber-800 font-normal">
                                   Es wurde eine Übereinstimmung mit einem bestehenden Benutzerkonto gefunden.
                                 </p>
                               </div>
@@ -6914,20 +6842,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               {liveDuplicateCandidates.map((cand) => (
                                 <div
                                   key={cand.personId}
-                                  className="bg-white border border-amber-200 rounded-xl p-3 space-y-2.5 shadow-xs"
+                                  className="bg-white border border-amber-200 rounded-xl p-3.5 space-y-2.5 shadow-xs"
                                 >
                                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                     <div>
-                                      <span className="font-extrabold text-slate-900 text-xs block">
+                                      <span className="font-bold text-slate-900 text-xs block">
                                         {cand.firstName} {cand.lastName}
                                       </span>
-                                      <span className="text-[10px] text-slate-400 font-mono">
+                                      <span className="text-xs text-slate-400 font-mono">
                                         System-ID: {cand.personId}
                                       </span>
                                     </div>
 
                                     {cand.hasAdminInOtherClub && (
-                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100/90 border border-amber-300 rounded-lg text-amber-950 font-bold text-[10px]">
+                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100/90 border border-amber-300 rounded-lg text-amber-950 font-semibold text-xs">
                                         <i className="fa-solid fa-shield-halved text-amber-600"></i>
                                         <span>Hinweis: Dieser Benutzer ist in einem anderen Verein als Administrator registriert.</span>
                                       </div>
@@ -6970,10 +6898,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           });
                                         }
                                       }}
-                                      className="flex-1 bg-[#1b4332] hover:bg-[#153326] text-white px-3 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-xs active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                                      className="flex-1 bg-[var(--color-primary)] hover:brightness-110 text-white px-4 h-10 rounded-xl font-semibold text-xs transition-all shadow-xs active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                                     >
-                                      <i className="fa-solid fa-link text-emerald-300"></i>
-                                      Bestehenden Benutzer zum Verein einladen / verknüpfen (Empfohlen)
+                                      <i className="fa-solid fa-link"></i>
+                                      Bestehenden Benutzer verknüpfen (Empfohlen)
                                     </button>
 
                                     <button
@@ -6982,7 +6910,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         setLiveDuplicateCandidates([]);
                                         handleSaveUser(true);
                                       }}
-                                      className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-colors border border-slate-200 text-center cursor-pointer"
+                                      className="h-10 px-4 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-semibold text-xs transition-colors border border-slate-200 text-center cursor-pointer"
                                     >
                                       Trotzdem neues Profil anlegen
                                     </button>
@@ -6993,18 +6921,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
                         )}
 
-                        <div className="flex gap-2 pt-3 justify-end border-t border-slate-100">
+                        <div className="flex gap-2 pt-3 justify-end border-t border-slate-200/60">
                           <button
                             type="button"
                             onClick={() => setShowUserForm(false)}
-                            className="px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 h-10 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors cursor-pointer"
+                            className="h-10 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
                           >
                             Abbrechen
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSaveUser()}
-                            className="px-8 bg-[var(--color-primary)] text-white hover:bg-black rounded-xl uppercase tracking-wide shadow-md transition-all active:scale-95 flex items-center gap-2 h-10 text-xs font-black cursor-pointer"
+                            className="h-10 px-5 bg-[var(--color-primary)] text-white hover:brightness-110 rounded-xl font-semibold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
                           >
                             <i className="fa-solid fa-user-plus"></i>
                             <span>Mitglied hinzufügen</span>
@@ -7013,40 +6941,40 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </div>
                     )}
 
-                    {/* Search Bar & Sorting */}
-                    <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Search Bar & Sorting Toolbar */}
+                    <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
                       <div className="relative flex-grow">
-                        <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
                         <input 
                           type="text"
-                          placeholder="Mitglieder durchsuchen (Name oder Rolle)..."
+                          placeholder="Mitglieder durchsuchen (Name, Rolle, Login)..."
                           value={userSearchQuery}
                           onChange={(e) => setUserSearchQuery(e.target.value)}
-                          className="w-full pl-12 pr-4 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] outline-none text-sm transition-all shadow-sm py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                          className="w-full h-10 pl-10 pr-9 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none text-sm transition-all shadow-2xs font-normal placeholder:text-slate-400 text-slate-800"
                         />
                         {userSearchQuery && (
                           <button
                             onClick={() => setUserSearchQuery("")}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
                           >
-                            <i className="fa-solid fa-xmark"></i>
+                            <i className="fa-solid fa-xmark text-sm"></i>
                           </button>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 bg-slate-50 border-2 border-slate-200 rounded-xl px-3 py-1.5 shrink-0 self-start sm:self-auto">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1 pl-1">
-                          <i className="fa-solid fa-arrow-down-a-z text-[11px]"></i>{" "}
-                          Sortieren:
+                      <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2.5 h-10 shrink-0 shadow-2xs">
+                        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 pl-1">
+                          <i className="fa-solid fa-arrow-down-a-z text-slate-400"></i>
+                          <span>Sortieren:</span>
                         </span>
-                        <div className="flex gap-1 bg-slate-200/60 p-0.5 rounded-lg">
+                        <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
                           <button
                             type="button"
                             onClick={() => setUserSortBy("alphabetical")}
-                            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all duration-200 select-none cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all select-none cursor-pointer ${
                               userSortBy === "alphabetical"
-                                ? "bg-white text-[var(--color-primary)] shadow-sm"
-                                : "text-slate-500 hover:text-slate-800"
+                                ? "bg-white text-[var(--color-primary)] shadow-xs"
+                                : "text-slate-600 hover:text-slate-900"
                             }`}
                           >
                             A-Z
@@ -7054,10 +6982,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           <button
                             type="button"
                             onClick={() => setUserSortBy("role")}
-                            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all duration-200 select-none cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all select-none cursor-pointer ${
                               userSortBy === "role"
-                                ? "bg-white text-[var(--color-primary)] shadow-sm"
-                                : "text-slate-500 hover:text-slate-800"
+                                ? "bg-white text-[var(--color-primary)] shadow-xs"
+                                : "text-slate-600 hover:text-slate-900"
                             }`}
                           >
                             Nach Typ
@@ -7077,16 +7005,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             ? "Aufsteigend sortieren"
                             : "Absteigend sortieren"
                         }
-                        className="flex items-center gap-1.5 bg-slate-50 border-2 border-slate-200 hover:bg-slate-100 rounded-xl h-10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-600 cursor-pointer shadow-sm active:scale-95 transition-all self-start sm:self-auto h-[48px]"
+                        className="h-10 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold text-slate-700 cursor-pointer shadow-2xs active:scale-95 transition-all flex items-center gap-1.5 shrink-0"
                       >
                         {userSortOrder === "asc" ? (
                           <>
-                            <i className="fa-solid fa-arrow-up-wide-short text-[11px] text-[var(--color-accent)]"></i>
+                            <i className="fa-solid fa-arrow-up-wide-short text-[var(--color-primary)]"></i>
                             <span>Aufst.</span>
                           </>
                         ) : (
                           <>
-                            <i className="fa-solid fa-arrow-down-wide-short text-[11px] text-[var(--color-accent)]"></i>
+                            <i className="fa-solid fa-arrow-down-wide-short text-[var(--color-primary)]"></i>
                             <span>Abst.</span>
                           </>
                         )}
@@ -7131,8 +7059,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     )}
 
                     {/* User List */}
-                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                      <div className="hidden md:grid grid-cols-12 gap-3 p-4 bg-slate-100 border-b border-slate-200 font-black text-[10px] uppercase tracking-widest text-[var(--color-primary)] items-center">
+                    <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
+                      <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-3 bg-slate-50/80 border-b border-slate-200/80 font-semibold text-xs uppercase tracking-wider text-slate-500 items-center">
                         <div className="col-span-1 flex items-center gap-2">
                           <input
                             type="checkbox"
@@ -7149,7 +7077,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               }
                               setSelectedUserIds(next);
                             }}
-                            className="w-4 h-4 text-emerald-600 bg-white border-slate-300 rounded focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                            className="w-4 h-4 text-[var(--color-primary)] bg-white border-slate-300 rounded focus:ring-[var(--color-primary)] cursor-pointer accent-[var(--color-primary)]"
                             title="Alle auf dieser Seite auswählen"
                           />
                         </div>
@@ -7158,7 +7086,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         <div className="col-span-3 text-right">Aktionen</div>
                       </div>
 
-                      <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+                      <div className="divide-y divide-slate-100">
                         {paginatedUsers.map((u, idx) => {
                           const isEditingInline =
                             inlineEditingUserId === u.name;
@@ -7166,25 +7094,25 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             return (
                               <div
                                 key={u.id || u.name + "-" + idx}
-                                className="p-5 bg-emerald-50/40 border-2 border-[#10b981]/30 rounded-2xl my-3 space-y-5 animate-in zoom-in-95 duration-200 text-left shadow-sm"
+                                className="p-5 sm:p-6 bg-slate-50/70 border-b border-slate-200/80 space-y-5 text-left animate-in fade-in duration-200"
                               >
-                                <div className="flex justify-between items-center pb-3 border-b border-emerald-100">
-                                  <div className="flex items-center gap-2 text-[var(--color-primary)] font-black text-xs uppercase tracking-wider">
-                                    <i className="fa-solid fa-user-pen text-sm"></i>
+                                <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
+                                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                                    <i className="fa-solid fa-user-pen text-[var(--color-primary)]"></i>
                                     <span>Mitglied bearbeiten: {u.klarname || u.name}</span>
                                   </div>
                                   <div className="flex gap-2">
                                     <button
                                       type="button"
                                       onClick={() => setInlineEditingUserId(null)}
-                                      className="px-4 py-2 bg-white border border-slate-300 rounded-xl font-black uppercase text-[10px] tracking-wider text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                                      className="h-9 px-3.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl font-semibold text-xs text-slate-700 transition-colors cursor-pointer shadow-2xs"
                                     >
                                       Abbrechen
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => handleSaveUser()}
-                                      className="px-5 bg-[var(--color-primary)] text-white rounded-xl uppercase tracking-wide shadow-md hover:bg-black transition-colors py-2 text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                                      className="h-9 px-4 bg-[var(--color-primary)] hover:brightness-110 text-white rounded-xl text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                                     >
                                       <i className="fa-solid fa-floppy-disk"></i>
                                       <span>Sichern</span>
@@ -7211,13 +7139,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                 {/* 1. PERSÖNLICHE DATEN */}
                                 <div className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
-                                    <i className="fa-solid fa-address-card text-[11px]"></i>
+                                  <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-address-card text-xs"></i>
                                     1. Persönliche Daten (Pflichtfelder)
                                   </h4>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Vorname <span className="text-red-500">*</span>
                                       </label>
                                       <input
@@ -7229,13 +7157,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             firstName: e.target.value,
                                           })
                                         }
-                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm outline-none text-slate-800 font-normal placeholder:text-slate-400"
                                         placeholder="Z.B. Max"
                                         required
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Nachname <span className="text-red-500">*</span>
                                       </label>
                                       <input
@@ -7247,13 +7175,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             lastName: e.target.value,
                                           })
                                         }
-                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] transition-all text-sm outline-none text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm outline-none text-slate-800 font-normal placeholder:text-slate-400"
                                         placeholder="Z.B. Mustermann"
                                         required
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Geschlecht <span className="text-red-500">*</span>
                                       </label>
                                       <select
@@ -7264,17 +7192,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             gender: e.target.value as "m" | "w",
                                           })
                                         }
-                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                                        className="w-full h-10 px-3.5 border border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all cursor-pointer text-sm text-slate-800 font-normal"
                                       >
                                         <option value="m">männlich</option>
                                         <option value="w">weiblich</option>
                                       </select>
                                     </div>
                                     <div>
-                                      <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
                                         <span>Geburtsdatum</span>
                                         {editingUser.birthDate && calculateAge(editingUser.birthDate) !== null && (
-                                          <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                          <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
                                             {calculateAge(editingUser.birthDate)} J. {calculateAge(editingUser.birthDate)! < 18 ? "(Jugend/U18)" : "(Erwachsen)"}
                                           </span>
                                         )}
@@ -7293,7 +7221,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             });
                                           }
                                         }}
-                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold bg-white outline-none focus:border-[var(--color-primary)] transition-all text-sm text-slate-800"
+                                        className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm text-slate-800 font-normal"
                                       />
                                     </div>
                                   </div>
@@ -7301,14 +7229,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                 {/* 2. KONTAKTINFORMATIONEN */}
                                 <div className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
-                                    <i className="fa-solid fa-address-book text-[11px]"></i>
+                                  <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-address-book text-xs"></i>
                                     2. Kontaktinformationen (Optional)
                                   </h4>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                       <div className="flex justify-between items-center mb-1.5">
-                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                        <label className="block text-xs font-semibold text-slate-700">
                                           E-Mail-Adresse {!editingUser.is_placeholder_email && <span className="text-red-500">*</span>}
                                         </label>
                                         <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -7325,7 +7253,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             }}
                                             className="w-3.5 h-3.5 accent-[var(--color-primary)] rounded font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
                                           />
-                                          <span className="text-[10px] font-bold text-slate-600">
+                                          <span className="text-xs font-medium text-slate-600">
                                             Keine E-Mail vorhanden
                                           </span>
                                         </label>
@@ -7342,7 +7270,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           })
                                         }
                                         required={!editingUser.is_placeholder_email}
-                                        className={`w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl font-bold outline-none focus:border-[var(--color-primary)] transition-all text-sm ${
+                                        className={`w-full h-10 px-3.5 border border-slate-200 rounded-xl outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm ${
                                           editingUser.is_placeholder_email
                                             ? "bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
                                             : "bg-white text-slate-800"
@@ -7351,7 +7279,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Telefonnummer <span className="text-slate-400 font-normal normal-case">(optional)</span>
                                       </label>
                                       <input
@@ -7363,7 +7291,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             phone: e.target.value,
                                           })
                                         }
-                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm text-slate-800 font-normal placeholder:text-slate-400"
                                         placeholder="+49 170 1234567"
                                       />
                                     </div>
@@ -7372,13 +7300,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                 {/* 3. ZUGANGSDATEN & PASSWORT */}
                                 <div className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
-                                    <i className="fa-solid fa-key text-[11px]"></i>
-                                    3. Zugangsdaten & Passwort
+                                  <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-key text-xs"></i>
+                                    3. Zugangsdaten &amp; Passwort
                                   </h4>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Benutzername (Login) <span className="text-red-500">*</span>
                                       </label>
                                       <input
@@ -7390,13 +7318,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             name: e.target.value,
                                           })
                                         }
-                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] transition-all text-sm text-slate-800 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-full h-10 px-3.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all text-sm text-slate-800 font-normal placeholder:text-slate-400"
                                         placeholder="z. B. maxmustermann"
                                         required
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Rolle <span className="text-red-500">*</span>
                                       </label>
                                       <select
@@ -7407,14 +7335,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             role: e.target.value as Role,
                                           })
                                         }
-                                        className="w-full h-10 px-3 py-2 border-2 border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] transition-all cursor-pointer text-sm text-slate-800 font-sans font-medium"
+                                        className="w-full h-10 px-3.5 border border-slate-200 bg-white rounded-xl outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all cursor-pointer text-sm text-slate-800 font-normal"
                                       >
                                         <option value={Role.MITGLIED}>Mitglied (Standard)</option>
-                                        <option value={Role.ADMIN}>Vereins-Administrator</option>
+                                        <option value={Role.ADMIN}>Vereinsadministrator</option>
                                       </select>
                                     </div>
                                     <div className="md:col-span-2">
-                                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">
+                                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                                         Passwort <span className="text-red-500">*</span>
                                       </label>
                                       <div className="flex items-center gap-2">
@@ -7429,10 +7357,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             })
                                           }
                                           disabled={u.name === "superadmin"}
-                                          className={`flex-1 h-10 px-3 py-2 border-2 rounded-xl font-bold transition-all text-sm font-mono ${
+                                          className={`flex-1 h-10 px-3.5 border rounded-xl transition-all text-sm font-mono ${
                                             u.name === "superadmin"
                                               ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
-                                              : "bg-white border-slate-200 focus:border-[var(--color-primary)] text-slate-800"
+                                              : "bg-white border-slate-200 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 placeholder:font-sans"
                                           }`}
                                           placeholder="Passwort eingeben..."
                                           title={
@@ -7457,8 +7385,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                                 mustChangePassword: true,
                                               });
                                             }}
-                                            className="h-10 px-4 bg-[var(--color-primary)]/10 text-[var(--color-primary)] font-bold text-xs rounded-xl hover:bg-[var(--color-primary)]/20 transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
-                                            title="Einmal-Passwort generieren"
+                                            className="h-10 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+                                            title="Einmalpasswort generieren"
                                           >
                                             <i className="fa-solid fa-key"></i>
                                             <span>Generieren</span>
@@ -7466,8 +7394,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         )}
                                       </div>
                                       {editingUser.mustChangePassword && (
-                                        <p className="text-[10px] text-amber-600 mt-1.5 font-bold flex items-center gap-1">
-                                          <i className="fa-solid fa-circle-info text-[9px]"></i>
+                                        <p className="text-xs text-amber-700 mt-1.5 font-medium flex items-center gap-1">
+                                          <i className="fa-solid fa-circle-info text-[11px]"></i>
                                           Benutzer wird beim nächsten Login zur Passwortänderung aufgefordert.
                                         </p>
                                       )}
@@ -7477,11 +7405,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                 {/* 4. PRIVATSPHÄRE & APP-ANZEIGE */}
                                 <div className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
-                                    <i className="fa-solid fa-user-shield text-[11px]"></i>
-                                    4. Privatsphäre & App-Anzeige
+                                  <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-user-shield text-xs"></i>
+                                    4. Privatsphäre &amp; App-Anzeige
                                   </h4>
-                                  <div className="space-y-3 bg-white p-3.5 rounded-xl border border-slate-200">
+                                  <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200/80">
                                     <label className="flex items-center gap-3 cursor-pointer group select-none">
                                       <input
                                         type="checkbox"
@@ -7492,13 +7420,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             showContactInfo: e.target.checked,
                                           })
                                         }
-                                        className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)]"
                                       />
                                       <div>
-                                        <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block">
+                                        <span className="text-xs font-semibold text-slate-800 group-hover:text-slate-900 block">
                                           Kontaktdaten freigeben
                                         </span>
-                                        <span className="text-[10px] text-slate-400 block font-medium">
+                                        <span className="text-xs text-slate-500 block font-normal">
                                           Meine E-Mail und Telefonnummer in Börse/Rangliste für Vereinsmitglieder anzeigen
                                         </span>
                                       </div>
@@ -7517,7 +7445,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         className="w-4 h-4 rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] accent-[var(--color-primary)]"
                                       />
                                       <div>
-                                        <span className="text-xs font-bold text-slate-700 group-hover:text-slate-900 block flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-slate-800 group-hover:text-slate-900 flex items-center gap-1.5">
                                           <span>Onboarding ausstehend</span>
                                           {editingUser.onboarding_pending && (
                                             <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[10px] font-bold rounded">
@@ -7525,8 +7453,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             </span>
                                           )}
                                         </span>
-                                        <span className="text-[10px] text-slate-400 block font-medium">
-                                          Beim nächsten Login des Mitglieds wird das Onboarding-Modal automatisch angezeigt
+                                        <span className="text-xs text-slate-500 block font-normal">
+                                          Beim nächsten Login des Mitglieds wird das Onboardingmodal automatisch angezeigt
                                         </span>
                                       </div>
                                     </label>
@@ -7535,17 +7463,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                 {/* 5. SYSTEM & KONTO-STATUS */}
                                 <div className="space-y-3">
-                                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
-                                    <i className="fa-solid fa-shield-halved text-[11px]"></i>
+                                  <h4 className="text-xs font-semibold uppercase text-slate-500 tracking-wider border-b border-slate-200/60 pb-1.5 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-shield-halved text-xs"></i>
                                     5. System &amp; Konto-Status
                                   </h4>
 
                                   {/* Timestamps & Auth Info */}
-                                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 text-xs">
+                                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 space-y-3 text-xs">
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                       <div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Konto-Status</span>
-                                        <span className="font-bold text-slate-800">
+                                        <span className="text-xs font-medium text-slate-500 block">Konto-Status</span>
+                                        <span className="font-semibold text-slate-900 mt-0.5 block">
                                           {editingUser.isSuspended
                                             ? "Gesperrt"
                                             : editingUser.lastLogin || editingUser.last_login || editingUser.lastLoginAt
@@ -7554,16 +7482,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         </span>
                                       </div>
                                       <div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Aktivierungs-Mail gesendet</span>
-                                        <span className="font-bold text-slate-800">
+                                        <span className="text-xs font-medium text-slate-500 block">Aktivierungsmail gesendet</span>
+                                        <span className="font-semibold text-slate-900 mt-0.5 block">
                                           {editingUser.activationSentAt
                                             ? `${new Date(editingUser.activationSentAt).toLocaleDateString("de-DE")} ${new Date(editingUser.activationSentAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
                                             : "Noch nicht versendet"}
                                         </span>
                                       </div>
                                       <div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Passwort-Reset gesendet</span>
-                                        <span className="font-bold text-slate-800">
+                                        <span className="text-xs font-medium text-slate-500 block">Passwortreset gesendet</span>
+                                        <span className="font-semibold text-slate-900 mt-0.5 block">
                                           {editingUser.passwordResetSentAt
                                             ? `${new Date(editingUser.passwordResetSentAt).toLocaleDateString("de-DE")} ${new Date(editingUser.passwordResetSentAt).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
                                             : "Keine Anfrage"}
@@ -7572,27 +7500,27 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     </div>
 
                                     {/* Direct Action Triggers inside detail view */}
-                                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">
+                                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                                       <button
                                         type="button"
                                         onClick={() => openSendActivationModal(editingUser as User)}
-                                        className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                        className="h-8 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200/80 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                                       >
-                                        <i className="fa-solid fa-paper-plane text-[10px]"></i>
-                                        <span>Aktivierungs-Mail {editingUser.activationSentAt ? "erneut senden" : "jetzt senden"}</span>
+                                        <i className="fa-solid fa-paper-plane text-[11px]"></i>
+                                        <span>Aktivierungsmail {editingUser.activationSentAt ? "erneut senden" : "jetzt senden"}</span>
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => openSendResetModal(editingUser as User)}
-                                        className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                        className="h-8 px-3 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200/80 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                                       >
-                                        <i className="fa-solid fa-key text-[10px]"></i>
-                                        <span>Passwort-Reset-Mail senden</span>
+                                        <i className="fa-solid fa-key text-[11px]"></i>
+                                        <span>Passwortreset-Mail senden</span>
                                       </button>
                                     </div>
                                   </div>
 
-                                  <div className="bg-red-50/80 p-3.5 rounded-xl border border-red-200/80">
+                                  <div className="bg-red-50/70 p-4 rounded-xl border border-red-200/80">
                                     <label className="flex items-center gap-3 cursor-pointer select-none">
                                       <input
                                         type="checkbox"
@@ -7603,13 +7531,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             isSuspended: e.target.checked,
                                           })
                                         }
-                                        className="w-4 h-4 text-red-600 bg-white border-red-300 rounded focus:ring-red-600 accent-red-600 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                        className="w-4 h-4 text-red-600 bg-white border-red-300 rounded focus:ring-red-600 accent-red-600"
                                       />
                                       <div>
-                                        <span className="text-xs font-bold text-red-700 block">
+                                        <span className="text-xs font-semibold text-red-700 block">
                                           Benutzerkonto sperren (Login verhindern)
                                         </span>
-                                        <span className="text-[10px] text-red-600/80 block font-medium">
+                                        <span className="text-xs text-red-600/80 block font-normal">
                                           Der Benutzer kann sich vorübergehend nicht mehr im System anmelden.
                                         </span>
                                       </div>
@@ -7617,18 +7545,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   </div>
                                 </div>
 
-                                <div className="flex gap-2 pt-3 justify-end border-t border-emerald-100">
+                                <div className="flex gap-2 pt-3 justify-end border-t border-slate-200/60">
                                   <button
                                     type="button"
                                     onClick={() => setInlineEditingUserId(null)}
-                                    className="px-5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-600 h-10 rounded-xl font-black uppercase text-[10px] tracking-widest transition-colors cursor-pointer"
+                                    className="h-10 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold text-xs transition-colors cursor-pointer"
                                   >
                                     Abbrechen
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleSaveUser()}
-                                    className="px-6 bg-[var(--color-primary)] text-white hover:bg-black rounded-xl uppercase tracking-wide shadow-md transition-all active:scale-95 flex items-center gap-2 h-10 text-xs font-black cursor-pointer"
+                                    className="h-10 px-5 bg-[var(--color-primary)] text-white hover:brightness-110 rounded-xl font-semibold text-xs shadow-xs transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
                                   >
                                     <i className="fa-solid fa-floppy-disk"></i>
                                     <span>Änderungen sichern</span>
@@ -7680,7 +7608,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-200"
                                     title={
                                       u.activationSentAt
-                                        ? `Aktivierungs-Mail gesendet am ${new Date(u.activationSentAt).toLocaleDateString("de-DE")}`
+                                        ? `Aktivierungsmail gesendet am ${new Date(u.activationSentAt).toLocaleDateString("de-DE")}`
                                         : "Noch nie eingeloggt / Eingeladen"
                                     }
                                   >
@@ -7816,7 +7744,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     type="button"
                                     onClick={() => openSendActivationModal(u)}
                                     className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer shrink-0"
-                                    title="Aktivierungs-Mail an Mitglied senden"
+                                    title="Aktivierungsmail an Mitglied senden"
                                   >
                                     <i className="fa-solid fa-paper-plane text-[10px]"></i>
                                     <span className="hidden xl:inline">
@@ -7828,7 +7756,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     type="button"
                                     onClick={() => openSendResetModal(u)}
                                     className="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer shrink-0"
-                                    title="Passwort-Reset-Mail an Mitglied senden"
+                                    title="Passwortreset-Mail an Mitglied senden"
                                   >
                                     <i className="fa-solid fa-key text-[10px]"></i>
                                     <span className="hidden xl:inline">Reset-Mail</span>
@@ -7885,8 +7813,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         <i className="fa-solid fa-paper-plane text-emerald-600 text-[11px] w-4 text-center"></i>
                                         <span>
                                           {u.activationSentAt
-                                            ? "Aktivierungs-Mail erneut senden"
-                                            : "Aktivierungs-Mail senden"}
+                                            ? "Aktivierungsmail erneut senden"
+                                            : "Aktivierungsmail senden"}
                                         </span>
                                       </button>
 
@@ -7896,7 +7824,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-800 flex items-center gap-2 cursor-pointer transition-colors"
                                       >
                                         <i className="fa-solid fa-key text-blue-600 text-[11px] w-4 text-center"></i>
-                                        <span>Passwort-Reset-Mail senden</span>
+                                        <span>Passwortreset-Mail senden</span>
                                       </button>
 
                                       <div className="my-1 border-t border-slate-100"></div>
@@ -8125,7 +8053,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     users={users}
                     currentUser={currentUser}
                     currentClubId={settings?.vereinsId || "sv-neuhausen"}
-                    clubName={settings?.clubName || settings?.name || "Tennis-Club e.V."}
+                    clubName={settings?.clubName || settings?.name || "Tennisclub e.V."}
                     onUpdateUsers={onUpdateUsers}
                     tenantColors={[
                       primaryColor || settings?.primaryColor || "#1b4332",
@@ -8139,33 +8067,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB 5: DATENVERWALTUNG */}
               {currentTab === "database" && (
-                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
+                <div className="space-y-6 animate-in fade-in duration-300">
                   {/* EINZELNE BUCHUNGEN VERWALTEN (APPOINTMENTS MANAGER) */}
-                  <div className="w-full bg-slate-50 border border-slate-200 p-6 sm:p-8 rounded-[1.25rem] space-y-6 shadow-none">
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                      <div className="flex gap-4 items-center">
-                        <div className="text-left">
-                          <h3 className="text-lg font-bold text-[var(--color-primary)] uppercase flex items-center gap-2">
-                            <i className="fa-solid fa-calendar-check"></i> Einzelne Termine & Buchungen verwalten
-                          </h3>
-                          <p className="text-xs font-medium text-slate-400 uppercase mt-0.5">
-                            Reservierte Stunden & Sperren ansehen, bearbeiten
-                            oder löschen
-                          </p>
-                        </div>
+                      <div className="text-left">
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-calendar-check text-[var(--color-primary)]"></i> Einzelne Termine &amp; Buchungen verwalten
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Reservierte Stunden &amp; Sperren ansehen, bearbeiten oder löschen
+                        </p>
                       </div>
 
                       {/* Summary Metric */}
-                      <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-black uppercase text-slate-600 tracking-wider">
+                      <div className="px-3.5 py-1.5 bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700">
                         Gesamt: {filteredAppointments.length} Einträge
                       </div>
                     </div>
 
                     {/* Search & Filter Controls */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
                       {/* Search query */}
                       <div className="md:col-span-5 space-y-1 text-left">
-                        <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400">
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                           Termine durchsuchen
                         </label>
                         <div className="relative">
@@ -8176,15 +8101,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               setBookingSearchQuery(e.target.value)
                             }
                             placeholder="Spieler, Plätze, Kommentare, Datum..."
-                            className="w-full pl-8 pr-4 bg-white border border-slate-300 rounded-xl text-xs outline-none focus:border-emerald-600 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="w-full h-10 pl-9 pr-4 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 transition-all font-normal placeholder:text-slate-400"
                           />
-                          <i className="fa-solid fa-search absolute left-3 top-3 text-slate-400 text-xs"></i>
+                          <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                         </div>
                       </div>
 
                       {/* Filter by Type */}
                       <div className="md:col-span-4 space-y-1 text-left">
-                        <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400">
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                           Kategorie / Zeitraum
                         </label>
                         <select 
@@ -8192,7 +8117,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           onChange={(e: any) =>
                             setBookingFilterType(e.target.value)
                           }
-                          className="w-full px-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 outline-none focus:border-emerald-600 cursor-pointer py-2 font-sans font-medium"
+                          className="w-full h-10 px-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 cursor-pointer font-normal"
                         >
                           <option value="all">Alle Belegungen</option>
                           <option value="future">Nur Zukünftige</option>
@@ -8206,7 +8131,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                       {/* Filter by Court */}
                       <div className="md:col-span-3 space-y-1 text-left">
-                        <label className="block text-[8px] font-black uppercase tracking-wider text-slate-400">
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                           Spezifischer Platz
                         </label>
                         <select 
@@ -8214,7 +8139,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           onChange={(e) =>
                             setBookingFilterCourt(e.target.value)
                           }
-                          className="w-full px-3 bg-white border border-slate-300 rounded-xl text-xs text-slate-700 outline-none focus:border-emerald-600 cursor-pointer py-2 font-sans font-medium"
+                          className="w-full h-10 px-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 cursor-pointer font-normal"
                         >
                           <option value="all">Alle Plätze</option>
                           {settings.courts?.map((court) => (
@@ -8227,10 +8152,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     </div>
 
                     {/* Appointments List */}
-                    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-2xs">
                       {/* Table header (hidden on mobile) */}
-                      <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-2.5 bg-slate-100 border-b border-slate-200 font-black text-[9px] uppercase tracking-wider text-slate-600 text-left">
-                        <div className="col-span-3">Datum & Uhrzeit</div>
+                      <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700 text-left">
+                        <div className="col-span-3">Datum &amp; Uhrzeit</div>
                         <div className="col-span-2">Platz</div>
                         <div className="col-span-5">Spielbelegung Details</div>
                         <div className="col-span-2 text-right">Aktionen</div>
@@ -8238,43 +8163,51 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                       <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
                         {paginatedAppointments.map((bk) => {
-                          const dateFmt = new Date(bk.date).toLocaleDateString(
-                            "de-DE",
-                            {
-                              weekday: "short",
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                            },
-                          );
+                          if (!bk) return null;
+                          let dateFmt = bk.date || "";
+                          try {
+                            if (bk.date) {
+                              dateFmt = new Date(bk.date).toLocaleDateString(
+                                "de-DE",
+                                {
+                                  weekday: "short",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                },
+                              );
+                            }
+                          } catch {
+                            dateFmt = bk.date || "";
+                          }
 
                           // Identify creator
-                          const creatorUser = bk.bookedBy ? users[bk.bookedBy] : null;
-                          const creatorName = creatorUser ? formatPlayerName(creatorUser.name) : "Unbekannt";
+                          const creatorUser = bk.bookedBy && users ? users[bk.bookedBy] : null;
+                          const creatorName = creatorUser ? formatPlayerName(creatorUser.name || creatorUser.id || "") : "";
 
                           return (
                             <div
                               key={bk.id}
-                              className="px-4 py-2.5 grid grid-cols-1 md:grid-cols-12 gap-3 hover:bg-slate-50/50 transition-colors items-center text-left"
+                              className="px-4 py-3 grid grid-cols-1 md:grid-cols-12 gap-3 hover:bg-slate-50/70 transition-colors items-center text-left"
                             >
                               {/* Date and time column */}
                               <div className="col-span-3 flex flex-col justify-center">
-                                <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                                  <i className="fa-regular fa-calendar text-emerald-600"></i>{" "}
+                                <span className="font-semibold text-xs text-slate-900 flex items-center gap-1.5">
+                                  <i className="fa-regular fa-calendar text-[var(--color-primary)]"></i>{" "}
                                   {dateFmt}
                                 </span>
-                                <span className="font-mono text-[10px] text-slate-500 font-extrabold tracking-tight mt-1">
-                                  <i className="fa-regular fa-clock"></i>{" "}
+                                <span className="font-mono text-xs text-slate-500 font-medium tracking-tight mt-0.5">
+                                  <i className="fa-regular fa-clock text-slate-400"></i>{" "}
                                   {bk.time} Uhr
                                 </span>
                               </div>
 
                               {/* Court column */}
-                              <div className="col-span-2 md:block flex justify-between items-center bg-slate-50 md:bg-transparent px-2 py-1 md:p-0 rounded-lg">
-                                <span className="block md:hidden text-[9px] font-black uppercase text-slate-400">
+                              <div className="col-span-2 md:block flex justify-between items-center bg-slate-50 md:bg-transparent px-2.5 py-1.5 md:p-0 rounded-lg">
+                                <span className="block md:hidden text-xs font-semibold text-slate-500">
                                   Platz
                                 </span>
-                                <span className="font-bold text-xs text-slate-700 bg-slate-100/80 px-2.5 py-1 rounded-full uppercase tracking-wider text-[10px]">
+                                <span className="font-semibold text-xs text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg">
                                   {bk.court}
                                 </span>
                               </div>
@@ -8283,17 +8216,17 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <div className="col-span-5 space-y-1.5 text-left py-2 md:py-0">
                                 {bk.isLocked ? (
                                   <div>
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-red-100 text-red-800 border border-red-200">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
                                       <i className="fa-solid fa-lock"></i>{" "}
                                       Adminsperrung
                                     </span>
-                                    <p className="text-xs font-black text-rose-800 uppercase mt-1 tracking-wide">
+                                    <p className="text-xs font-semibold text-rose-800 mt-1">
                                       {bk.reason || "Platz gesperrt"}
                                     </p>
                                   </div>
                                 ) : (
                                   <div className="space-y-1">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                                       <i className="fa-solid fa-users"></i>{" "}
                                       Spielbelegung
                                     </span>
@@ -8302,30 +8235,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         bk.players.map((p, idx) => (
                                           <span
                                             key={idx}
-                                            className="inline-block bg-slate-100 px-1.5 py-0.5 rounded text-[10px] text-slate-700 font-semibold"
+                                            className="inline-block bg-slate-100 px-2 py-0.5 rounded-md text-xs text-slate-700 font-medium"
                                           >
                                             {formatPlayerName(p)}
                                           </span>
                                         ))
                                       ) : (
-                                        <span className="text-[10px] text-slate-400 italic">
+                                        <span className="text-xs text-slate-400 italic">
                                           Keine Spieler eingetragen
                                         </span>
                                       )}
                                     </div>
                                     {creatorName && (
-                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-1">
+                                      <p className="text-[11px] text-slate-400 font-normal mt-0.5">
                                         Gebucht von: {creatorName}
                                       </p>
                                     )}
                                     {bk.hasBallMachine && (
-                                      <div className="inline-flex items-center gap-1 text-[8.5px] font-black uppercase tracking-widest text-[#10b981] bg-emerald-500/10 px-1.5 py-0.5 rounded-md mt-1">
+                                      <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md mt-1 border border-emerald-200/60">
                                         <i className="fa-solid fa-microchip"></i>{" "}
                                         Mit Ballmaschine
                                       </div>
                                     )}
                                     {bk.comment && (
-                                      <p className="text-[10px] font-bold text-slate-500 leading-normal italic mt-1 border-l-2 border-slate-300 pl-1.5">
+                                      <p className="text-xs text-slate-600 italic mt-1 border-l-2 border-slate-300 pl-2">
                                         "{bk.comment}"
                                       </p>
                                     )}
@@ -8340,7 +8273,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onClick={() =>
                                     handleStartEditAdminBooking(bk)
                                   }
-                                  className="w-8 h-8 rounded-lg bg-slate-100 text-blue-600 hover:bg-[var(--color-primary)] hover:text-white transition-all flex items-center justify-center shadow-sm shrink-0 active:scale-95 cursor-pointer"
+                                  className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 hover:bg-[var(--color-primary)] hover:text-white transition-all flex items-center justify-center shadow-2xs shrink-0 cursor-pointer"
                                   title="Termin bearbeiten"
                                 >
                                   <i className="fa-solid fa-pen text-xs"></i>
@@ -8350,7 +8283,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onClick={() =>
                                     handleDeleteAdminBooking(bk.id)
                                   }
-                                  className="w-8 h-8 rounded-lg bg-rose-50 text-red-600 hover:bg-red-600 hover:text-white transition-all flex items-center justify-center shadow-sm shrink-0 active:scale-95 border border-red-100 cursor-pointer"
+                                  className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center shadow-2xs shrink-0 border border-rose-100 cursor-pointer"
                                   title="Termin löschen"
                                 >
                                   <i className="fa-solid fa-trash-can text-xs"></i>
@@ -8361,7 +8294,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         })}
 
                         {paginatedAppointments.length === 0 && (
-                          <div className="p-8 text-center text-slate-400 font-bold text-xs italic">
+                          <div className="p-8 text-center text-slate-400 font-medium text-xs italic">
                             Keine Reservierungen oder Termine für die
                             Filterkriterien gefunden.
                           </div>
@@ -8370,8 +8303,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                       {/* Pagination control block */}
                       {bkTotalPages > 1 && (
-                        <div className="flex justify-between items-center bg-slate-50 h-8 px-3 py-1 border-t border-slate-100 font-sans font-medium">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-left">
+                        <div className="flex justify-between items-center bg-slate-50 px-4 py-2.5 border-t border-slate-200">
+                          <div className="text-xs text-slate-500 font-medium text-left">
                             Seite {bookingPage} von {bkTotalPages} (
                             {filteredAppointments.length} gefundene Termine)
                           </div>
@@ -8382,7 +8315,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               onClick={() =>
                                 setBookingPage((prev) => Math.max(prev - 1, 1))
                               }
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white transition-colors"
+                              className="h-8 px-3 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white transition-colors cursor-pointer"
                             >
                               <i className="fa-solid fa-chevron-left mr-1"></i>{" "}
                               Zurück
@@ -8395,7 +8328,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   Math.min(prev + 1, bkTotalPages),
                                 )
                               }
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white transition-colors"
+                              className="h-8 px-3 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:hover:bg-white transition-colors cursor-pointer"
                             >
                               Weiter{" "}
                               <i className="fa-solid fa-chevron-right ml-1"></i>
@@ -8408,45 +8341,44 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                   {/* EDIT SINGLE BOOKING MODAL */}
                   {editingAdminBooking && (
-                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto">
-                      <div className="border-none outline-none bg-white rounded-2xl -200/80 shadow-sm w-full max-w-lg overflow-hidden animate-in zoom-in duration-300 -200 text-left my-8">
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+                      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xl w-full max-w-lg overflow-hidden my-8 text-left animate-in zoom-in duration-200">
                         {/* Header */}
-                        <div className="bg-[var(--color-primary)] p-6 text-white flex justify-between items-center">
+                        <div className="bg-slate-900 p-5 sm:p-6 text-white flex justify-between items-center">
                           <div className="text-left">
-                            <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
-                              <i className="fa-solid fa-edit"></i> Einzeltermin
-                              bearbeiten
+                            <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                              <i className="fa-solid fa-edit text-[var(--color-primary)]"></i> Einzeltermin bearbeiten
                             </h3>
-                            <p className="text-[10px] font-bold opacity-85 mt-1 uppercase tracking-widest">
+                            <p className="text-xs text-slate-400 font-mono mt-0.5">
                               ID: {editingAdminBooking.id}
                             </p>
                           </div>
                           <button
                             type="button"
                             onClick={() => setEditingAdminBooking(null)}
-                            className="w-8 h-8 rounded-lg bg-emerald-990/40 flex items-center justify-center text-white hover:bg-black/30 transition-colors cursor-pointer"
+                            className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors cursor-pointer"
                           >
-                            <i className="fa-solid fa-xmark text-lg"></i>
+                            <i className="fa-solid fa-xmark text-sm"></i>
                           </button>
                         </div>
 
                         {/* Form body */}
                         <form
                           onSubmit={handleSaveAdminBooking}
-                          className="p-6 sm:p-8 space-y-5 text-left"
+                          className="p-5 sm:p-6 space-y-4 text-left"
                         >
                           {/* Booking/Lock Type Switcher Toggle */}
                           <div className="space-y-1.5 text-left">
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
                               Typ der Belegung
                             </label>
                             <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
                               <button
                                 type="button"
                                 onClick={() => setEditBkIsLocked(false)}
-                                className={`py-2 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                                className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                                   !editBkIsLocked
-                                    ? "bg-[var(--color-primary)] text-white shadow-sm"
+                                    ? "bg-[var(--color-primary)] text-white shadow-2xs"
                                     : "text-slate-600 hover:text-slate-900"
                                 }`}
                               >
@@ -8456,9 +8388,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setEditBkIsLocked(true)}
-                                className={`py-2 px-3 rounded-lg text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                                className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                                   editBkIsLocked
-                                    ? "bg-red-650 bg-red-600 text-white shadow-sm"
+                                    ? "bg-rose-600 text-white shadow-2xs"
                                     : "text-slate-600 hover:text-slate-900"
                                 }`}
                               >
@@ -8468,10 +8400,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           </div>
 
                           {/* Date, Time, Court Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-left">
                             {/* Date */}
                             <div className="space-y-1 text-left">
-                              <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
                                 Datum
                               </label>
                               <input 
@@ -8479,19 +8411,19 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 required
                                 value={editBkDate}
                                 onChange={(e) => setEditBkDate(e.target.value)}
-                                className="w-full px-3 border-2 border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none text-slate-800 transition-all font-normal"
                               />
                             </div>
 
                             {/* Start Time */}
                             <div className="space-y-1 text-left">
-                              <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
                                 Uhrzeit
                               </label>
                               <select 
                                 value={editBkTime}
                                 onChange={(e) => setEditBkTime(e.target.value)}
-                                className="w-full px-3 border-2 border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 cursor-pointer text-slate-800 py-2 font-sans font-medium"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none cursor-pointer text-slate-800 transition-all font-normal"
                               >
                                 {TIME_SLOTS.map((slot) => (
                                   <option key={slot} value={slot}>
@@ -8503,13 +8435,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                             {/* Court selection */}
                             <div className="space-y-1 text-left">
-                              <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
                                 Platz
                               </label>
                               <select 
                                 value={editBkCourt}
                                 onChange={(e) => setEditBkCourt(e.target.value)}
-                                className="w-full px-3 border-2 border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white outline-none focus:border-emerald-600 cursor-pointer text-slate-800 py-2 font-sans font-medium"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none cursor-pointer text-slate-800 transition-all font-normal"
                               >
                                 {settings.courts?.map((c) => (
                                   <option key={c} value={c}>
@@ -8522,10 +8454,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                           {/* LOCK FIELDS (Is Locked) */}
                           {editBkIsLocked ? (
-                            <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300 text-left">
-                              <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                            <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200 text-left">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
                                 Sperrgrund{" "}
-                                <span className="text-red-500">*</span>
+                                <span className="text-rose-500">*</span>
                               </label>
                               <input 
                                 type="text"
@@ -8535,24 +8467,24 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   setEditBkReason(e.target.value)
                                 }
                                 placeholder="z.B. Verbandspiel, Training, Platzpflege"
-                                className="w-full px-3 border border-red-200 rounded-xl text-sm bg-white outline-none focus:border-red-500 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 transition-all font-normal placeholder:text-slate-400"
                               />
                             </div>
                           ) : (
                             /* USER BOOKING SPECIFIC FIELDS */
-                            <div className="space-y-4 animate-in slide-in-from-top-2 duration-300 text-left">
+                            <div className="space-y-3.5 animate-in slide-in-from-top-2 duration-200 text-left">
                               {/* Players List with Suggestion Autocomplete */}
                               <div className="space-y-1.5 relative text-left">
-                                <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">
                                   Eingetragene Spieler ({editBkPlayers.length})
                                 </label>
 
                                 {/* Existing Players List visual tags */}
-                                <div className="flex flex-wrap gap-1.5 p-2 border-2 border-slate-100 rounded-xl bg-slate-50/50 mb-2">
+                                <div className="flex flex-wrap gap-1.5 p-2.5 border border-slate-200 rounded-xl bg-slate-50/70 mb-2">
                                   {editBkPlayers.map((player, idx) => (
                                     <span
                                       key={idx}
-                                      className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 px-2 py-1 rounded-lg text-xs font-bold border border-emerald-100"
+                                      className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-lg text-xs font-semibold border border-emerald-200/80"
                                     >
                                       {player}
                                       <button
@@ -8560,7 +8492,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                         onClick={() =>
                                           handleRemovePlayerFromEditList(idx)
                                         }
-                                        className="text-emerald-600 hover:text-red-600 font-extrabold focus:outline-none px-0.5 ml-1 cursor-pointer"
+                                        className="text-emerald-600 hover:text-rose-600 font-bold focus:outline-none ml-0.5 cursor-pointer"
                                         title="Spieler entfernen"
                                       >
                                         &times;
@@ -8568,7 +8500,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     </span>
                                   ))}
                                   {editBkPlayers.length === 0 && (
-                                    <span className="text-[10px] text-slate-400 italic">
+                                    <span className="text-xs text-slate-400 italic">
                                       Noch keine Spieler hinzugefügt.
                                     </span>
                                   )}
@@ -8587,7 +8519,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setEditBkShowSuggestions(true)
                                     }
                                     placeholder="Spielernamen eingeben oder suchen..."
-                                    className="flex-1 px-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-emerald-600 text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="flex-1 h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal placeholder:text-slate-400"
                                   />
                                   <button
                                     type="button"
@@ -8597,7 +8529,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       )
                                     }
                                     disabled={!editBkNewPlayerQuery.trim()}
-                                    className="px-4 py-2 bg-slate-800 text-white font-black text-[10px] uppercase tracking-wider rounded-xl hover:bg-[var(--color-primary)] disabled:opacity-40 select-none active:scale-95 transition-all cursor-pointer"
+                                    className="h-10 px-4 bg-slate-900 text-white font-semibold text-xs rounded-xl hover:bg-[var(--color-primary)] disabled:opacity-40 select-none active:scale-95 transition-all cursor-pointer"
                                   >
                                     Hinzufügen
                                   </button>
@@ -8606,7 +8538,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 {/* Suggestion list overlay */}
                                 {editBkShowSuggestions &&
                                   editPlayerSuggestions.length > 0 && (
-                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-[100] overflow-hidden divide-y divide-slate-100">
+                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-[100] overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto">
                                       {editPlayerSuggestions.map((u, idx) => {
                                         const fullName =
                                           u.lastName || u.firstName
@@ -8621,10 +8553,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                                 fullName,
                                               )
                                             }
-                                            className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-xs font-bold text-slate-700 block transition-colors cursor-pointer"
+                                            className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-xs font-semibold text-slate-700 block transition-colors cursor-pointer"
                                           >
                                             {fullName}{" "}
-                                            <span className="text-[9px] text-slate-400 font-normal italic">
+                                            <span className="text-[11px] text-slate-400 font-normal italic">
                                               ({u.name})
                                             </span>
                                           </button>
@@ -8635,10 +8567,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               </div>
 
                               {/* Extra user details (Ballmachine & Comment) */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-left">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 text-left">
                                 {/* Comment */}
                                 <div className="space-y-1">
-                                  <label className="block text-[9px] font-black uppercase text-slate-500 tracking-wider">
+                                  <label className="block text-xs font-semibold text-slate-700 mb-1">
                                     Notiz / Kommentar
                                   </label>
                                   <input 
@@ -8648,14 +8580,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setEditBkComment(e.target.value)
                                     }
                                     placeholder="z.B. Gastspieler"
-                                    className="w-full px-2.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-emerald-600 text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                    className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal placeholder:text-slate-400"
                                   />
                                 </div>
 
                                 {/* Ballmachine usage */}
                                 {(settings?.reservationRules
                                   ?.availableBallMachines ?? 1) > 0 && (
-                                  <div className="flex items-center gap-3 pt-4 sm:pt-6">
+                                  <div className="flex items-center gap-3 pt-6">
                                     <input
                                       type="checkbox"
                                       id="editBkHasBallMachine"
@@ -8665,13 +8597,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                           e.target.checked,
                                         )
                                       }
-                                      className="w-4.5 h-4.5 text-emerald-600 border-2 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                      className="w-4 h-4 text-[var(--color-primary)] border-slate-300 rounded focus:ring-[var(--color-primary)] cursor-pointer"
                                     />
                                     <label
                                       htmlFor="editBkHasBallMachine"
-                                      className="text-xs font-black text-[var(--color-primary)] uppercase tracking-wide cursor-pointer user-select-none flex items-center gap-1.5"
+                                      className="text-xs font-semibold text-slate-800 cursor-pointer user-select-none flex items-center gap-1.5"
                                     >
-                                      <i className="fa-solid fa-microchip text-emerald-600 text-xs"></i>{" "}
+                                      <i className="fa-solid fa-microchip text-[var(--color-primary)] text-xs"></i>{" "}
                                       Ballmaschine nutzen
                                     </label>
                                   </div>
@@ -8681,22 +8613,24 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           )}
 
                           {/* Modal Footer Controls */}
-                          <div className="pt-6 border-t border-slate-100 flex gap-3">
+                          <div className="pt-4 border-t border-slate-100 flex gap-3">
                             <button
                               type="button"
                               onClick={() => setEditingAdminBooking(null)}
-                              className="flex-1 border-2 border-slate-300 hover:border-slate-400 py-3.5 rounded-xl font-black uppercase text-xs tracking-widest text-slate-600 transition-all text-center bg-white cursor-pointer"
+                              className="flex-1 h-10 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl transition-all text-center cursor-pointer flex items-center justify-center"
                             >
                               Abbrechen
                             </button>
                             <button
                               type="submit"
-                              className={`flex-1 text-sm font-medium${ editBkIsLocked ? "bg-red-600 hover:bg-red-700 font-medium"
-                                  : "bg-[var(--color-primary)] hover:bg-black font-medium"
-                              }text-white py-2.5 rounded-xl uppercase tracking-widest shadow-md transition-all active:scale-95 text-center cursor-pointer flex items-center justify-center text-sm font-medium`}
+                              className={`flex-1 h-10 rounded-xl text-white text-xs font-semibold transition-all active:scale-95 text-center cursor-pointer flex items-center justify-center gap-2 shadow-xs ${
+                                editBkIsLocked
+                                  ? "bg-rose-600 hover:bg-rose-700"
+                                  : "bg-[var(--color-primary)] hover:brightness-110"
+                              }`}
                             >
-                              <i className="fa-solid fa-save mr-1.5"></i>{" "}
-                              Änderungen sichern
+                              <i className="fa-solid fa-check"></i>
+                              <span>{editBkIsLocked ? "Sperre speichern" : "Buchung speichern"}</span>
                             </button>
                           </div>
                         </form>
@@ -8705,32 +8639,32 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   )}
 
                   {/* PUBLIC CALENDAR SHARE WIDGET */}
-                  <div className="w-full bg-slate-50 border border-slate-200 p-6 sm:p-8 rounded-[1.25rem] space-y-6 shadow-none mt-8">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                      <div className="flex gap-4 items-center">
-                        <div className="text-left">
-                          <h3 className="text-lg font-bold text-[var(--color-primary)] uppercase flex items-center gap-2">
-                            <i className="fa-solid fa-share-nodes"></i> Öffentliche Wochenplan-Freigabe
-                          </h3>
-                          <p className="text-xs font-medium text-slate-400 uppercase mt-0.5">
-                            Kalender per iFrame auf Vereinswebsite einbetten
-                          </p>
-                        </div>
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                    <div className="border-b border-slate-100 pb-4">
+                      <div className="text-left">
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                          <i className="fa-solid fa-share-nodes text-[var(--color-primary)]"></i> Öffentliche Wochenplan-Freigabe
+                        </h3>
+                        <p className="text-xs text-slate-500 font-normal mt-0.5">
+                          Kalender per iFrame auf Vereinswebsite einbetten
+                        </p>
                       </div>
                     </div>
 
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
                         <div className="text-left">
-                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                          <h4 className="text-xs font-semibold text-slate-900">
                             Öffentlichen Direktlink aktivieren
                           </h4>
-                          <p className="text-[10px] text-slate-500 mt-1 uppercase">
+                          <p className="text-xs text-slate-500 mt-0.5">
                             Schaltet den Zugriff ohne Login für externe Aufrufer frei.
                           </p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
                             checked={settings?.publicCalendar?.enabled || false}
                             onChange={(e) => {
                               let token = settings?.publicCalendar?.token;
@@ -8752,21 +8686,23 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         </label>
                       </div>
 
-                      <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors">
+                      <div className="flex items-center justify-between p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
                         <div className="text-left">
-                          <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                          <h4 className="text-xs font-semibold text-slate-900">
                             Spielernamen öffentlich anzeigen
                           </h4>
-                          <p className="text-[10px] text-slate-500 mt-1 uppercase">
+                          <p className="text-xs text-slate-500 mt-0.5">
                             {settings?.publicCalendar?.showNames ? (
-                              <span className="text-orange-600 font-bold">DSGVO-Hinweis: Namen sind aktuell für jedermann sichtbar!</span>
+                              <span className="text-rose-600 font-semibold">DSGVO-Hinweis: Namen sind aktuell für jedermann sichtbar!</span>
                             ) : (
-                              <span>Alle Buchungen werden als "Belegt" anonymisiert dargestellt.</span>
+                              <span>Alle Buchungen werden als „Belegt“ anonymisiert dargestellt.</span>
                             )}
                           </p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
                             checked={settings?.publicCalendar?.showNames || false}
                             onChange={(e) => {
                               onUpdateSettings({
@@ -8784,41 +8720,45 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                       </div>
 
                       {settings?.publicCalendar?.enabled && settings?.publicCalendar?.token ? (
-                        <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-100 space-y-4 text-left">
+                        <div className="bg-emerald-50/70 p-4 sm:p-5 rounded-xl border border-emerald-200/80 space-y-3.5 text-left">
                           <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <label className="block text-[10px] font-black uppercase text-emerald-800 tracking-wider">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block text-xs font-semibold text-emerald-900">
                                 Öffentlicher Direktlink
                               </label>
                               <a
                                 href={`${window.location.origin}/public/calendar/woche/${settings.publicCalendar.token}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-colors inline-flex items-center gap-1"
+                                className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors inline-flex items-center gap-1.5"
                               >
-                                Testen <i className="fa-solid fa-arrow-up-right-from-square text-[8px]"></i>
+                                Testen <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                               </a>
                             </div>
-                            <input className="w-full h-8 px-3 py-1 bg-white border border-emerald-200 rounded-lg text-sm font-mono text-emerald-900 select-all outline-none placeholder: placeholder: placeholder: placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
+                            <input
+                              type="text"
+                              readOnly
+                              value={`${window.location.origin}/public/calendar/woche/${settings.publicCalendar.token}`}
+                              className="w-full h-10 px-3.5 bg-white border border-emerald-200 rounded-xl text-xs font-mono text-emerald-900 select-all outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-[10px] font-black uppercase text-emerald-800 tracking-wider mb-2">
+                            <label className="block text-xs font-semibold text-emerald-900 mb-1.5">
                               HTML iFrame-Code zur Einbettung
                             </label>
                             <textarea
                               readOnly
                               rows={3}
                               value={`<iframe src="${window.location.origin}/public/calendar/woche/${settings.publicCalendar.token}" width="100%" height="800px" frameborder="0" style="border:none; border-radius:12px;"></iframe>`}
-                              className="w-full px-3 py-2 bg-white border border-emerald-200 rounded-lg text-xs font-mono text-emerald-900 select-all outline-none resize-none"
+                              className="w-full p-3 bg-white border border-emerald-200 rounded-xl text-xs font-mono text-emerald-900 select-all outline-none resize-none leading-relaxed"
                             />
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-slate-100/80 p-4 rounded-xl border border-slate-200 text-left text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-3">
+                        <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 text-left text-xs font-medium text-slate-500 flex items-center gap-3">
                           <i className="fa-solid fa-eye-slash text-slate-400 text-base shrink-0"></i>
-                          <p className="normal-case font-medium text-slate-500 text-xs">
-                            Öffentliche Freigabe ist aktuell <span className="font-bold text-slate-700">deaktiviert</span>. Aktiviere den Schalter oben, um den Direktlink und iFrame-Code zu generieren.
+                          <p className="text-xs text-slate-500">
+                            Öffentliche Freigabe ist aktuell <span className="font-semibold text-slate-700">deaktiviert</span>. Aktiviere den Schalter oben, um den Direktlink und iFrame-Code zu generieren.
                           </p>
                         </div>
                       )}
@@ -8826,32 +8766,30 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   </div>
 
                   {/* SAFETY CLEANSING CARD */}
-                  <div className="w-full bg-red-50/50 border-2 border-red-100 p-6 sm:p-8 rounded-[1.25rem] space-y-4 shadow-sm">
-                    <div className="text-left">
-                      <h3 className="text-lg font-bold text-red-700 uppercase flex items-center gap-2">
-                        <i className="fa-solid fa-triangle-exclamation text-red-600"></i> Sicherheits-Bereinigungen
+                  <div className="bg-white rounded-2xl border border-rose-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                    <div className="border-b border-rose-100 pb-4 text-left">
+                      <h3 className="text-base font-bold text-rose-900 tracking-tight flex items-center gap-2">
+                        <i className="fa-solid fa-triangle-exclamation text-rose-600"></i> Sicherheits-Bereinigungen
                       </h3>
-                      <p className="text-xs font-medium text-slate-400 uppercase mt-0.5">
-                        Datenlöschung & Wartungstasks
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
+                        Datenlöschung &amp; Wartungstasks
                       </p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200/60 p-6 space-y-4 shadow-sm">
-                      <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                        Als Administrator kannst du Buchungszeiträume selektiv
-                        löschen, um das System clean zu halten oder eine neue
-                        Saison vorzubereiten.
+                    <div className="space-y-4 text-left">
+                      <p className="text-xs text-slate-600 leading-relaxed font-normal">
+                        Als Administrator kannst du Buchungszeiträume selektiv löschen, um das System sauber zu halten oder eine neue Saison vorzubereiten.
                       </p>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                         <button
                           type="button"
                           onClick={() => setShowDeleteModal("bookings")}
-                          className="w-full text-left p-4 bg-red-50 hover:bg-red-600 border border-red-200 hover:border-red-600 rounded-xl hover:text-white transition-all group flex items-center justify-between"
+                          className="w-full text-left p-4 bg-rose-50/60 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-xl text-rose-700 hover:text-white transition-all group flex items-center justify-between cursor-pointer"
                         >
                           <div className="flex items-center gap-3">
-                            <i className="fa-solid fa-calendar-xmark text-lg text-red-500 group-hover:text-white shrink-0"></i>
-                            <span className="text-[10px] font-black uppercase tracking-wider">
+                            <i className="fa-solid fa-calendar-xmark text-lg text-rose-500 group-hover:text-white shrink-0"></i>
+                            <span className="text-xs font-semibold">
                               Reservierungen in Zeitraum bereinigen
                             </span>
                           </div>
@@ -8861,11 +8799,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         <button
                           type="button"
                           onClick={() => setShowDeleteModal("users")}
-                          className="w-full text-left p-4 bg-rose-50 hover:bg-red-600 border border-rose-200 hover:border-red-600 rounded-xl text-red-700 hover:text-white transition-all group flex items-center justify-between"
+                          className="w-full text-left p-4 bg-rose-50/60 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-xl text-rose-700 hover:text-white transition-all group flex items-center justify-between cursor-pointer"
                         >
                           <div className="flex items-center gap-3">
-                            <i className="fa-solid fa-users-slash text-lg text-red-500 group-hover:text-white shrink-0"></i>
-                            <span className="text-[10px] font-black uppercase tracking-wider text-red-700 group-hover:text-white">
+                            <i className="fa-solid fa-users-slash text-lg text-rose-500 group-hover:text-white shrink-0"></i>
+                            <span className="text-xs font-semibold">
                               Alle registrierten Mitglieder löschen
                             </span>
                           </div>
@@ -8876,45 +8814,43 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   </div>
 
                   {/* BOOKINGS EXPORT CARD */}
-                  <div className="w-full bg-slate-100/50 border border-slate-200/80 p-6 sm:p-8 rounded-2xl space-y-4 shadow-sm mt-8">
-                    <div className="text-left">
-                      <h3 className="text-lg font-bold text-[var(--color-accent-2)] uppercase flex items-center gap-2">
-                        <i className="fa-solid fa-file-export"></i> Buchungsexport (CSV / JSON)
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                    <div className="border-b border-slate-100 pb-4 text-left">
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <i className="fa-solid fa-file-export text-[var(--color-primary)]"></i> Buchungsexport (CSV / JSON)
                       </h3>
-                      <p className="text-xs font-medium text-slate-400 uppercase mt-0.5">
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
                         Reservierungsdaten herunterladen
                       </p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200/60 space-y-6 shadow-sm text-left">
-                      <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                        Exportieren Sie sämtliche im System hinterlegten
-                        Reservierungen. Sie können optional einen Zeitraum
-                        (von/bis Datum) angeben, um den Export einzugrenzen.
+                    <div className="space-y-4 text-left">
+                      <p className="text-xs text-slate-600 leading-relaxed font-normal">
+                        Exportieren Sie sämtliche im System hinterlegten Reservierungen. Sie können optional einen Zeitraum (von/bis Datum) angeben, um den Export einzugrenzen.
                       </p>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Von Datum (optional)
                           </label>
                           <input 
                             type="date"
                             value={exportStartDate}
                             onChange={(e) => setExportStartDate(e.target.value)}
-                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:border-[var(--color-accent-2)] outline-none text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none text-slate-800 transition-all font-normal"
                           />
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                        <div className="space-y-1">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Bis Datum (optional)
                           </label>
                           <input 
                             type="date"
                             value={exportEndDate}
                             onChange={(e) => setExportEndDate(e.target.value)}
-                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:border-[var(--color-accent-2)] outline-none text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none text-slate-800 transition-all font-normal"
                           />
                         </div>
                       </div>
@@ -8928,7 +8864,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               setExportStartDate("");
                               setExportEndDate("");
                             }}
-                            className="text-[9px] font-black text-red-600 hover:text-red-800 uppercase tracking-wider flex items-center gap-1"
+                            className="text-xs font-semibold text-rose-600 hover:text-rose-800 flex items-center gap-1.5 cursor-pointer"
                           >
                             <i className="fa-solid fa-circle-xmark"></i>{" "}
                             Zeitraum zurücksetzen
@@ -8936,23 +8872,21 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         </div>
                       )}
 
-                      <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row gap-3">
+                      <div className="pt-2 flex flex-col sm:flex-row gap-3">
                         <button
                           type="button"
                           onClick={exportBookingsCSV}
-                          className="flex-1 bg-[var(--color-accent-2)] text-white hover:opacity-90 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 h-10 !text-sm font-medium"
-                          style={{ fontSize: "14px" }}
+                          className="flex-1 h-10 px-5 rounded-xl bg-[var(--color-primary)] hover:brightness-110 text-white font-semibold text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <i className="fa-solid fa-file-csv text-[14px]"></i>
+                          <i className="fa-solid fa-file-csv text-sm"></i>
                           CSV-Export herunterladen
                         </button>
                         <button
                           type="button"
                           onClick={exportBookingsJSON}
-                          className="flex-1 border border-slate-200 text-slate-700 hover:border-slate-300 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 bg-white active:scale-95 h-10 !text-sm font-medium"
-                          style={{ fontSize: "14px" }}
+                          className="flex-1 h-10 px-5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <i className="fa-solid fa-file-code text-[14px] text-blue-600"></i>
+                          <i className="fa-solid fa-file-code text-sm text-blue-600"></i>
                           JSON-Export herunterladen
                         </button>
                       </div>
@@ -8960,20 +8894,19 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   </div>
 
                   {/* BOOKINGS IMPORT CARD */}
-                  <div className="w-full bg-slate-100/50 border border-slate-200/80 p-6 sm:p-8 rounded-2xl space-y-4 shadow-sm mt-8">
-                    <div className="text-left">
-                      <h3 className="text-lg font-bold text-[var(--color-primary)] uppercase flex items-center gap-2">
-                        <i className="fa-solid fa-file-import"></i> Buchungsimport & Testdaten
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                    <div className="border-b border-slate-100 pb-4 text-left">
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <i className="fa-solid fa-file-import text-[var(--color-primary)]"></i> Buchungsimport &amp; Testdaten
                       </h3>
-                      <p className="text-xs font-medium text-slate-400 uppercase mt-0.5">
-                        Reservierungsdaten einspielen & Dummydaten verwalten
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
+                        Reservierungsdaten einspielen &amp; Dummydaten verwalten
                       </p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200/60 space-y-6 shadow-sm text-left">
-                      <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                        Importieren Sie reservierte Stunden und Belegungen aus
-                        einer vorherigen CSV- oder JSON-Sicherungsdatei.
+                    <div className="space-y-4 text-left">
+                      <p className="text-xs text-slate-600 leading-relaxed font-normal">
+                        Importieren Sie reservierte Stunden und Belegungen aus einer vorherigen CSV- oder JSON-Sicherungsdatei.
                       </p>
 
                       <>
@@ -8981,18 +8914,23 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           <div className="space-y-4">
                             {/* Dropzone */}
                             <div
-                              className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100/70 transition-all cursor-pointer hover:border-[var(--color-accent-2)]"
+                              className="border-2 border-dashed border-slate-200 hover:border-[var(--color-primary)] rounded-xl p-8 text-center bg-slate-50/70 hover:bg-slate-100/50 transition-all cursor-pointer"
                               onClick={() =>
                                 importFileInputRef.current?.click()
                               }
                             >
-                              <input className="hidden p-2 placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              <input
+                                type="file"
+                                ref={importFileInputRef}
+                                className="hidden"
+                                accept=".csv,.json"
+                                onChange={handleImportFileChange}
                               />
                               <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
-                              <p className="text-xs font-bold text-slate-700">
+                              <p className="text-xs font-semibold text-slate-800">
                                 CSV- oder JSON-Datei hier hochladen
                               </p>
-                              <p className="text-[10px] text-slate-400 mt-1 font-semibold uppercase">
+                              <p className="text-xs text-slate-400 mt-1 font-normal">
                                 Klicken, um Datei auszuwählen (*.csv, *.json)
                               </p>
                             </div>
@@ -9001,8 +8939,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {importStatus === "parsing" && (
                           <div className="py-8 text-center space-y-3">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-accent-2)] mx-auto"></div>
-                            <p className="text-xs font-bold text-slate-600">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--color-primary)] mx-auto"></div>
+                            <p className="text-xs font-semibold text-slate-600">
                               Datei wird analysiert...
                             </p>
                           </div>
@@ -9012,25 +8950,25 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           importStatus === "importing" ||
                           importStatus === "success") && (
                           <div className="space-y-4">
-                            <div className="p-4 bg-[var(--color-accent-2)]/5 border border-[var(--color-accent-2)]/10 rounded-xl space-y-2">
-                              <h4 className="text-[11px] font-black text-[var(--color-accent-2)] uppercase tracking-wider flex items-center gap-2">
-                                <i className="fa-solid fa-circle-info"></i>{" "}
+                            <div className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-2">
+                              <h4 className="text-xs font-semibold text-slate-900 flex items-center gap-2">
+                                <i className="fa-solid fa-circle-info text-[var(--color-primary)]"></i>{" "}
                                 Import-Vorschau
                               </h4>
                               <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div>
-                                  <span className="font-bold text-slate-400">
+                                  <span className="font-medium text-slate-400">
                                     Dateiname:
                                   </span>{" "}
-                                  <span className="font-bold text-slate-700 block truncate">
+                                  <span className="font-semibold text-slate-700 block truncate">
                                     {importFile?.name || "Demo-Vorschau"}
                                   </span>
                                 </div>
                                 <div>
-                                  <span className="font-bold text-slate-400">
+                                  <span className="font-medium text-slate-400">
                                     Gefundene Buchungen:
                                   </span>{" "}
-                                  <span className="font-bold text-slate-700 block text-lg">
+                                  <span className="font-bold text-slate-900 block text-lg">
                                     {importPreview.length}
                                   </span>
                                 </div>
@@ -9039,19 +8977,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                             {importStatus === "ready" && (
                               <div className="space-y-4">
-                                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-left space-y-1">
-                                  <h4 className="text-[11px] font-black uppercase text-emerald-800 tracking-wider flex items-center gap-1.5">
-                                    <i className="fa-solid fa-circle-check"></i>{" "}
+                                <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-left space-y-1">
+                                  <h4 className="text-xs font-semibold text-emerald-900 flex items-center gap-1.5">
+                                    <i className="fa-solid fa-circle-check text-emerald-600"></i>{" "}
                                     Import-Modus: Hinzufügen (Merge)
                                   </h4>
-                                  <p className="text-[11px] font-bold text-emerald-700 leading-normal">
+                                  <p className="text-xs text-emerald-700 leading-relaxed font-normal">
                                     Die geladenen {importPreview.length}{" "}
-                                    Buchungseinträge werden in die leere
-                                    Spieldatenbank eingepflegt.
+                                    Buchungseinträge werden in die Spieldatenbank eingepflegt.
                                   </p>
                                 </div>
 
-                                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                                <div className="flex gap-3 pt-2">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -9059,14 +8996,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       setImportFile(null);
                                       setImportPreview([]);
                                     }}
-                                    className="flex-1 border-2 border-slate-300 text-slate-700 hover:border-slate-400 py-3 rounded-xl font-black uppercase text-xs tracking-widest bg-white animate-in duration-100"
+                                    className="flex-1 h-10 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center"
                                   >
                                     Abbrechen
                                   </button>
                                   <button
                                     type="button"
                                     onClick={runFileImport}
-                                    className="flex-1 text-white rounded-xl uppercase tracking-wide shadow-md transition-all bg-[var(--color-accent-2)] hover:opacity-90 flex items-center justify-center h-10 text-sm font-semibold"
+                                    className="flex-1 h-10 rounded-xl text-white text-xs font-semibold transition-all shadow-xs bg-[var(--color-primary)] hover:brightness-110 flex items-center justify-center cursor-pointer"
                                   >
                                     Import starten
                                   </button>
@@ -9076,36 +9013,33 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                             {importStatus === "importing" && (
                               <div className="space-y-3 py-4">
-                                <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                                <div className="flex justify-between items-center text-xs font-semibold text-slate-600">
                                   <span>Importiere Daten...</span>
                                   <span>{importProgress}%</span>
                                 </div>
                                 <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                                   <div
-                                    className="bg-[var(--color-accent-2)] h-full rounded-full transition-all duration-300"
+                                    className="bg-[var(--color-primary)] h-full rounded-full transition-all duration-300"
                                     style={{ width: `${importProgress}%` }}
                                   ></div>
                                 </div>
-                                <p className="text-[10px] text-slate-400 text-center font-bold uppercase">
-                                  Bitte haben Sie einen Moment Geduld – die
-                                  Datenbank wird synchronisiert.
+                                <p className="text-xs text-slate-400 text-center font-normal">
+                                  Bitte haben Sie einen Moment Geduld – die Datenbank wird synchronisiert.
                                 </p>
                               </div>
                             )}
 
                             {importStatus === "success" && (
                               <div className="space-y-4 text-center py-2">
-                                <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-sm text-xl">
+                                <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-2xs text-xl">
                                   <i className="fa-solid fa-circle-check"></i>
                                 </div>
                                 <div className="space-y-1">
-                                  <h4 className="text-sm font-black text-slate-800 uppercase">
+                                  <h4 className="text-sm font-bold text-slate-900">
                                     Daten erfolgreich eingespielt!
                                   </h4>
-                                  <p className="text-xs text-slate-500">
-                                    {importPreview.length} Buchungen wurden
-                                    geladen und stehen im Buchungskalender
-                                    bereit.
+                                  <p className="text-xs text-slate-500 font-normal">
+                                    {importPreview.length} Buchungen wurden geladen und stehen im Buchungskalender bereit.
                                   </p>
                                 </div>
                                 <button
@@ -9115,9 +9049,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     setImportFile(null);
                                     setImportPreview([]);
                                   }}
-                                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all"
+                                  className="h-10 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-all cursor-pointer inline-flex items-center justify-center"
                                 >
-                                  Fertigstellen & Zurück
+                                  Fertigstellen &amp; Zurück
                                 </button>
                               </div>
                             )}
@@ -9126,12 +9060,12 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {importStatus === "error" && (
                           <div className="space-y-4">
-                            <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-left space-y-1">
-                              <h4 className="text-[11px] font-black uppercase text-red-800 tracking-wider flex items-center gap-1.5">
-                                <i className="fa-solid fa-circle-exclamation"></i>{" "}
+                            <div className="p-4 bg-rose-50/70 border border-rose-200/80 rounded-xl text-left space-y-1">
+                              <h4 className="text-xs font-semibold text-rose-900 flex items-center gap-1.5">
+                                <i className="fa-solid fa-circle-exclamation text-rose-600"></i>{" "}
                                 Import-Fehler
                               </h4>
-                              <p className="text-xs font-bold text-red-700 leading-normal">
+                              <p className="text-xs text-rose-700 leading-relaxed font-normal">
                                 {importErrorMsg ||
                                   "Ein unbekannter Fehler ist beim Import aufgetreten."}
                               </p>
@@ -9143,7 +9077,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 setImportFile(null);
                                 setImportPreview([]);
                               }}
-                              className="w-full bg-slate-800 text-white hover:bg-slate-900 py-3 rounded-xl font-black uppercase text-xs tracking-widest"
+                              className="w-full h-10 bg-slate-900 text-white hover:bg-slate-800 rounded-xl font-semibold text-xs cursor-pointer flex items-center justify-center"
                             >
                               Erneut versuchen
                             </button>
@@ -9153,211 +9087,133 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     </div>
                   </div>
 
-                  {/* PUBLIC JSON FEEDS MANAGEMENT CARD */}
-                  <div className="w-full bg-slate-100/50 border border-slate-200/80 p-6 sm:p-8 rounded-2xl space-y-6 shadow-sm mt-8">
-                    <div className="text-left">
-                      <h3 className="text-lg font-bold text-[var(--color-accent-2)] uppercase flex items-center gap-2">
-                        <i className="fa-solid fa-share-nodes"></i> Öffentliche JSON-Feeds (Widget-Datenquellen)
+                  {/* WEBSITE-WIDGET & EMBEDDED MODE CARD */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                    <div className="border-b border-slate-100 pb-4 text-left">
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <i className="fa-solid fa-code text-[var(--color-primary)]"></i> Website-Widget &amp; Einbettung (iFrame)
                       </h3>
-                      <p className="text-xs font-medium text-slate-400 uppercase mt-0.5">
-                        Live-Schnittstellen für Ihre Vereinswebsite & externe Kalender
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
+                        Live-Belegungsplan nahtlos in die eigene Vereinshomepage einbinden
                       </p>
                     </div>
 
-                    <p className="text-xs font-bold text-slate-600 leading-relaxed text-left">
-                      Konfigurieren Sie öffentliche, live aktualisierte Schnittstellen für Ihre Platzbelegung von der letzten Woche bis unbegrenzt in die Zukunft. Sobald eine Buchung im Kalender eingetragen oder geändert wird, aktualisieren sich diese Feeds vollkommen automatisch in Echtzeit.
-                    </p>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 text-left">
-                      {/* OPTION 1: ANONYMISED FEED */}
-                      <div className="bg-white p-6 rounded-2xl border border-slate-200/60 flex flex-col space-y-5 shadow-sm">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
-                              Option 1 (Anonymisiert)
-                            </span>
-                            
-                            {/* Toggle Slider Switch */}
-                            <label className="relative inline-flex items-center cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={settings.feedAnonEnabled || false}
-                                onChange={(e) => {
-                                  onUpdateSettings({
-                                    ...settings,
-                                    feedAnonEnabled: e.target.checked,
-                                  });
-                                  setMessage({
-                                    text: `Anonymisierter Feed wurde ${e.target.checked ? "aktiviert" : "deaktiviert"}.`,
-                                    type: "success",
-                                  });
-                                }}
-                                className="sr-only peer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                              />
-                              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                            </label>
-                          </div>
-
-                          <h4 className="text-sm font-bold text-slate-800">
-                            Anonymisierter Buchungs-Feed
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-left">
+                      {/* OPTION 1: HTML IFRAME EMBED CODE */}
+                      <div className="bg-slate-50/70 p-5 rounded-xl border border-slate-200/80 flex flex-col justify-between space-y-4">
+                        <div className="space-y-1.5">
+                          <h4 className="text-xs font-semibold text-slate-900">
+                            HTML-Einbettungscode (iFrame)
                           </h4>
-                          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-                            Alle Namen Ihrer Vereinsmitglieder werden automatisch durch neutrale Platzhalter wie <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800">Spieler 1</code>, <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-800">Spieler 2</code> ersetzt. Perfekt für öffentliche Club-Websites zum Datenschutz.
+                          <p className="text-xs text-slate-500 font-normal leading-relaxed">
+                            Fügen Sie diesen Code-Schnipsel in Ihre Vereinswebsite ein. Das Widget übernimmt automatisch die Vereinsfarben.
                           </p>
                         </div>
 
-                        {settings.feedAnonEnabled ? (
-                          <div className="space-y-4 pt-4 border-t border-slate-100">
-                            <div className="space-y-1.5">
-                              <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 font-bold">
-                                REST-Schnittstellen URL
-                              </label>
-                              <div className="flex gap-2">
-                                <input className="flex-1 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono text-slate-600 outline-none select-all cursor-text truncate p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(getPublicFeedURL());
-                                    setLinkCopied(true);
-                                    setTimeout(() => setLinkCopied(false), 2000);
-                                  }}
-                                  className={`${
-                                    linkCopied ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-900"
-                                  } text-white px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 active:scale-95`}
-                                >
-                                  {linkCopied ? "Kopiert!" : "Kopieren"}
-                                </button>
-                                <a
-                                  href={getPublicFeedURL()}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 active:scale-95"
-                                >
-                                  Testen
-                                </a>
-                              </div>
-                            </div>
+                        <div className="space-y-2 pt-2 border-t border-slate-200/80">
+                          <div className="p-3 bg-slate-900 rounded-xl font-mono text-[11px] text-emerald-400 overflow-x-auto select-all leading-relaxed">
+                            {getEmbedIframeCode()}
                           </div>
-                        ) : (
-                          <div className="p-4 bg-slate-50 border border-slate-200/50 rounded-xl text-center">
-                            <p className="text-xs font-semibold text-slate-400">
-                              Dieser Feed ist aktuell ausgeschaltet.
-                            </p>
-                          </div>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(getEmbedIframeCode());
+                              setWidgetIframeCopied(true);
+                              setTimeout(() => setWidgetIframeCopied(false), 2000);
+                            }}
+                            className={`w-full h-10 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs ${
+                              widgetIframeCopied
+                                ? "bg-emerald-600 text-white"
+                                : "bg-slate-900 hover:bg-slate-800 text-white"
+                            }`}
+                          >
+                            <i className={`fa-solid ${widgetIframeCopied ? "fa-check" : "fa-copy"}`}></i>
+                            <span>{widgetIframeCopied ? "HTML-Code kopiert!" : "HTML-Code kopieren"}</span>
+                          </button>
+                        </div>
                       </div>
 
-                      {/* OPTION 2: CLEAR NAME FEED */}
-                      <div className="bg-white p-6 rounded-2xl border border-slate-200/60 flex flex-col space-y-5 shadow-sm">
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
-                              Option 2 (Klarnamen)
-                            </span>
-
-                            {/* Toggle Slider Switch */}
-                            <label className="relative inline-flex items-center cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={settings.feedRealEnabled || false}
-                                onChange={(e) => {
-                                  onUpdateSettings({
-                                    ...settings,
-                                    feedRealEnabled: e.target.checked,
-                                  });
-                                  setMessage({
-                                    text: `Klarnamen Feed wurde ${e.target.checked ? "aktiviert" : "deaktiviert"}.`,
-                                    type: "success",
-                                  });
-                                }}
-                                className="sr-only peer font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                              />
-                              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
-                            </label>
-                          </div>
-
-                          <h4 className="text-sm font-bold text-slate-800">
-                            Klarnamen Buchungs-Feed
+                      {/* OPTION 2: DIRECT STANDALONE URL */}
+                      <div className="bg-slate-50/70 p-5 rounded-xl border border-slate-200/80 flex flex-col justify-between space-y-4">
+                        <div className="space-y-1.5">
+                          <h4 className="text-xs font-semibold text-slate-900">
+                            Standalone-Widget URL
                           </h4>
-                          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-                            Liefert die echten und vollständigen Namen der buchenden Mitglieder im JSON-Format aus. Empfohlen für passwortgeschützte interne Vereinsbereiche oder vertrauenswürdige Integrationen.
+                          <p className="text-xs text-slate-500 font-normal leading-relaxed">
+                            Direkte URL für Popups, externe Verlinkungen oder eigene Web-Viewer ohne übergeordnete Menüleisten.
                           </p>
                         </div>
 
-                        {settings.feedRealEnabled ? (
-                          <div className="space-y-4 pt-4 border-t border-slate-100">
-                            <div className="space-y-1.5">
-                              <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 font-bold">
-                                REST-Schnittstellen URL
-                              </label>
-                              <div className="flex gap-2">
-                                <input className="flex-1 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl font-mono text-slate-600 outline-none select-all cursor-text truncate p-2 text-sm placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(getClearFeedURL());
-                                    setLinkCopiedClear(true);
-                                    setTimeout(() => setLinkCopiedClear(false), 2000);
-                                  }}
-                                  className={`${
-                                    linkCopiedClear ? "bg-indigo-600" : "bg-slate-800 hover:bg-slate-900"
-                                  } text-white px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 active:scale-95`}
-                                >
-                                  {linkCopiedClear ? "Kopiert!" : "Kopieren"}
-                                </button>
-                                <a
-                                  href={getClearFeedURL()}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-4 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors flex items-center gap-1.5 active:scale-95"
-                                >
-                                  Testen
-                                </a>
-                              </div>
-                            </div>
+                        <div className="space-y-2 pt-2 border-t border-slate-200/80">
+                          <input
+                            type="text"
+                            readOnly
+                            value={getEmbedWidgetURL()}
+                            className="w-full h-10 px-3.5 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-700 outline-none select-all"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(getEmbedWidgetURL());
+                                setWidgetLinkCopied(true);
+                                setTimeout(() => setWidgetLinkCopied(false), 2000);
+                              }}
+                              className={`flex-1 h-10 rounded-xl font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-2xs ${
+                                widgetLinkCopied
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-slate-900 hover:bg-slate-800 text-white"
+                              }`}
+                            >
+                              <i className={`fa-solid ${widgetLinkCopied ? "fa-check" : "fa-copy"}`}></i>
+                              <span>{widgetLinkCopied ? "URL kopiert!" : "URL kopieren"}</span>
+                            </button>
+                            <a
+                              href={getEmbedWidgetURL()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="h-10 px-4 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-800 hover:bg-emerald-100 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                              <span>Öffnen</span>
+                              <i className="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            </a>
                           </div>
-                        ) : (
-                          <div className="p-4 bg-slate-50 border border-slate-200/50 rounded-xl text-center">
-                            <p className="text-xs font-semibold text-slate-400">
-                              Dieser Feed ist aktuell ausgeschaltet.
-                            </p>
-                          </div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* GLOBAL COLLECTION POLICIES CARD */}
-                  <div className="w-full bg-slate-100/50 border border-slate-200/80 p-6 sm:p-8 rounded-2xl space-y-6 shadow-sm mt-8">
-                    <div className="text-left">
-                      <h3 className="text-lg font-bold text-[var(--color-primary)] uppercase flex items-center gap-2">
-                        <i className="fa-solid fa-user-shield"></i> Globale Erfassungs-Richtlinien
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+                    <div className="border-b border-slate-100 pb-4 text-left">
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <i className="fa-solid fa-user-shield text-[var(--color-primary)]"></i> Globale Erfassungsrichtlinien
                       </h3>
-                      <p className="text-xs font-medium text-slate-400 uppercase mt-0.5">
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
                         Steuerung der Erfassung von Kontaktdaten der Mitglieder
                       </p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200/60 space-y-6 shadow-sm text-left">
-                      <p className="text-xs font-bold text-slate-600 leading-relaxed">
+                    <div className="space-y-4 text-left">
+                      <p className="text-xs text-slate-600 leading-relaxed font-normal">
                         Hier können Sie festlegen, ob E-Mail-Adressen und Telefonnummern von Mitgliedern erfasst und angezeigt werden sollen.
                       </p>
 
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         {/* Toggle Email Collection */}
-                        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors">
+                        <div className="flex items-center justify-between p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
                           <div className="text-left">
-                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                            <h4 className="text-xs font-semibold text-slate-900">
                               E-Mail-Adressen erfassen
                             </h4>
-                            <p className="text-[10px] text-slate-500 mt-1 uppercase">
+                            <p className="text-xs text-slate-500 mt-0.5">
                               Schaltet die Erfassung und Anzeige von E-Mail-Adressen für Mitglieder an oder aus.
                             </p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer select-none">
-                            <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
                               checked={settings.collectEmail !== false}
                               onChange={(e) => {
                                 onUpdateSettings({
@@ -9371,22 +9227,24 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onDirtyChange?.();
                               }}
                             />
-                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
                           </label>
                         </div>
 
                         {/* Toggle Phone Collection */}
-                        <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-emerald-500 transition-colors">
+                        <div className="flex items-center justify-between p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl">
                           <div className="text-left">
-                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                            <h4 className="text-xs font-semibold text-slate-900">
                               Telefonnummern erfassen
                             </h4>
-                            <p className="text-[10px] text-slate-500 mt-1 uppercase">
+                            <p className="text-xs text-slate-500 mt-0.5">
                               Schaltet die Erfassung und Anzeige von Telefonnummern für Mitglieder an oder aus.
                             </p>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer select-none">
-                            <input className="sr-only peer placeholder: placeholder: placeholder: font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
                               checked={settings.collectPhone !== false}
                               onChange={(e) => {
                                 onUpdateSettings({
@@ -9400,13 +9258,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onDirtyChange?.();
                               }}
                             />
-                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
                           </label>
                         </div>
                       </div>
 
-                      <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl text-left space-y-1">
-                        <p className="text-[11px] font-medium text-amber-800 leading-normal font-sans">
+                      <div className="p-4 bg-amber-50/70 border border-amber-200/80 rounded-xl text-left">
+                        <p className="text-xs font-normal text-amber-900 leading-relaxed">
                           Hinweis: Wenn Sie die Erfassung deaktivieren, werden diese Felder in der gesamten App für Mitglieder ausgeblendet. Bereits erfasste Daten bleiben in der Datenbank erhalten.
                         </p>
                       </div>
@@ -9431,30 +9289,28 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
               {/* TAB: VERANSTALTUNGEN */}
               {currentTab === "tournaments" && (
-                <div className="space-y-4 lg:space-y-6 animate-in fade-in duration-300">
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl border border-slate-200/80 gap-4 shadow-sm">
-                    <div>
-                      <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2 text-[var(--color-primary)]">
-                        <i className="fa-solid fa-calendar-days"></i>{" "}
+                <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs">
+                    <div className="text-left">
+                      <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <i className="fa-solid fa-calendar-days text-[var(--color-primary)]"></i>{" "}
                         Veranstaltungen verwalten
                       </h3>
-                      <p className="text-xs text-slate-500 font-medium mt-1">
-                        Definieren Sie hier Turniere, Events oder andere
-                        Aktivitäten. Spieler können sich direkt im Kalender-Menü
-                        dafür an- und abmelden.
+                      <p className="text-xs text-slate-500 font-normal mt-0.5">
+                        Definieren Sie hier Turniere, Events oder andere Aktivitäten. Spieler können sich direkt im Kalender-Menü dafür an- und abmelden.
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* FORM COLUMN */}
                     <div className="lg:col-span-1 space-y-6">
                       <form
                         onSubmit={handleEventSubmit}
-                        className="bg-slate-50 p-6 rounded-[1rem] border border-slate-200 shadow-sm space-y-5 text-left"
+                        className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4 text-left"
                       >
-                        <h4 className="text-xs font-black uppercase tracking-widest text-[var(--color-primary)] border-b border-slate-200 pb-3 mb-2 flex items-center gap-1.5">
-                          <i className="fa-solid fa-pen-to-square"></i>
+                        <h4 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+                          <i className="fa-solid fa-pen-to-square text-[var(--color-primary)]"></i>
                           {editingTournamentId
                             ? "Event bearbeiten"
                             : "Neues Event anlegen"}
@@ -9462,9 +9318,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {/* Titel (Pflichtfeld) */}
                         <div className="space-y-1">
-                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Name der Veranstaltung{" "}
-                            <span className="text-red-500 font-bold">*</span>
+                            <span className="text-rose-500">*</span>
                           </label>
                           <input 
                             type="text"
@@ -9472,27 +9328,27 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             value={eventTitle}
                             onChange={(e) => setEventTitle(e.target.value)}
                             placeholder="z.B. Sommerfest, Schleiferlturnier"
-                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal placeholder:text-slate-400"
                           />
                         </div>
 
                         {/* Datum (Optional) */}
                         <div className="space-y-1">
-                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Datum (optional)
                           </label>
                           <input 
                             type="date"
                             value={eventDate}
                             onChange={(e) => setEventDate(e.target.value)}
-                            className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal placeholder:text-slate-400"
                           />
                         </div>
 
                         {/* Uhrzeit (Optional) */}
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                               Startzeit (optional)
                             </label>
                             <input 
@@ -9501,27 +9357,27 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               onChange={(e) =>
                                 setEventStartTime(e.target.value)
                               }
-                              className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal placeholder:text-slate-400"
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                               Endzeit (optional)
                             </label>
                             <input 
                               type="time"
                               value={eventEndTime}
                               onChange={(e) => setEventEndTime(e.target.value)}
-                              className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                              className="w-full h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal placeholder:text-slate-400"
                             />
                           </div>
                         </div>
 
                         {/* An- & Abmeldefristen (Optional) in einer gemeinsamen Karte */}
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200 space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
-                              <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
                                 Anmeldung ab (optional)
                               </label>
                               <input 
@@ -9530,11 +9386,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onChange={(e) =>
                                   setEventRegistrationStart(e.target.value)
                                 }
-                                className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                                className="w-full h-9 px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                              <label className="block text-xs font-semibold text-slate-700 mb-1">
                                 Anmeldung bis (optional)
                               </label>
                               <input 
@@ -9543,15 +9399,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onChange={(e) =>
                                   setEventRegistrationEnd(e.target.value)
                                 }
-                                className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                                className="w-full h-9 px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal"
                               />
                             </div>
                           </div>
 
-                          <div className="border-t border-slate-200/80 pt-2.5">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="border-t border-slate-200/80 pt-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div className="space-y-1">
-                                <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">
                                   Abmeldung ab (optional)
                                 </label>
                                 <input 
@@ -9560,11 +9416,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setEventDeregistrationStart(e.target.value)
                                   }
-                                  className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                                  className="w-full h-9 px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal"
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500 font-bold">
+                                <label className="block text-xs font-semibold text-slate-700 mb-1">
                                   Abmeldung bis (optional)
                                 </label>
                                 <input 
@@ -9573,7 +9429,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                   onChange={(e) =>
                                     setEventDeregistrationEnd(e.target.value)
                                   }
-                                  className="w-full px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium uppercase"
+                                  className="w-full h-9 px-3 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 transition-all font-normal"
                                 />
                               </div>
                             </div>
@@ -9582,7 +9438,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                         {/* Beschreibung (Optional) */}
                         <div className="space-y-1">
-                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                          <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                             Beschreibung (optional)
                           </label>
                           <textarea
@@ -9592,37 +9448,36 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             }
                             placeholder="Details, Ablauf, Verpflegung..."
                             rows={3}
-                            className="w-full h-8 px-3 py-1 border-2 border-slate-300 rounded-xl text-xs bg-white outline-none focus:border-[var(--color-primary)] resize-y placeholder:font-normal placeholder:text-slate-400 font-sans font-medium"
+                            className="w-full p-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 resize-y placeholder:font-normal placeholder:text-slate-400 font-normal transition-all"
                           />
                         </div>
 
                         {/* Hide expired events (optional, default: true) */}
-                        <div className="pt-2 border-t border-slate-200/60 space-y-2">
-                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-400">
-                            Archivierung & Anzeige
+                        <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                          <label className="block text-xs font-semibold text-slate-700">
+                            Archivierung &amp; Anzeige
                           </label>
-                          <span className="block text-[9px] font-semibold text-slate-500 leading-normal mb-1">
-                            Soll die Veranstaltung nach verstreichen des Datums
-                            für Spieler ausgeblendet werden?
+                          <span className="block text-xs text-slate-500 font-normal leading-normal">
+                            Soll die Veranstaltung nach Verstreichen des Datums für Spieler ausgeblendet werden?
                           </span>
-                          <div className="flex gap-4">
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <div className="flex gap-4 pt-1">
+                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
                               <input
                                 type="radio"
                                 name="eventHideExpired"
                                 checked={eventHideExpired === true}
                                 onChange={() => setEventHideExpired(true)}
-                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
                               />
                               <span>Ja (Standard)</span>
                             </label>
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
                               <input
                                 type="radio"
                                 name="eventHideExpired"
                                 checked={eventHideExpired === false}
                                 onChange={() => setEventHideExpired(false)}
-                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
                               />
                               <span>Nein</span>
                             </label>
@@ -9630,29 +9485,31 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         </div>
 
                         {/* Allow registration comments (optional, default: false) */}
-                        <div className="pt-3 border-t border-slate-200/60 space-y-2">
-                          <span className="block text-[9px] font-semibold text-slate-500 leading-normal mb-1">
-                            Kommentarfeld bei der Anmeldung zulassen? (z.B. für
-                            Essenswünsche, Mitbringsel)
+                        <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                          <label className="block text-xs font-semibold text-slate-700">
+                            Kommentarfeld
+                          </label>
+                          <span className="block text-xs text-slate-500 font-normal leading-normal">
+                            Kommentarfeld bei der Anmeldung zulassen? (z.B. für Essenswünsche, Mitbringsel)
                           </span>
-                          <div className="flex gap-4">
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <div className="flex gap-4 pt-1">
+                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
                               <input
                                 type="radio"
                                 name="eventAllowComment"
                                 checked={eventAllowComment === true}
                                 onChange={() => setEventAllowComment(true)}
-                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
                               />
                               <span>Ja</span>
                             </label>
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
                               <input
                                 type="radio"
                                 name="eventAllowComment"
                                 checked={eventAllowComment === false}
                                 onChange={() => setEventAllowComment(false)}
-                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
                               />
                               <span>Nein (Standard)</span>
                             </label>
@@ -9660,8 +9517,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         </div>
 
                         {/* Maximale Teilnehmerzahl (optional) */}
-                        <div className="pt-3 border-t border-slate-200/60 space-y-2">
-                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                        <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                          <label className="block text-xs font-semibold text-slate-700">
                             Max. Teilnehmerzahl (optional)
                           </label>
                           <input 
@@ -9672,21 +9529,20 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             onChange={(e) =>
                               setEventMaxParticipants(e.target.value)
                             }
-                            className="w-full max-w-[200px] px-3 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] text-slate-800 py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                            className="w-full max-w-[200px] h-10 px-3.5 border border-slate-200 rounded-xl text-sm bg-white outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 text-slate-800 font-normal transition-all"
                           />
                         </div>
 
                         {/* Anmeldungen sperren */}
-                        <div className="pt-3 border-t border-slate-200/60 space-y-2">
-                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-500">
+                        <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                          <label className="block text-xs font-semibold text-slate-700">
                             Anmeldungen sperren?
                           </label>
-                          <span className="block text-[9px] font-semibold text-slate-500 leading-normal mb-1">
-                            Sperrt die Registrierung für normale Spieler, ohne
-                            dass das Event ausgeblendet wird.
+                          <span className="block text-xs text-slate-500 font-normal leading-normal">
+                            Sperrt die Registrierung für normale Spieler, ohne dass das Event ausgeblendet wird.
                           </span>
-                          <div className="flex gap-4">
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <div className="flex gap-4 pt-1">
+                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
                               <input
                                 type="radio"
                                 name="eventIsRegistrationBlocked"
@@ -9694,11 +9550,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onChange={() =>
                                   setEventIsRegistrationBlocked(true)
                                 }
-                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
                               />
                               <span>Ja</span>
                             </label>
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
                               <input
                                 type="radio"
                                 name="eventIsRegistrationBlocked"
@@ -9706,7 +9562,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                 onChange={() =>
                                   setEventIsRegistrationBlocked(false)
                                 }
-                                className="w-4 h-4 accent-[var(--color-primary)] font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                                className="w-4 h-4 accent-[var(--color-primary)] cursor-pointer"
                               />
                               <span>Nein (Standard)</span>
                             </label>
@@ -9714,10 +9570,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                         </div>
 
                         {/* Actions */}
-                        <div className="flex gap-3 pt-4 border-t border-slate-200">
+                        <div className="flex gap-3 pt-3 border-t border-slate-100">
                           <button
                             type="submit"
-                            className="flex-1 bg-[var(--color-primary)] text-white rounded-xl uppercase tracking-wider shadow-sm hover:shadow-md hover:bg-black transition-all flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium"
+                            className="flex-1 h-10 px-5 rounded-xl bg-[var(--color-primary)] hover:brightness-110 text-white font-semibold text-xs transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                           >
                             <i className="fa-solid fa-check"></i>{" "}
                             {editingTournamentId
@@ -9731,7 +9587,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                             <button
                               type="button"
                               onClick={resetEventForm}
-                              className="px-4 border-2 border-slate-300 text-slate-700 rounded-xl uppercase tracking-wider hover:border-slate-400 bg-white transition-all py-2.5 text-sm font-medium"
+                              className="h-10 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition-all flex items-center justify-center cursor-pointer"
                             >
                               Abbrechen
                             </button>
@@ -9742,14 +9598,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                     {/* LISTING COLUMN */}
                     <div className="lg:col-span-2 space-y-6">
-                      <div className="bg-white p-6 rounded-2xl border-none shadow-md space-y-4 text-left">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-[var(--color-primary)] flex items-center gap-2 border-b border-slate-100 pb-3">
-                          <i className="fa-solid fa-list"></i> Geplante
-                          Veranstaltungen ({tournaments.length})
+                      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4 text-left">
+                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                          <i className="fa-solid fa-list text-[var(--color-primary)]"></i> Geplante Veranstaltungen ({tournaments.length})
                         </h4>
 
                         {tournaments.length === 0 ? (
-                          <p className="text-xs text-slate-500 py-8 italic text-center">
+                          <p className="text-xs text-slate-400 py-8 italic text-center font-medium">
                             Keine geplanten Veranstaltungen gefunden.
                           </p>
                         ) : (
@@ -9772,29 +9627,29 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                               return (
                                 <div
                                   key={t.id}
-                                  className="p-5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-green-50/10 transition-colors flex flex-col justify-between gap-4"
+                                  className="p-4 sm:p-5 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col justify-between gap-4"
                                 >
                                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                                     <div className="space-y-2">
-                                      <h5 className="text-sm font-black text-[var(--color-primary)] uppercase tracking-wide">
+                                      <h5 className="text-sm font-bold text-slate-900">
                                         {t.title}
                                       </h5>
 
-                                      <div className="text-[10px] text-slate-500 font-bold flex flex-wrap gap-x-4 gap-y-2 items-center">
+                                      <div className="text-xs text-slate-500 font-medium flex flex-wrap gap-x-3 gap-y-1.5 items-center">
                                         {formattedDate ? (
-                                          <span className="flex items-center gap-1 bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-extrabold">
-                                            <i className="fa-solid fa-calendar-day"></i>{" "}
+                                          <span className="flex items-center gap-1 bg-slate-200/80 text-slate-700 px-2.5 py-0.5 rounded-md text-xs font-semibold">
+                                            <i className="fa-solid fa-calendar-day text-[11px]"></i>{" "}
                                             {formattedDate}
                                           </span>
                                         ) : (
-                                          <span className="flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-extrabold">
+                                          <span className="flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md text-xs font-medium">
                                             Kein festes Datum
                                           </span>
                                         )}
 
                                         {hasTime && (
-                                          <span className="flex items-center gap-1 text-slate-600 font-extrabold">
-                                            <i className="fa-regular fa-clock"></i>{" "}
+                                          <span className="flex items-center gap-1 text-slate-600 font-medium">
+                                            <i className="fa-regular fa-clock text-slate-400"></i>{" "}
                                             {t.startTime}{" "}
                                             {t.endTime ? `- ${t.endTime}` : ""}{" "}
                                             Uhr
@@ -9803,22 +9658,22 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                         {t.maxParticipants &&
                                         t.maxParticipants > 0 ? (
-                                          <span className="flex items-center gap-1 bg-emerald-50 text-[var(--color-primary)] px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-extrabold border border-emerald-200">
-                                            <i className="fa-solid fa-users"></i>{" "}
+                                          <span className="flex items-center gap-1 bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md text-xs font-semibold border border-emerald-200/80">
+                                            <i className="fa-solid fa-users text-[11px]"></i>{" "}
                                             Max. {t.maxParticipants}
                                           </span>
                                         ) : null}
 
                                         {t.isRegistrationBlocked && (
-                                          <span className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase tracking-wider font-extrabold border border-red-200">
-                                            <i className="fa-solid fa-lock"></i>{" "}
+                                          <span className="flex items-center gap-1 bg-rose-50 text-rose-700 px-2 py-0.5 rounded-md text-xs font-semibold border border-rose-200">
+                                            <i className="fa-solid fa-lock text-[11px]"></i>{" "}
                                             Anmeldungen gesperrt
                                           </span>
                                         )}
                                       </div>
 
                                       {t.description && (
-                                        <p className="text-slate-600 text-[11px] leading-relaxed pt-1 bg-white/50 h-8 px-3 py-1 rounded-lg border border-slate-100 font-sans font-medium">
+                                        <p className="text-slate-600 text-xs leading-relaxed pt-1 bg-white p-3 rounded-lg border border-slate-200/60 font-normal">
                                           {t.description}
                                         </p>
                                       )}
@@ -9828,7 +9683,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                       <button
                                         type="button"
                                         onClick={() => handleStartEditEvent(t)}
-                                        className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 hover:bg-[var(--color-primary)] hover:text-white flex items-center justify-center transition-colors text-xs shadow-sm"
+                                        className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 hover:bg-[var(--color-primary)] hover:text-white flex items-center justify-center transition-colors text-xs shadow-2xs cursor-pointer"
                                         title="Bearbeiten"
                                       >
                                         <i className="fa-solid fa-pen"></i>
@@ -9848,7 +9703,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             });
                                           }
                                         }}
-                                        className="w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-colors text-xs shadow-sm"
+                                        className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white flex items-center justify-center transition-colors text-xs shadow-2xs border border-rose-100 cursor-pointer"
                                         title="Löschen"
                                       >
                                         <i className="fa-solid fa-trash-can"></i>
@@ -9856,18 +9711,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                     </div>
                                   </div>
 
-                                  <div className="border-t border-slate-200/60 pt-3 flex flex-col gap-3">
+                                  <div className="border-t border-slate-200/80 pt-3 flex flex-col gap-3">
                                     {/* Badges */}
                                     <div className="flex flex-wrap gap-2">
                                       <span
-                                        className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${(t.hideExpired ?? true) ? "bg-slate-100 border-slate-200 text-slate-500" : "bg-orange-50 border-orange-200 text-orange-600"}`}
+                                        className={`text-[11px] font-medium px-2.5 py-0.5 rounded-md border ${(t.hideExpired ?? true) ? "bg-slate-100 border-slate-200 text-slate-600" : "bg-amber-50 border-amber-200 text-amber-700"}`}
                                       >
                                         {(t.hideExpired ?? true)
                                           ? "Nach Ablauf ausblenden: Ja"
                                           : "Nach Ablauf ausblenden: Nein"}
                                       </span>
                                       <span
-                                        className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${t.allowComment ? "bg-green-50 border-green-200 text-green-700" : "bg-slate-100 border-slate-200 text-slate-500"}`}
+                                        className={`text-[11px] font-medium px-2.5 py-0.5 rounded-md border ${t.allowComment ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-slate-100 border-slate-200 text-slate-600"}`}
                                       >
                                         {t.allowComment
                                           ? "Kommentarfeld zulässig: Ja"
@@ -9877,13 +9732,12 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
                                     {/* Participants lists */}
                                     <div>
-                                      <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                                        Angemeldete Spieler (
-                                        {t.participants?.length || 0})
+                                      <span className="block text-xs font-semibold text-slate-700 mb-2">
+                                        Angemeldete Spieler ({t.participants?.length || 0})
                                       </span>
                                       {!t.participants ||
                                       t.participants.length === 0 ? (
-                                        <span className="text-[10px] text-slate-400 font-bold italic">
+                                        <span className="text-xs text-slate-400 italic">
                                           Noch keine Anmeldungen vorhanden.
                                         </span>
                                       ) : (
@@ -9894,13 +9748,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                                             return (
                                               <div
                                                 key={idx}
-                                                className="bg-white h-8 px-3 py-1 rounded-2xl border-none shadow-md text-[10px] text-slate-700 flex flex-col gap-1 font-sans font-medium"
+                                                className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs text-xs text-slate-800 flex flex-col gap-1 font-medium"
                                               >
-                                                <div className="flex items-center gap-1.5 text-slate-800">
+                                                <div className="flex items-center gap-1.5 text-slate-900 font-semibold">
                                                   <span>{player}</span>
                                                 </div>
                                                 {comment && (
-                                                  <div className="bg-slate-50 p-1.5 rounded border border-slate-100 text-[9px] text-[var(--color-primary)] font-semibold italic">
+                                                  <div className="bg-slate-50 p-1.5 rounded-md border border-slate-100 text-[11px] text-[var(--color-primary)] italic font-normal">
                                                     <i className="fa-regular fa-comment-dots mr-1"></i>
                                                     "{comment}"
                                                   </div>
@@ -9950,17 +9804,15 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
       {/* WARNING POPUP: CHANGING TABS WITH UNSAVED CHANGES */}
       {pendingTab && (
-        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="border-none outline-none bg-white rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-sm -200/80 -500 animate-in zoom-in duration-300">
-            <h3 className="text-orange-600 font-extrabold text-lg uppercase tracking-tight flex items-center gap-2">
-              <i className="fa-solid fa-circle-exclamation"></i> Ungespeicherte
-              Änderungen
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 sm:p-7 max-w-sm w-full shadow-xl border border-slate-200/80 animate-in zoom-in duration-200 text-left">
+            <h3 className="text-amber-600 font-bold text-base flex items-center gap-2">
+              <i className="fa-solid fa-circle-exclamation"></i> Ungespeicherte Änderungen
             </h3>
-            <p className="text-xs text-slate-500 my-4 leading-relaxed">
-              Du hast in der aktuellen Kategorie ungespeicherte Änderungen
-              vorgenommen. Möchtest du diese vor dem Wechsel speichern?
+            <p className="text-xs text-slate-600 my-4 leading-relaxed font-normal">
+              Du hast in der aktuellen Kategorie ungespeicherte Änderungen vorgenommen. Möchtest du diese vor dem Wechsel speichern?
             </p>
-            <div className="flex flex-col gap-2 pt-2">
+            <div className="flex flex-col gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -9968,9 +9820,9 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   setCurrentTab(pendingTab);
                   setPendingTab(null);
                 }}
-                className="w-full py-3 bg-[var(--color-primary)] hover:bg-black text-white rounded-xl font-bold text-xs transition-colors"
+                className="w-full h-10 bg-[var(--color-primary)] hover:brightness-110 text-white rounded-xl font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center shadow-xs"
               >
-                Speichern & Wechseln
+                Speichern &amp; Wechseln
               </button>
               <button
                 type="button"
@@ -9979,14 +9831,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   setCurrentTab(pendingTab);
                   setPendingTab(null);
                 }}
-                className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold text-xs transition-colors"
+                className="w-full h-10 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center"
               >
-                Änderungen verwerfen & Wechseln
+                Änderungen verwerfen &amp; Wechseln
               </button>
               <button
                 type="button"
                 onClick={() => setPendingTab(null)}
-                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
+                className="w-full h-10 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center"
               >
                 Auf aktueller Seite bleiben
               </button>
@@ -9997,34 +9849,34 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
       {/* POPUP: RESERVATIONS PURGE */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
-          <div className="border-none outline-none bg-white rounded-2xl -200/80 shadow-sm w-full max-w-md overflow-hidden animate-in zoom-in duration-300 -600">
-            <div className="bg-red-600 p-8 text-white">
-              <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
-                <i className="fa-solid fa-shield-virus"></i>{" "}
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200 text-left my-8">
+            <div className="bg-rose-600 p-6 text-white">
+              <h3 className="text-base font-bold flex items-center gap-2.5">
+                <i className="fa-solid fa-shield-virus text-lg"></i>{" "}
                 Sicherheits-Bestätigung
               </h3>
-              <p className="text-[10px] font-bold opacity-80 mt-1 uppercase tracking-widest">
+              <p className="text-xs text-rose-100 mt-1 font-normal">
                 {showDeleteModal === "bookings"
                   ? "Reservierungs-Bereinigung"
                   : "Mitglieder-Bereinigung (Bulk)"}
               </p>
             </div>
 
-            <div className="p-8 space-y-6">
-              <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex items-start gap-4">
-                <i className="fa-solid fa-circle-exclamation text-red-600 text-xl mt-1"></i>
-                <p className="text-[10px] font-bold text-red-900 leading-relaxed">
+            <div className="p-6 space-y-4">
+              <div className="bg-rose-50 p-4 rounded-xl border border-rose-200/80 flex items-start gap-3">
+                <i className="fa-solid fa-circle-exclamation text-rose-600 text-base mt-0.5 shrink-0"></i>
+                <p className="text-xs font-medium text-rose-900 leading-relaxed">
                   {showDeleteModal === "bookings"
-                    ? "Bist du absolut sicher? Alle passenden Reservierungen werden unumkehrbar gelöscht!"
-                    : "Bist du absolut sicher? ALLE registrierten Mitglieder werden unumkehrbar gelöscht (außer dein eigener Administrator-Account, damit du eingeloggt bleibst)!"}
+                    ? "Bist du absolut sicher? Alle passenden Reservierungen werden unwiderruflich gelöscht!"
+                    : "Bist du absolut sicher? ALLE registrierten Mitglieder werden unwiderruflich gelöscht (außer dein eigener Administrator-Account, damit du eingeloggt bleibst)!"}
                 </p>
               </div>
 
               {showDeleteModal === "bookings" && (
-                <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-slate-200">
+                <div className="grid grid-cols-2 gap-3 bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
                   <div>
-                    <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Ab Datum
                     </label>
                     <input 
@@ -10036,11 +9888,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           start: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs outline-none focus:border-red-500 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 text-slate-800 transition-all font-normal"
                     />
                   </div>
                   <div>
-                    <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Bis Datum
                     </label>
                     <input 
@@ -10052,11 +9904,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           end: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs outline-none focus:border-red-500 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 text-slate-800 transition-all font-normal"
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
                       Platz wählen (optional)
                     </label>
                     <select 
@@ -10067,7 +9919,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                           court: e.target.value,
                         }))
                       }
-                      className="w-full p-2 border-2 border-slate-200 rounded-lg text-xs outline-none focus:border-red-500 bg-white font-sans font-medium"
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10 text-slate-800 cursor-pointer transition-all font-normal"
                     >
                       <option value="all">Alle Plätze</option>
                       {courtsList.map((court, i) => (
@@ -10080,10 +9932,10 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">
+              <div className="space-y-1.5 text-center pt-2">
+                <label className="block text-xs font-semibold text-slate-700">
                   Eingabe zur Bestätigung:{" "}
-                  <span className="text-red-600 font-extrabold uppercase">
+                  <span className="text-rose-600 font-bold tracking-wider">
                     LÖSCHEN
                   </span>
                 </label>
@@ -10092,16 +9944,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
                   placeholder="LÖSCHEN"
-                  className="w-full px-4 border-2 border-red-200 rounded-2xl text-center text-red-600 tracking-[0.5em] outline-none focus:border-red-600 focus:bg-red-50 transition-all uppercase py-2 font-sans font-medium placeholder:font-normal placeholder:text-slate-400"
+                  className="w-full h-10 px-4 border-2 border-rose-200 rounded-xl text-center text-rose-600 tracking-widest outline-none focus:border-rose-600 focus:bg-rose-50/50 transition-all uppercase font-semibold text-sm"
                 />
               </div>
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-3 pt-3">
                 <button
                   type="button"
                   disabled={deleteConfirmText !== "LÖSCHEN"}
                   onClick={executeBulkDelete}
-                  className="flex-1 bg-red-600 text-white rounded-xl shadow-md uppercase tracking-wide active:scale-95 transition-all disabled:opacity-20 flex items-center justify-center h-10 text-sm font-semibold"
+                  className="flex-1 h-10 bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs font-semibold text-xs active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center cursor-pointer"
                 >
                   Unwiderruflich Löschen
                 </button>
@@ -10111,7 +9963,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     setShowDeleteModal(null);
                     setDeleteConfirmText("");
                   }}
-                  className="px-6 bg-slate-100 text-slate-500 font-black py-2.5 rounded-xl uppercase tracking-widest text-xs active:scale-95"
+                  className="h-10 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center"
                 >
                   Abbruch
                 </button>
@@ -10478,14 +10330,14 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     {authMailModal.mode === "bulk"
                       ? `Massen-Aktivierung: E-Mails an ${authMailModal.userIds?.length || 0} Mitglieder senden`
                       : authMailModal.type === "activation"
-                      ? "Aktivierungs-Mail senden"
-                      : "Passwort-Reset-Mail senden"}
+                      ? "Aktivierungsmail senden"
+                      : "Passwortreset-Mail senden"}
                   </h3>
                   <p className="text-xs text-slate-600 font-medium mt-0.5">
                     {authMailModal.mode === "bulk"
-                      ? "Einweg-Token generieren und Einladungs-Mails mit Aktivierungs-Link zustellen."
+                      ? "Einwegtoken generieren und Einladungs-Mails mit Aktivierungslink zustellen."
                       : authMailModal.type === "activation"
-                      ? "Generiert einen sicheren Einweg-Token (24h) zur erstmaligen Passwortvergabe."
+                      ? "Generiert einen sicheren Einwegtoken (24h) zur erstmaligen Passwortvergabe."
                       : "Generiert einen sicheren Reset-Token (1h) zum Zurücksetzen des Passworts."}
                   </p>
                 </div>
@@ -10501,7 +10353,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
 
             {/* Modal Body */}
             <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1">
-              {/* Empfänger-Bereich Single */}
+              {/* Empfängerbereich Single */}
               {authMailModal.mode === "single" && authMailModal.user && (() => {
                 const u = authMailModal.user;
                 const memberName =
@@ -10590,7 +10442,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                 );
               })()}
 
-              {/* Empfänger-Bereich Bulk */}
+              {/* Empfängerbereich Bulk */}
               {authMailModal.mode === "bulk" && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -10695,8 +10547,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({
                     <span className="font-semibold text-slate-800 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
                       {authMailModal.activeTemplate?.subject ||
                         (authMailModal.type === "activation"
-                          ? `Willkommen bei ${settings.clubName || "Tennis-Club e.V."}! Bitte erstelle dein persönliches Passwort`
-                          : `Passwort zurücksetzen für dein ${settings.clubName || "Tennis-Club e.V."}-Konto`)}
+                          ? `Willkommen bei ${settings.clubName || "Tennisclub e.V."}! Bitte erstelle dein persönliches Passwort`
+                          : `Passwort zurücksetzen für dein ${settings.clubName || "Tennisclub e.V."}-Konto`)}
                     </span>
                   </div>
 

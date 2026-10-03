@@ -20,7 +20,7 @@ export async function loadPersonality(vorname: string = ''): Promise<string> {
   }
 
   const template = cachedPersonalityTemplate || `# PERSÖNLICHKEIT & SYSTEM-INSTRUCTIONS: "ACE" (DJK FÜRTH)
-Du bist "Ace", der persönliche, intelligente Vereins- und Tennis-Assistent der DJK Fürth.
+Du bist "Ace", der persönliche, intelligente Vereins- und Tennisassistent der DJK Fürth.
 Begrüße den Nutzer bei der ersten Antwort immer mit: "Servus {{VORNAME}}!" (falls leer: "Servus!").
 Du bist ein bodenständiger, sympathischer Vereinskollege aus Franken/Bayern mit dem vertrauten Vereins-"Du".
 Vermeide Anglizismen: Nutze "Partie/Spiel" statt "Match", "Spiele" statt "Games", "Anlage" statt "Location".
@@ -46,14 +46,14 @@ export interface KnowledgeEntry {
 
 export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   // ---------------------------------------------------------------------------
-  // Modul 9: Support-Matrix (Schnellreferenz)
+  // Modul 9: Supportmatrix (Schnellreferenz)
   // ---------------------------------------------------------------------------
   {
     id: 'support-alleine-buchen',
-    module: 'Support-Matrix',
+    module: 'Supportmatrix',
     title: 'Kann ich alleine einen Platz reservieren?',
     keywords: ['alleine', 'einzeln', 'ohne partner', 'allein', 'solo', 'ohne mitspieler', 'alleine buchen', 'alleine spielen'],
-    content: `Nein, das System blockiert reine Allein-Buchungen:
+    content: `Nein, das System blockiert reine Alleinbuchungen:
 
 • **Regel:** Es muss mindestens 1 Mitspieler (Partner), 1 Gast oder die **Ballmaschine** ausgewählt werden.
 • **Reines Einzeltraining ohne Ballmaschine** ist buchungsseitig nicht zulässig.
@@ -61,7 +61,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   },
   {
     id: 'support-spieldauer',
-    module: 'Support-Matrix',
+    module: 'Supportmatrix',
     title: 'Wie lange darf ich spielen (Einzel vs. Doppel)?',
     keywords: ['dauer', 'spieldauer', 'wie lange', 'einzel dauer', 'doppel dauer', '60 minuten', '120 minuten', 'stunde'],
     content: `Die Buchungsdauer richtet sich nach der Spielform:
@@ -72,7 +72,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   },
   {
     id: 'support-meisterschaft-dritter-satz',
-    module: 'Support-Matrix',
+    module: 'Supportmatrix',
     title: 'Was passiert bei 1:1 Sätzen in der Meisterschaft?',
     keywords: ['1:1', 'dritter satz', '3. satz', 'satzgleichstand', 'match-tiebreak', 'champions tiebreak', 'entscheidungssatz', 'gleichstand sätze'],
     content: `In der Vereinsmeisterschaft wird **kein voller 3. Satz** ausgespielt:
@@ -83,7 +83,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   },
   {
     id: 'support-punktgleichheit-gruppe',
-    module: 'Support-Matrix',
+    module: 'Supportmatrix',
     title: 'Wie wird bei Punktgleichheit in der Gruppe entschieden?',
     keywords: ['punktgleich', 'punktgleichheit', 'gleiche punkte', 'tabelle reihenfolge', 'wer kommt weiter', 'kaskade', 'direkter vergleich', 'standings'],
     content: `Stehen nach Beendigung aller Gruppenspiele zwei oder mehr Teilnehmer punktgleich da, entscheidet das System strikt nach folgender Kaskade:
@@ -91,16 +91,16 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
 1. **Anzahl der Siege** (Gewonnene Partien / Punkte)
 2. **Direkter Vergleich (Head-to-Head):** Greift vorrangig, wenn exakt 2 Spieler punktgleich sind.
 3. **Satzdifferenz:** Gewonnene Sätze minus verlorene Sätze.
-4. **Spiele-Differenz:** Gewonnene Spiele minus verlorene Spiele.
+4. **Spieledifferenz:** Gewonnene Spiele minus verlorene Spiele.
 5. **Erzielte Spiele gesamt:** Wer absolut mehr Spiele erzielt hat.
-6. **Alphabetische Sortierung:** Letzter technischer Tie-Breaker.`
+6. **Alphabetische Sortierung:** Letzter technischer Tiebreaker.`
   },
   {
     id: 'support-arbeitsstunden-einsehen',
-    module: 'Support-Matrix',
+    module: 'Supportmatrix',
     title: 'Wo sehe ich meine Arbeitsstunden?',
     keywords: ['arbeitsstunden', 'arbeitszeit', 'fortschrittsbalken', 'helferstunden', 'wo sehe ich', 'meine stunden', 'soll-stunden'],
-    content: `Im Modul **Arbeitseinsätze** (Aktentaschen-Symbol):
+    content: `Im Modul **Arbeitseinsätze** (Aktentaschensymbol):
 
 • **Fortschrittsbalken:** Direkt im Kopfbereich siehst du deinen aktuellen Stand (z. B. *7.5 von 10.0 Std. geleistet*).
 • **Status:** Zeigt offene Stunden und die Saisonfrist (in der Regel 31. Oktober).
@@ -108,7 +108,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   },
   {
     id: 'support-gast-bezahlen',
-    module: 'Support-Matrix',
+    module: 'Supportmatrix',
     title: 'Muss ich meinen Gastspieler bar bezahlen?',
     keywords: ['gast bar', 'bar bezahlen', 'bargeld', 'gastgebühr', 'wie bezahlen gast', 'sepa gast', 'gastspiel bezahlen'],
     content: `Nein, auf der Anlage findet **keine Barzahlung** statt:
@@ -119,7 +119,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   },
   {
     id: 'support-ace-deaktivieren',
-    module: 'Support-Matrix',
+    module: 'Supportmatrix',
     title: 'Wie deaktiviere ich den Assistenten Ace?',
     keywords: ['ace deaktivieren', 'assistent ausschalten', 'ausblenden', 'ace entfernen', 'maskottchen weg', 'deaktivieren'],
     content: `Du kannst Ace auf zwei Wegen ausschalten:
@@ -161,7 +161,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
     module: 'Plätze',
     title: 'Ballmaschine zubuchen',
     keywords: ['ballmaschine', 'ballwurfmaschine', 'ballmaschine zubuchen', 'alleine mit maschine'],
-    content: `Wenn der Platz über die Vereins-Ballmaschine verfügt:
+    content: `Wenn der Platz über die Vereinsballmaschine verfügt:
 
 1. Klicke im Belegungsplan auf einen freien Zeitslot.
 2. Setze im Buchungsfenster ein Häkchen bei **„Ballmaschine zubuchen“**.
@@ -171,12 +171,12 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'plaetze-kollisionen',
     module: 'Plätze',
-    title: 'Buchungskollisionen & Fairplay-Sperren',
+    title: 'Buchungskollisionen & Fairplaysperren',
     keywords: ['kollision', 'doppelbuchung', 'fairplay sperre', 'bereits gebucht', 'vorlaufzeit', 'kontingent'],
     content: `Das System schützt vor unfairen Belegungen (` + '`collisionService`' + `):
 
 • **Persönliche Doppelbuchung:** Du kannst zur selben Uhrzeit nicht auf zwei verschiedenen Plätzen eingebucht sein.
-• **Mitspieler-Kollision:** Ist dein gewünschter Partner zum selben Zeitpunkt bereits anderweitig gebucht, warnt das System mit Nennung des Konflikts.
+• **Mitspielerkollision:** Ist dein gewünschter Partner zum selben Zeitpunkt bereits anderweitig gebucht, warnt das System mit Nennung des Konflikts.
 • **Vorlaufzeit & Kontingent:** Je nach Clubvorgabe kann maximal eine begrenzte Anzahl an Tagen im Voraus gebucht werden, damit alle Mitglieder gleiche Chancen haben.`
   },
   {
@@ -203,7 +203,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   1. Platz mit dem Schleppnetz **kreisförmig von außen nach innen** bis an die Zäune abziehen.
   2. Alle Linien mit dem Linienbesen säubern.
   3. Bei Trockenheit die Beregnungsanlage einschalten.
-• **Wichtige Regen-Regel:**
+• **Wichtige Regenregel:**
   * Bei Pfützenbildung ist das Spielen untersagt!
   * **Pfützen dürfen NIEMALS mit Schleppnetzen oder Besen weggeschoben werden**, da dies das feine Ziegelmehl unwiderruflich ausschwemmt. Erst spielen, wenn der Platz trittfest abgetrocknet ist.`
   },
@@ -216,7 +216,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
     module: 'Veranstaltungen',
     title: 'An- und Abmeldung zu Events & Turnieren',
     keywords: ['veranstaltung', 'turnier', 'event', 'schleifchenturnier', 'anmelden turnier', 'abmelden event', 'party'],
-    content: `Im Modul **Veranstaltungen** (Symbol: Party-Popper):
+    content: `Im Modul **Veranstaltungen** (Symbol: Partypopper):
 
 1. **Event wählen:** Klicke in der Liste auf das gewünschte Event (z. B. Saisoneröffnung oder Schleifchenturnier).
 2. **Anmelden:** Klicke auf den Button **„Anmelden“**. Falls ein Kommentarfeld aktiv ist, kannst du Spielstärke, Partnerwunsch oder Salat-/Kuchenspenden eintragen.
@@ -235,23 +235,23 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
     content: `Die vereinsinterne Forderungspyramide (Symbol: Medaille):
 
 • **Forderungsrecht:** Du darfst Spieler fordern, die in der Pyramide über dir stehen (in derselben Reihe links von dir oder in der Reihe direkt darüber).
-• **Platztausch-Prinzip:**
+• **Platztauschprinzip:**
   * **Sieg des Forderers:** Du übernimmst den Rangplatz des Verlierers. Der Verlierer und alle dazwischenliegenden Spieler rücken genau 1 Platz nach unten.
   * **Sieg des Geforderten:** Die Rangliste bleibt unverändert.
 • **Ablauf:** Klicke auf das Profil des Spielers in der Pyramide, öffne das Kontaktfenster, vereinbart einen Termin und bucht regulär einen Platz!`
   },
 
   // ---------------------------------------------------------------------------
-  // Modul 4: Meisterschaft (Clubturniere & Meisterschafts-Hub)
+  // Modul 4: Meisterschaft (Clubturniere & Meisterschaftshub)
   // ---------------------------------------------------------------------------
   {
     id: 'meisterschaft-zaehlweise',
     module: 'Meisterschaft',
-    title: 'Meisterschafts-Zählweise & Spielformate',
+    title: 'Meisterschaftszählweise & Spielformate',
     keywords: ['meisterschaft zählweise', 'champions tiebreak', 'match tiebreak regeln', 'satz tiebreak', 'meisterschaft ergebnis', 'w/o', 'aufgabe'],
     content: `Offizielle Zählweise für Clubmeisterschaften:
 
-• **1. & 2. Satz:** Regulärer Satz bis 6 Spiele (z. B. 6:4, 7:5). Bei 6:6 entscheidet ein Satz-Tiebreak bis 7 (mit min. 2 Punkten Vorsprung).
+• **1. & 2. Satz:** Regulärer Satz bis 6 Spiele (z. B. 6:4, 7:5). Bei 6:6 entscheidet ein Satztiebreak bis 7 (mit min. 2 Punkten Vorsprung).
 • **3. Satz (Entscheidungssatz):** Pflicht-Match-Tiebreak bis **10 Punkte** (mit min. 2 Punkten Vorsprung). Es wird kein ganzer 3. Satz gespielt!
 • **Aufgabe / Verletzung (w/o):** Kann ein Spieler nicht antreten oder muss aufgeben, aktiviere im Ergebnisfenster *„w/o (Aufgabe) – 6:0, 6:0“* und wähle den Sieger.`
   },
@@ -276,16 +276,16 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'liga-hobbyliga-punkte',
     module: 'Liga',
-    title: 'Hobbyliga Punkte-Mechanik & Regeln',
+    title: 'Hobbyliga Punktemechanik & Regeln',
     keywords: ['hobbyliga', 'liga', 'ligapunkte', 'partnerbörse', 'inaktivität', 'abzug punkte', 'hobbyliga spiel', 'bonuspunkte'],
     content: `Die Hobbyliga (Symbol: Schild) für ganzjährigen Spielbetrieb:
 
 • **Teilnahme:** Im Profil per Häkchen bei *„Teilnahme an der Hobbyliga“* aktivieren.
-• **Punkte-System:**
-  * Jede ausgetragene Partie belohnt beide Spieler mit Basis-Punkten (Standard: 5 Punkte).
-  * Siege über höher platzierte Spieler bringen spürbare **Bonus-Punkte**!
-• **Inaktivitäts-Dämpfung:** Wer länger als 7 Tage kein Ligaspiel macht, verliert 5 Punkte pro inaktiver Woche.
-• **24-Stunden-Fenster:** Neu gemeldete Ergebnisse bleiben 24 Stunden als vorläufig markiert zur Einsicht beider Spieler.
+• **Punktesystem:**
+  * Jede ausgetragene Partie belohnt beide Spieler mit Basispunkten (Standard: 5 Punkte).
+  * Siege über höher platzierte Spieler bringen spürbare **Bonuspunkte**!
+• **Inaktivitätsdämpfung:** Wer länger als 7 Tage kein Ligaspiel macht, verliert 5 Punkte pro inaktiver Woche.
+• **24-Stundenfenster:** Neu gemeldete Ergebnisse bleiben 24 Stunden als vorläufig markiert zur Einsicht beider Spieler.
 • **Spielpartner-Börse:** Unter *Liga -> Spielpartner-Börse* kannst du eigene Inserate aufgeben oder auf Gesuche antworten.`
   },
 
@@ -314,9 +314,9 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
     module: 'Arbeitseinsätze',
     title: 'Arbeitseinsätze: Stunden ableisten & einreichen',
     keywords: ['arbeitseinsatz', 'arbeitsdienst', 'helferstunden', 'arbeitsstunden einreichen', 'schichten', 'offene schichten', 'pflichtstunden'],
-    content: `Das Modul Arbeitseinsätze (Aktentaschen-Symbol):
+    content: `Das Modul Arbeitseinsätze (Aktentaschensymbol):
 
-• **Soll-Vorgabe:** Aktive Mitglieder ab 18 Jahren leisten in der Regel **10 Arbeitsstunden** pro Saison ab.
+• **Sollvorgabe:** Aktive Mitglieder ab 18 Jahren leisten in der Regel **10 Arbeitsstunden** pro Saison ab.
 • **Option A – Geplante Schichten:** Unter *„Offene Schichten“* kannst du dich verbindlich für organisierte Einsätze eintragen (z. B. Platzinstandsetzung, Turnierdienste).
 • **Option B – Eigenen Einsatz einreichen:**
   1. Klicke auf **„Einsatz einreichen“**.
@@ -330,7 +330,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   {
     id: 'profil-privatsphaere-avatar',
     module: 'Mein Profil',
-    title: 'Profil, Avatar-Zuschnitt & Datenschutzeinstellungen',
+    title: 'Profil, Avatarzuschnitt & Datenschutzeinstellungen',
     keywords: ['profil', 'avatar', 'profilbild', 'bild zuschneiden', 'passwort ändern', 'datenschutz', 'kontaktdaten', 'onboarding'],
     content: `Im Profilmenü (Klick auf deinen Avatar oben rechts):
 
@@ -341,7 +341,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
   },
 
   // ---------------------------------------------------------------------------
-  // Offizielle ITF / DTB Tennis-Regeln
+  // Offizielle ITF / DTB Tennisregeln
   // ---------------------------------------------------------------------------
   {
     id: 'tennisregel-tiebreak',
@@ -376,7 +376,7 @@ export const TUTORIAL_KNOWLEDGE: KnowledgeEntry[] = [
 
 • **Die Linie gehört zum Feld:** Berührt der Ball auch nur die winzigste Außenkante einer Linie, gilt er als **vollkommen GUT**!
 • **Entscheidung:** Jeder Spieler entscheidet Bälle auf seiner eigenen Platzhälfte.
-• **Fairplay-Gebot:** Kann ein Spieler einen Ball nicht zu 100 % sicher im Aus sehen, **muss** der Ball zwingend zugunsten des Gegners als „GUT“ gewertet werden.`
+• **Fairplaygebot:** Kann ein Spieler einen Ball nicht zu 100 % sicher im Aus sehen, **muss** der Ball zwingend zugunsten des Gegners als „GUT“ gewertet werden.`
   },
   {
     id: 'tennisregel-fussfehler',

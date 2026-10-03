@@ -433,7 +433,7 @@ export const HobbyligaBookingDrawer: React.FC<HobbyligaBookingDrawerProps> = ({
     });
   }, [currentClubSettings, currentClubBookings, modalStartTime, endTime, slot?.date]);
 
-  // Auto-adjust court when facility changes or courtOptions change (Platz-Check)
+  // Auto-adjust court when facility changes or courtOptions change (Platzcheck)
   useEffect(() => {
     if (!isOpen || courtOptions.length === 0) return;
     const courtNames = courtOptions.map((c) => c.name);
@@ -696,7 +696,7 @@ export const HobbyligaBookingDrawer: React.FC<HobbyligaBookingDrawerProps> = ({
   const handleSubmit = async () => {
     if (!slot) return;
     if (!leagueOpponent) {
-      setError('Bitte wähle einen Hobbyliga-Gegner aus.');
+      setError('Bitte wähle einen Hobbyligagegner aus.');
       return;
     }
     if (playerCollision) {
@@ -708,11 +708,11 @@ export const HobbyligaBookingDrawer: React.FC<HobbyligaBookingDrawerProps> = ({
       return;
     }
     if (currentDuration < 2 && facilityClosingIdx > TIME_SLOTS.indexOf(modalStartTime) + 1) {
-      setError(`Hobbyliga-Matches müssen mindestens 2 Stunden dauern (aktuell: ${currentDuration.toFixed(1)} Std.).`);
+      setError(`Hobbyligamatches müssen mindestens 2 Stunden dauern (aktuell: ${currentDuration.toFixed(1)} Std.).`);
       return;
     }
     if (currentDuration > 3) {
-      setError(`Hobbyliga-Matches dürfen maximal 3 Stunden dauern (aktuell: ${currentDuration.toFixed(1)} Std.).`);
+      setError(`Hobbyligamatches dürfen maximal 3 Stunden dauern (aktuell: ${currentDuration.toFixed(1)} Std.).`);
       return;
     }
 

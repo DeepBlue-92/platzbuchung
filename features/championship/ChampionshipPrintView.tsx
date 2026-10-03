@@ -18,7 +18,7 @@ interface ChampionshipPrintViewProps {
 export const ChampionshipPrintView: React.FC<ChampionshipPrintViewProps> = ({
   tournament,
   users,
-  clubName = 'Tennis-Club',
+  clubName = 'Tennisclub',
   logoUrl,
   previewMode = false,
 }) => {
@@ -131,7 +131,7 @@ export const ChampionshipPrintView: React.FC<ChampionshipPrintViewProps> = ({
             </strong>
           </div>
           <div>
-            <span className="text-slate-500 font-medium">Tiebreak-Regel:</span>{' '}
+            <span className="text-slate-500 font-medium">Tiebreakregel:</span>{' '}
             <strong className="text-slate-800">
               {tournament.tieBreakRule === 'head_to_head' ? 'Direkter Vergleich' : 'Satzdifferenz'}
             </strong>
@@ -248,7 +248,7 @@ export const ChampionshipPrintView: React.FC<ChampionshipPrintViewProps> = ({
           {semiFinals.length > 0 && (
             <div className="mt-4 pt-3 border-t border-slate-200">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                Halbfinal-Begegnungen
+                Halbfinalbegegnungen
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 {semiFinals.map((hf, idx) => (
@@ -299,7 +299,7 @@ export const ChampionshipPrintView: React.FC<ChampionshipPrintViewProps> = ({
 
               return (
                 <div key={group.id} className="border border-slate-300 rounded-xl overflow-hidden break-inside-avoid">
-                  {/* Gruppen-Header */}
+                  {/* Gruppenheader */}
                   <div className="bg-slate-100 px-3 py-2 border-b border-slate-300 flex items-center justify-between">
                     <h3 className="font-black text-xs text-slate-900 uppercase tracking-wider">
                       {group.name}
@@ -392,7 +392,7 @@ export const ChampionshipPrintView: React.FC<ChampionshipPrintViewProps> = ({
           <div className="flex items-center gap-2 border-b border-slate-300 pb-1.5 mb-3">
             <Calendar className="w-4 h-4 text-slate-600" />
             <h2 className="text-sm font-black uppercase tracking-wider text-slate-900">
-              Spielplan & Partien-Übersicht
+              Spielplan & Partienübersicht
             </h2>
           </div>
 
@@ -481,7 +481,7 @@ export const ChampionshipPrintView: React.FC<ChampionshipPrintViewProps> = ({
       {/* ===================================================================== */}
       <footer className="pt-3 border-t border-slate-300 flex items-center justify-between text-[9px] text-slate-500">
         <div>
-          {clubName} &bull; Vereinsmeisterschafts-System
+          {clubName} &bull; Vereinsmeisterschaftssystem
         </div>
         <div>
           Offizieller Abschlussbericht &bull; Gedruckt am {todayStr}

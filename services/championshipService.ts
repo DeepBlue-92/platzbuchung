@@ -141,7 +141,7 @@ export async function deleteChampionshipTemplate(
     if (err?.message?.includes('Gesperrte Vorlagen in aktiver Verwendung können nicht gelöscht werden')) {
       throw err;
     }
-    console.warn('[ChampionshipService] Lock-Prüfung vor dem Löschen fehlgeschlagen/übersprungen:', err);
+    console.warn('[ChampionshipService] Lockprüfung vor dem Löschen fehlgeschlagen/übersprungen:', err);
   }
 
   try {

@@ -74,7 +74,7 @@ export const ChampionshipTemplatesModal: React.FC<ChampionshipTemplatesModalProp
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-base font-bold text-slate-900">
-              Turnier-Vorlagen (Templates)
+              Turniervorlagen (Templates)
             </h3>
             <p className="text-xs text-slate-500 font-medium">
               Vorlagen definieren den Spielmodus, Stufen und Regeln. Verwendete Vorlagen sind manipulationssicher gesperrt.

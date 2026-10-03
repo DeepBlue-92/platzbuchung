@@ -227,7 +227,7 @@ export const HobbyligaNaechstesSpiel: React.FC<HobbyligaNaechstesSpielProps> = (
                 <button
                   onClick={() => onCancelMatch && onCancelMatch(currentMatch)}
                   className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
-                  title="Match-Ergebnis stornieren und Punkte zurücksetzen"
+                  title="Matchergebnis stornieren und Punkte zurücksetzen"
                 >
                   <i className="fa-solid fa-rotate-left text-[10px]" /> Stornieren
                 </button>

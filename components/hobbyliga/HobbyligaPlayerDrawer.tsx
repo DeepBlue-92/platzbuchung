@@ -310,7 +310,7 @@ export const HobbyligaPlayerDrawer: React.FC<HobbyligaPlayerDrawerProps> = ({
     return { matches: h2h, userWins, targetWins };
   }, [matches, targetUserId, isCurrentUser, currentUser.id]);
 
-  // Sparkline Chart: Ranglisten-Verlauf der letzten Wochen/Monate (chronologisch aufsteigend)
+  // Sparkline Chart: Ranglistenverlauf der letzten Wochen/Monate (chronologisch aufsteigend)
   const sparklineData = useMemo(() => {
     if (!targetUserId) return [];
 
@@ -321,7 +321,7 @@ export const HobbyligaPlayerDrawer: React.FC<HobbyligaPlayerDrawerProps> = ({
     const totalPlayers = Math.max((allProfiles || []).length || 1, 5);
     const initialRank = Math.min(totalPlayers, Math.max(1, Math.ceil(totalPlayers / 2)));
 
-    // Start-Punkt
+    // Startpunkt
     const firstDate = chronological.length > 0
       ? new Date(chronological[0].played_at || chronological[0].createdAt)
       : new Date();
@@ -643,7 +643,7 @@ export const HobbyligaPlayerDrawer: React.FC<HobbyligaPlayerDrawerProps> = ({
                       const isUserWinner = m.result?.winnerId === currentUser.id;
                       const isP1User = (m.player1UserId || m.player1Id) === currentUser.id;
 
-                      // Satz-Ergebnis (aus Sicht des aktuellen Nutzers)
+                      // Satzergebnis (aus Sicht des aktuellen Nutzers)
                       const setsFormatted = m.result?.sets
                         ? isP1User
                           ? m.result.sets.map((s) => `${s.p1}:${s.p2}`).join(', ')

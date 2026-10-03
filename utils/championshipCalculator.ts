@@ -104,7 +104,7 @@ export function getEffectiveMatchesWithWalkovers(
             isWalkover: true,
             walkoverReason: 'Aufgabe / Verletzung (automatische 6:0, 6:0 Wertung)',
             enteredByUserId: 'system',
-            enteredByUserName: 'Turnier-System',
+            enteredByUserName: 'Turniersystem',
             enteredAt: new Date().toISOString(),
           },
         };
@@ -124,7 +124,7 @@ export function getEffectiveMatchesWithWalkovers(
             isWalkover: true,
             walkoverReason: 'Aufgabe / Verletzung (automatische 6:0, 6:0 Wertung)',
             enteredByUserId: 'system',
-            enteredByUserName: 'Turnier-System',
+            enteredByUserName: 'Turniersystem',
             enteredAt: new Date().toISOString(),
           },
         };

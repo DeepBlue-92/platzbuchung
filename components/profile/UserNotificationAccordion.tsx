@@ -39,8 +39,8 @@ interface EventItemConfig {
 // 1. Buchungsbestätigung
 // 2. Buchungsstornierung
 // 3. Buchungsänderung
-// 4. Neuer Hobbyliga-Beitrag
-// 5. Match-Ergebnis eingetragen
+// 4. Neuer Hobbyligabeitrag
+// 5. Matchergebnis eingetragen
 const ORDERED_EVENT_ITEMS: EventItemConfig[] = [
   {
     key: "RESERVATION_CONFIRMED",
@@ -59,13 +59,13 @@ const ORDERED_EVENT_ITEMS: EventItemConfig[] = [
   },
   {
     key: "HOBBYLIGA_NEW_POST",
-    label: "Neuer Hobbyliga-Beitrag",
+    label: "Neuer Hobbyligabeitrag",
     description: "Benachrichtigung bei neuen Beiträgen auf der Pinnwand der Hobbyliga.",
   },
   {
     key: "MATCH_RESULT_SUBMITTED",
-    label: "Match-Ergebnis eingetragen",
-    description: "Ergebnis-Mitteilung, wenn dein Spielpartner ein Match-Ergebnis erfasst hat.",
+    label: "Matchergebnis eingetragen",
+    description: "Ergebnismitteilung, wenn dein Spielpartner ein Matchergebnis erfasst hat.",
   },
 ];
 
@@ -152,7 +152,7 @@ export const UserNotificationAccordion: React.FC<UserNotificationAccordionProps>
             <span className="text-[10px] text-slate-500 block truncate">
               {isGlobalEmailPaused
                 ? "E-Mail-Versand klubweit pausiert"
-                : `${activeCount} von ${ORDERED_EVENT_ITEMS.length} E-Mail-Kategorien aktiv`}
+                : `${activeCount} von ${ORDERED_EVENT_ITEMS.length} E-Mailkategorien aktiv`}
             </span>
           </div>
         </div>

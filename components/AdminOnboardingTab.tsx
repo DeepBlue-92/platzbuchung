@@ -72,7 +72,7 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
       setTimeout(() => setSaveSuccess(false), 3500);
     } catch (err: any) {
       console.error("Failed to save onboarding settings:", err);
-      setSaveError(err.message || "Fehler beim Speichern der Onboarding-Einstellungen.");
+      setSaveError(err.message || "Fehler beim Speichern der Onboardingeinstellungen.");
       setTimeout(() => setSaveError(null), 6000);
     } finally {
       setIsSaving(false);
@@ -211,7 +211,7 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
                 Onboarding für Club aktivieren
               </label>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Ist dieser Schalter aktiv, erscheint das Onboarding-Modal automatisch bei jedem Mitglied, das die Markierung &quot;Onboarding ausstehend&quot; im Benutzerprofil besitzt.
+                Ist dieser Schalter aktiv, erscheint das Onboardingmodal automatisch bei jedem Mitglied, das die Markierung &quot;Onboarding ausstehend&quot; im Benutzerprofil besitzt.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
@@ -238,7 +238,7 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
                 Automatisch für neu erstellte Benutzer aktivieren
               </label>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Neu angelegte Mitglieder erhalten automatisch die Kennzeichnung &quot;Onboarding ausstehend&quot;, sodass sie beim Erst-Login direkt begrüßt werden.
+                Neu angelegte Mitglieder erhalten automatisch die Kennzeichnung &quot;Onboarding ausstehend&quot;, sodass sie beim Erstlogin direkt begrüßt werden.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
@@ -268,7 +268,7 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
               htmlFor="welcome-title-input"
               className="block text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1.5"
             >
-              Begrüßungs-Überschrift (Signatur-Serifenschrift)
+              Begrüßungs-Überschrift (Signaturserifenschrift)
             </label>
             <input
               type="text"
@@ -277,11 +277,11 @@ export const AdminOnboardingTab: React.FC<AdminOnboardingTabProps> = ({
               onChange={(e) =>
                 setConfig({ ...config, welcome_title: e.target.value })
               }
-              placeholder="Willkommen in unserem Tennis-Club!"
+              placeholder="Willkommen in unserem Tennisclub!"
               className="w-full h-11 px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-[var(--color-primary)] outline-none text-sm text-slate-900 font-serif font-bold transition-all shadow-2xs"
             />
             <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
-              Wird im Modal mit der eleganten Vereins-Serifenschrift (Playfair Display) dargestellt.
+              Wird im Modal mit der eleganten Vereinsserifenschrift (Playfair Display) dargestellt.
             </p>
           </div>
 

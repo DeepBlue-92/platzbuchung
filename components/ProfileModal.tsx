@@ -451,7 +451,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({
                   {showAdminNotice && (
                     <div className="mt-2 text-[10px] text-slate-400 font-medium px-1 flex items-start gap-1.5">
                       <i className="fa-solid fa-circle-info mt-0.5 text-blue-400"></i>
-                      Stammdaten zur Liga-Zuordnung. Änderungen bitte über den Administrator anfragen.
+                      Stammdaten zur Ligazuordnung. Änderungen bitte über den Administrator anfragen.
                     </div>
                   )}
                 </div>

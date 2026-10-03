@@ -418,7 +418,7 @@ export const HobbyligaMiniKalender: React.FC<HobbyligaMiniKalenderProps> = ({
             </span>
             <div>
               <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                Freie Liga-Slots
+                Freie Ligaslots
               </h3>
             </div>
           </div>

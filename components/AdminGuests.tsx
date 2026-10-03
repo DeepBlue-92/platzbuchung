@@ -1046,7 +1046,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 shadow-sm">
                     {rules.length === 0 ? (
                       <div className="text-center text-slate-400 text-sm py-8 bg-white">
-                        Keine Regeln hinterlegt. Es gelten die System-Defaults.
+                        Keine Regeln hinterlegt. Es gelten die Systemdefaults.
                       </div>
                     ) : (
                       [...rules].sort((a, b) => b.gueltig_ab_jahr - a.gueltig_ab_jahr).map((rule: any) => (
@@ -1094,7 +1094,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-sm">
-                    <h4 className="text-sm font-bold text-slate-800 mb-4">Gastspiel-Gebühren</h4>
+                    <h4 className="text-sm font-bold text-slate-800 mb-4">Gastspielgebühren</h4>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 mb-2">
                         Gastspielgebühr
@@ -1240,7 +1240,7 @@ const AdminGuests: React.FC<AdminGuestsProps> = ({
                 {/* Manual vs Scheduled Indication */}
                 {editingBooking && !editingBooking.isManualGuestEntry && (
                   <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-[10px] font-semibold leading-relaxed">
-                    Dieses Gastspiel stammt aus einer regulären Kalender-Buchung.
+                    Dieses Gastspiel stammt aus einer regulären Kalenderbuchung.
                     Datum, Zeit und Platz sind schreibgeschützt und können im
                     Kalender geändert werden.
                   </div>

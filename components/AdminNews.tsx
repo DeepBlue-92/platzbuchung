@@ -26,7 +26,7 @@ const AdminNews: React.FC<AdminNewsProps> = ({ currentNews, onUpdateNews }) => {
           </div>
           <div>
             <h2 className="text-3xl font-black text-[var(--color-primary)] uppercase tracking-tighter">
-              News-Zentrale
+              Newszentrale
             </h2>
             <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em]">
               Kommunikation für alle Mitglieder

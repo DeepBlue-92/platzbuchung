@@ -189,7 +189,7 @@ export async function cropAndCompressAvatar(
 }
 
 /**
- * Lädt das komprimierte Avatar-Bild in Firebase Storage hoch.
+ * Lädt das komprimierte Avatarbild in Firebase Storage hoch.
  * Besitzt ein Timeout, damit der Vorgang bei Netzwerkproblemen niemals unendlich hängen bleibt.
  */
 export async function uploadAvatarToStorage(
@@ -221,7 +221,7 @@ export async function uploadAvatarToStorage(
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     setTimeout(
-      () => reject(new Error("Timeout beim Hochladen in den Cloud-Speicher.")),
+      () => reject(new Error("Timeout beim Hochladen in den Cloudspeicher.")),
       timeoutMs
     );
   });
@@ -230,7 +230,7 @@ export async function uploadAvatarToStorage(
 }
 
 /**
- * Löscht ein altes Avatar-Bild aus Firebase Storage
+ * Löscht ein altes Avatarbild aus Firebase Storage
  */
 export async function deleteAvatarFromStorage(avatarUrl: string): Promise<void> {
   if (!avatarUrl || typeof avatarUrl !== "string") return;
@@ -251,7 +251,7 @@ export async function deleteAvatarFromStorage(avatarUrl: string): Promise<void> 
 }
 
 /**
- * Standard Vektor-Icons (Zero-Bandwidth Fallback)
+ * Standard Vektoricons (Zero-Bandwidth Fallback)
  * Werden lokal im Frontend-Bundle gerendert und verbrauchen 0 Byte Firebase-Traffic!
  */
 export interface AvatarIconOption {
@@ -263,7 +263,7 @@ export interface AvatarIconOption {
 }
 
 export const AVATAR_ICON_OPTIONS: AvatarIconOption[] = [
-  // Reihe 1: Basis & Tennis-Kern
+  // Reihe 1: Basis & Tenniskern
   {
     id: "initials",
     name: "Initialen",
@@ -306,7 +306,7 @@ export const AVATAR_ICON_OPTIONS: AvatarIconOption[] = [
     colorClass: "text-amber-700",
     bgClass: "bg-amber-100",
   },
-  // Reihe 2: Tennis-Taktik & Vereinsleben
+  // Reihe 2: Tennistaktik & Vereinsleben
   {
     id: "flame",
     name: "Flamme",

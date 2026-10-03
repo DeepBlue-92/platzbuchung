@@ -35,7 +35,7 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
   onNavigateToAdmin,
   onSelectAdmin,
   users = {},
-  clubName = 'Tennis-Club',
+  clubName = 'Tennisclub',
   onExportExcel,
   onExportPdf,
   onPrint,
@@ -197,7 +197,7 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
             )}
           </div>
 
-          {/* Button "Turnier-Verwaltung" (für Admins) */}
+          {/* Button "Turnierverwaltung" (für Admins) */}
           {isAdmin && (
             <button
               type="button"
@@ -213,10 +213,10 @@ export const ChampionshipBentoHeader: React.FC<ChampionshipBentoHeaderProps> = (
                   ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
                   : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
               }`}
-              title="Turnier-Einstellungen & Verwaltung"
+              title="Turniereinstellungen & Verwaltung"
             >
               <Settings className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden sm:inline">Turnier-Verwaltung</span>
+              <span className="hidden sm:inline">Turnierverwaltung</span>
               <span className="inline sm:hidden">Verwaltung</span>
             </button>
           )}

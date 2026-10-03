@@ -194,7 +194,7 @@ export const OnboardingBatchActions: React.FC<OnboardingBatchActionsProps> = ({
       console.error("Toggle single member onboarding error:", err);
       setFeedback({
         type: "error",
-        message: err.message || "Fehler beim Umschalten des Onboarding-Status.",
+        message: err.message || "Fehler beim Umschalten des Onboardingstatus.",
       });
       setTimeout(() => setFeedback(null), 5000);
     } finally {
@@ -232,7 +232,7 @@ export const OnboardingBatchActions: React.FC<OnboardingBatchActionsProps> = ({
           />
         </div>
 
-        {/* Schnellfilter Segment-Pills */}
+        {/* Schnellfilter Segmentpills */}
         <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-xl shrink-0 text-xs select-none">
           <button
             type="button"
@@ -283,7 +283,7 @@ export const OnboardingBatchActions: React.FC<OnboardingBatchActionsProps> = ({
         onClearSelection={handleClearSelection}
       />
 
-      {/* 4. Selektierbare Mitglieder-Liste */}
+      {/* 4. Selektierbare Mitgliederliste */}
       <OnboardingMemberSelectorList
         members={filteredMembers}
         selectedKeys={selectedUserKeys}

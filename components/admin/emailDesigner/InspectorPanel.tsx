@@ -779,7 +779,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
         {/* Button Label */}
         <div className="space-y-1">
           <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-            Button-Beschriftung
+            Buttonbeschriftung
           </label>
           <input
             type="text"
@@ -1372,7 +1372,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 config: { ...cfg, altText: e.target.value },
               })
             }
-            placeholder="z. B. Vereinslogo Tennis-Club e.V."
+            placeholder="z. B. Vereinslogo Tennisclub e.V."
             className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:border-emerald-600"
           />
         </div>

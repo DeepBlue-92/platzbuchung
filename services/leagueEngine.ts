@@ -113,7 +113,7 @@ export function applyDecay(
   matchesCount?: number,
   targetDateIso?: string
 ): number {
-  // Das Punkte-Modell ist rein akkumulativ. Es gibt keinen Punkteabzug für Inaktivität.
+  // Das Punktemodell ist rein akkumulativ. Es gibt keinen Punkteabzug für Inaktivität.
   return currentPoints;
 }
 

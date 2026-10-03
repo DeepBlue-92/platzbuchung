@@ -30,14 +30,14 @@ export const ADMIN_WIKI_CATEGORIES: AdminWikiCategory[] = [
 
 Das System unterscheidet folgende Berechtigungsstufen:
 
-1. **Super-Administrator (\`super-admin\`):**
+1. **Superadministrator (\`super-admin\`):**
    - Höchste Systemebene mit mandantenübergreifender Gesamtverwaltung.
    - Zugriff auf das Super-Admin-Dashboard, globale Mandantenverwaltung, globale Backups und endgültige DSGVO-Benutzerbereinigung (Papierkorb).
-2. **Haupt-Administrator (\`hauptAdmin: true\`):**
+2. **Hauptadministrator (\`hauptAdmin: true\`):**
    - Vereinsinterner Hauptverantwortlicher (z. B. 1. Vorstand oder Sportwart).
-   - Kann andere Administratoren für den Verein ernennen oder deren Admin-Rechte entziehen.
+   - Kann andere Administratoren für den Verein ernennen oder deren Adminrechte entziehen.
 3. **Administrator (\`admin\`):**
-   - Verwaltung von Vereins-Einstellungen, Platzsperren, Buchungs-Reports, Gastspiel-Abrechnungen, Turnieren und News.
+   - Verwaltung von Vereinseinstellungen, Platzsperren, Buchungsreports, Gastspielabrechnungen, Turnieren und News.
 4. **Mitglied / Spieler (\`mitglied\` / \`spieler\`):**
    - Reguläre Berechtigung zur Platzbuchung, Ranglistenteilnahme, Meisterschafts- und Profilverwaltung.`
       },
@@ -50,7 +50,7 @@ Das System unterscheidet folgende Berechtigungsstufen:
 
 - **Einzelne Mitglieder anlegen:** Im Bereich **Mitgliederverwaltung** auf **„+ Neues Mitglied“** klicken. Pflichtangaben sind Vorname, Nachname, Benutzername und ein Anfangspasswort (mind. 8 Zeichen).
 - **Excel- / CSV-Massenimport:** Über den Button **„Importieren“** können Adresslisten aus gängigen Vereinsverwaltungsprogrammen (z. B. NetTennis, ClubDesk, BLSV) importiert werden. Das System mappt automatisch Spalten wie Name, E-Mail, Telefon und Geburtsdatum.
-- **Platzhalter-E-Mails:** Bei Mitgliedern ohne eigene E-Mail-Adresse erzeugt das System automatisch eine interne Platzhalter-Adresse (\`vorname.nachname@verein.internal\`), damit alle Authentifizierungsprozesse stabil durchlaufen.`
+- **Platzhalter-E-Mails:** Bei Mitgliedern ohne eigene E-Mail-Adresse erzeugt das System automatisch eine interne Platzhalteradresse (\`vorname.nachname@verein.internal\`), damit alle Authentifizierungsprozesse stabil durchlaufen.`
       },
       {
         id: 'konten-sperren-entsperren',
@@ -67,25 +67,25 @@ Administratoren können einzelne Mitglieder mit sofortiger Wirkung für Buchunge
       {
         id: 'onboarding-konfiguration',
         title: 'Saisonales Onboarding, ACE-Begrüßung & Stapelaktionen',
-        summary: 'Steuerung des Begrüßungsfensters, ACE-Callout und globale Reset-Funktionen zum Saisonstart.',
+        summary: 'Steuerung des Begrüßungsfensters, ACE-Callout und globale Resetfunktionen zum Saisonstart.',
         keywords: ['onboarding', 'saisonstart', 'begrüßungsfenster', 'batch', 'stapelaktion', 'pflichtfelder', 'ace', 'sprechblase'],
-        content: `### Onboarding-Zentrale für Administratoren
+        content: `### Onboardingzentrale für Administratoren
 
 Unter **Einstellungen ➔ Mitglieder-Onboarding** kann der Begrüßungsdialog gesteuert werden:
-- **Feld-Konfiguration:** Jedes Stammdatenfeld (Geburtsdatum, Geschlecht, Telefon, E-Mail, Passwort) kann einzeln auf *„Frei bearbeitbar“*, *„Schreibgeschützt“* oder *„Ausgeblendet“* geschaltet werden.
-- **ACE Onboarding-Sprechblase (Willkommens-Callout):**
-  - Sobald ein Mitglied sein Erst-Onboarding bestätigt, zeigt das System über dem schwebenden Maskottchen-Button eine dezente Sprechblase (*„Hi, ich bin ACE! 👋“*).
+- **Feldkonfiguration:** Jedes Stammdatenfeld (Geburtsdatum, Geschlecht, Telefon, E-Mail, Passwort) kann einzeln auf *„Frei bearbeitbar“*, *„Schreibgeschützt“* oder *„Ausgeblendet“* geschaltet werden.
+- **ACE Onboardingsprechblase (Willkommenscallout):**
+  - Sobald ein Mitglied sein Erstonboarding bestätigt, zeigt das System über dem schwebenden Maskottchenbutton eine dezente Sprechblase (*„Hi, ich bin ACE! 👋“*).
   - Der Status wird über das Benutzerprofil (\`has_seen_ace_welcome: true\`) und im LocalStorage dauerhaft gespeichert, sodass der Hinweis garantiert nur einmalig pro Benutzerlebenszeit erscheint.
   - Das Element blendet sich nach 8 Sekunden selbstständig aus oder schließt sich per Klick.
-- **Stapelverarbeitung: Onboarding-Status (Selektiv & Global):**
+- **Stapelverarbeitung: Onboardingstatus (Selektiv & Global):**
   - **Schnellsuche & Filter:** Suche nach Vor-/Nachnamen und E-Mail sowie Filterung nach *„Ausstehend“* und *„Erledigt“*.
   - **Mehrfachauswahl & Bulk-Aktionen:** Markiere gezielt einzelne oder alle gefilterten Mitglieder und aktiviere das Onboarding oder markiere es mit einem Klick als erledigt.
-  - **Einzel-Umschalter:** Schalte das Onboarding für ein einzelnes Mitglied direkt in der Liste um.
-  - **Globale Aktionen:** Über *„Für alle anwenden...“* kann das Onboarding weiterhin für die gesamte Mitgliedschaft auf einmal ein- oder ausgeschaltet werden (inkl. Sicherheits-Abfrage).`
+  - **Einzelumschalter:** Schalte das Onboarding für ein einzelnes Mitglied direkt in der Liste um.
+  - **Globale Aktionen:** Über *„Für alle anwenden...“* kann das Onboarding weiterhin für die gesamte Mitgliedschaft auf einmal ein- oder ausgeschaltet werden (inkl. Sicherheitsabfrage).`
       },
       {
         id: 'dsgvo-loeschung-papierkorb',
-        title: 'DSGVO-Löschung & Papierkorb mit 30-Tage-Frist',
+        title: 'DSGVO-Löschung & Papierkorb mit 30-Tagefrist',
         summary: 'Rechtssichere Benutzerbereinigung mit Wiederherstellungsmöglichkeit.',
         keywords: ['dsgvo', 'löschen', 'papierkorb', 'purge', 'wiederherstellen', 'datenschutz'],
         content: `### Papierkorb & Endgültige Bereinigung
@@ -105,9 +105,9 @@ Unter **Einstellungen ➔ Mitglieder-Onboarding** kann der Begrüßungsdialog ge
       {
         id: 'plaetze-verwalten',
         title: 'Plätze anlegen, benennen & sortieren',
-        summary: 'Verwaltung der verfügbaren Court-Kapazitäten und Platzmerkmale.',
+        summary: 'Verwaltung der verfügbaren Courtkapazitäten und Platzmerkmale.',
         keywords: ['plätze', 'court', 'sandplatz', 'halle', 'hartplatz', 'anlage', 'anzahl'],
-        content: `### Platz-Konfiguration
+        content: `### Platzkonfiguration
 
 Unter **Einstellungen ➔ Plätze**:
 - **Plätze hinzufügen / entfernen:** Passe die Anzahl der verfügbaren Tennisplätze an.
@@ -117,13 +117,13 @@ Unter **Einstellungen ➔ Plätze**:
       {
         id: 'zeitraster-saisonzeiten',
         title: 'Zeitraster, Öffnungszeiten & Saisonstart',
-        summary: 'Tägliche Buchungszeiten von 07:00 bis 22:00 Uhr und Slot-Dauer (60 / 90 Minuten).',
+        summary: 'Tägliche Buchungszeiten von 07:00 bis 22:00 Uhr und Slotdauer (60 / 90 Minuten).',
         keywords: ['zeitraster', 'slots', 'stunden', 'öffnungszeiten', 'dauer', '60min'],
         content: `### Zeitfenster & Kalendereinstellungen
 
 - **Tägliche Spanne:** Das Standardraster beginnt um 07:00 oder 08:00 Uhr und endet bei Einbruch der Dunkelheit bzw. Hallenschließung um 21:00 oder 22:00 Uhr.
-- **Slot-Länge:** In der Regel 60 Minuten für Einzelslots. Das System unterstützt flexible Startzeiten im vollen Stundentakt.
-- **Saison-Zeitraum:** Über die Vereinseinstellungen kann das offizielle Datum für den Saisonauftakt (Frühjahr) und das Saisonende (Herbst) hinterlegt werden.`
+- **Slotlänge:** In der Regel 60 Minuten für Einzelslots. Das System unterstützt flexible Startzeiten im vollen Stundentakt.
+- **Saisonzeitraum:** Über die Vereinseinstellungen kann das offizielle Datum für den Saisonauftakt (Frühjahr) und das Saisonende (Herbst) hinterlegt werden.`
       },
       {
         id: 'vorausbuchung-limits',
@@ -146,8 +146,8 @@ Unter **Einstellungen ➔ Reservierungsregeln**:
 
 Administratoren können Plätze jederzeit für die allgemeine Buchung sperren:
 - **Im Belegungsplan:** Klicke auf den gewünschten Zeitslot und wähle im Slider den Modus **„Sperre / Reserviert für Verein“**.
-- **Sperrgründe:** Trage einen transparenten Grund ein (z. B. *„Punktspiel Herren 40“*, *„Platzwart-Pflege / Walzen“*, *„Wegen Dauerregen unbespielbar“*).
-- **Farbliche Kennzeichnung:** Gesperrte Slots werden rot hinterlegt mit gut lesbarem Schloss-Icon und Sperrgrund dargestellt.`
+- **Sperrgründe:** Trage einen transparenten Grund ein (z. B. *„Punktspiel Herren 40“*, *„Platzwartpflege / Walzen“*, *„Wegen Dauerregen unbespielbar“*).
+- **Farbliche Kennzeichnung:** Gesperrte Slots werden rot hinterlegt mit gut lesbarem Schlossicon und Sperrgrund dargestellt.`
       }
     ]
   },
@@ -160,61 +160,61 @@ Administratoren können Plätze jederzeit für die allgemeine Buchung sperren:
       {
         id: 'veranstaltungen-turniere',
         title: 'Veranstaltungen & Events anlegen',
-        summary: 'Club-Turniere, Schleifchenturniere und Sommerfeste mit Anmeldefristen und Audit-Log.',
+        summary: 'Clubturniere, Schleifchenturniere und Sommerfeste mit Anmeldefristen und Audit-Log.',
         keywords: ['veranstaltung', 'event', 'turnier', 'anmeldung', 'audit', 'teilnehmer', 'header'],
-        content: `### Event-Management direkt auf der Veranstaltungs-Seite
+        content: `### Event-Management direkt auf der Veranstaltungsseite
 
-- **Einheitlicher Bento-Header:** Die Veranstaltungsansicht verfügt über eine einheitliche Kopfzeile mit Icon (Party-Popper) und Untertitel analog zur Rangliste. Administratoren finden direkt im Header den Schnellzugriff **„Neues Event“**.
-- **Neues Event anlegen:** Klicke auf der Veranstaltungs-Seite auf **„Neues Event“**. Es öffnet sich der Slider zur Eingabe von Titel, Datum, Beschreibung, maximaler Teilnehmerzahl und Anmeldeschluss.
-- **Kommentarfeld bei Anmeldung:** Ermöglicht es Spielern, Essenswünsche, T-Shirt-Größen oder Leistungsklassen anzugeben.
+- **Einheitlicher Bentoheader:** Die Veranstaltungsansicht verfügt über eine einheitliche Kopfzeile mit Icon (Partypopper) und Untertitel analog zur Rangliste. Administratoren finden direkt im Header den Schnellzugriff **„Neues Event“**.
+- **Neues Event anlegen:** Klicke auf der Veranstaltungsseite auf **„Neues Event“**. Es öffnet sich der Slider zur Eingabe von Titel, Datum, Beschreibung, maximaler Teilnehmerzahl und Anmeldeschluss.
+- **Kommentarfeld bei Anmeldung:** Ermöglicht es Spielern, Essenswünsche, T-Shirtgrößen oder Leistungsklassen anzugeben.
 - **Audit-Log (Revisionssicher):** Über den Button **„Audit“** können Administratoren lückenlos nachvollziehen, wann sich welches Mitglied an- oder abgemeldet hat.
 - **Papierkorb:** Gelöschte Events bleiben 30 Tage im Archiv wiederherstellbar.`
       },
       {
         id: 'vereinsmeisterschaft-admin',
-        title: 'Vereinsmeisterschaften (Turnier-Vorlagen & Phasen-Pipeline)',
+        title: 'Vereinsmeisterschaften (Turniervorlagen & Phasenpipeline)',
         summary: 'Strukturierte Turniere mit Vorlagen, Gruppenphasen, K.-o.-Bäumen und Finaltagen organisieren.',
         keywords: ['meisterschaft', 'pipeline', 'vorlage', 'gruppenphase', 'k.o.', 'finaltag', 'baum'],
-        content: `### Meisterschafts-Zentrale im Admin-Bereich
+        content: `### Meisterschaftszentrale im Adminbereich
 
 Im Bereich **Einstellungen ➔ Meisterschaft**:
-- **Turnier-Vorlagen (In-Page-Editor):** Erstelle wiederverwendbare Turnierformate (z. B. *Einzel Herren*, *Doppel Damen*).
-- **Phasen-Pipeline & UX:** Konfiguriere chronologisch von oben nach unten:
+- **Turniervorlagen (In-Page-Editor):** Erstelle wiederverwendbare Turnierformate (z. B. *Einzel Herren*, *Doppel Damen*).
+- **Phasenpipeline & UX:** Konfiguriere chronologisch von oben nach unten:
   1. *Gruppenphase:* Anzahl Gruppen und Spieler pro Gruppe. Die Tabelle führt Sätze und Spiele inklusive Differenz kompakt zusammen (\`4:2 (+2)\`, \`36:24 (+12)\`).
   2. *K.-o.-Stufen:* Halbfinale mit eigener Frist (*„Zu spielen bis“*). In der Teilnehmeransicht werden Partien fokussiert je Phase unter der Überschrift *„Begegnungen [Phasenname]“* (z. B. *Begegnungen Halbfinale*) dargestellt.
-  3. *Finaltag:* Modulare Ausspielung aller Plätze (Großes Finale um Platz 1 & 2, Kleines Finale um Platz 3) mit konkretem Event-Datum (*„Begegnungen Endrunde / Finaltag“*).
-  4. *Performante Animationen:* Der Wechsel zwischen den Phasen sowie zwischen Ranglisten-Kategorien erfolgt über eine hardwarebeschleunigte 150-ms-Fade-Animation (AnimatePresence), die harte Übergänge vermeidet und gleichzeitig sofort reagiert.
+  3. *Finaltag:* Modulare Ausspielung aller Plätze (Großes Finale um Platz 1 & 2, Kleines Finale um Platz 3) mit konkretem Eventdatum (*„Begegnungen Endrunde / Finaltag“*).
+  4. *Performante Animationen:* Der Wechsel zwischen den Phasen sowie zwischen Ranglistenkategorien erfolgt über eine hardwarebeschleunigte 150-ms-Fade-Animation (AnimatePresence), die harte Übergänge vermeidet und gleichzeitig sofort reagiert.
 - **Vorlagenschutz:** Vorlagen, die in laufenden Meisterschaften aktiv sind, werden schreibgeschützt gesperrt, um Ergebnisverfälschungen zu verhindern.`
       },
       {
         id: 'hobbyliga-rangliste',
-        title: 'Hobbyliga & Forderungs-Rangliste',
-        summary: 'Pyramiden-Rangliste und Hobbyliga mit provisorischen Ergebnissen und Verfallsfristen.',
+        title: 'Hobbyliga & Forderungsrangliste',
+        summary: 'Pyramidenrangliste und Hobbyliga mit provisorischen Ergebnissen und Verfallsfristen.',
         keywords: ['hobbyliga', 'rangliste', 'pyramide', 'forderung', 'provisorisch', 'bestätigen'],
         content: `### Spielbetrieb im Verein fördern
 
-- **Forderungs-Pyramide:** Mitglieder fordern weiter oben platzierte Spieler heraus. Bei Sieg tauschen beide Spieler die Positionen.
-- **Hobbyliga-Punkteberechnung:** Spiele fließen in die automatisierte Hobbyliga-Wertung ein.
+- **Forderungspyramide:** Mitglieder fordern weiter oben platzierte Spieler heraus. Bei Sieg tauschen beide Spieler die Positionen.
+- **Hobbyliga-Punkteberechnung:** Spiele fließen in die automatisierte Hobbyligawertung ein.
 - **Provisorische Ergebnisse:** Nach Eingabe eines Ergebnisses durch einen Spieler hat der Gegner ein Zeitfenster zur Bestätigung. Erfolgt kein Widerspruch, wird das Ergebnis automatisch endgültig gewertet.`
       },
       {
         id: 'oeffentlicher-wochenplan-feeds',
-        title: 'Öffentlicher Wochenplan & Buchungs-Feeds',
+        title: 'Öffentlicher Wochenplan & Buchungsfeeds',
         summary: 'Freigabe von Kalendern für Vereinshomepages oder digitale Infostelen im Clubheim.',
         keywords: ['öffentlich', 'wochenplan', 'feed', 'ical', 'homepage', 'infostele', 'djk'],
-        content: `### Öffentliche Schnittstellen & Display-Modus
+        content: `### Öffentliche Schnittstellen & Displaymodus
 
 - **Öffentlicher Wochenplan (\`/public/wochenplan\`):** Ermöglicht die Einbindung des Belegungsplans auf der Vereinshomepage oder auf einem Touchscreen-Terminal im Clubheim ohne Login.
-- **Schnellbuchungs-Trichter:** Besucher können direkt auf freie Plätze tippen; nach schneller Passworteingabe wird die Reservierung gebucht.
-- **Sicherheits-Status 403:** Wird ein Feed im Admin-Menü deaktiviert, antwortet die Schnittstelle mit einem standardkonformen \`403 Forbidden\`, statt unberechtigte Aufrufer zur Anmeldeseite umzuleiten.`
+- **Schnellbuchungstrichter:** Besucher können direkt auf freie Plätze tippen; nach schneller Passworteingabe wird die Reservierung gebucht.
+- **Sicherheitsstatus 403:** Wird ein Feed im Admin-Menü deaktiviert, antwortet die Schnittstelle mit einem standardkonformen \`403 Forbidden\`, statt unberechtigte Aufrufer zur Anmeldeseite umzuleiten.`
       }
     ]
   },
   {
     id: 'system-parameter-tarife',
-    title: 'System-Parameter & Tarife',
+    title: 'Systemparameter & Tarife',
     iconName: 'Settings',
-    description: 'Modulsteuerung, Gastspiel-Tarifmodelle, Arbeitseinsatz-Timelines, Immutable-Rate-Konzept & Club-Branding.',
+    description: 'Modulsteuerung, Gastspieltarifmodelle, Arbeitseinsatztimelines, Immutable-Rate-Konzept & Clubbranding.',
     articles: [
       {
         id: 'modulare-systemsteuerung',
@@ -226,19 +226,19 @@ Im Bereich **Einstellungen ➔ Meisterschaft**:
 In den **Allgemeinen Einstellungen** unter **Module aktivieren**:
 - **Veranstaltungen:** Blendet den Turnierkalender global ein oder aus.
 - **Gastspiele:** Ermöglicht oder verbietet die Buchung mit vereinsfremden Gastspielern.
-- **Rangliste:** Aktiviert die Forderungs-Pyramide.
-- **Meisterschaft:** Schaltet den Pokal-Reiter für Vereinsmeisterschaften frei.
+- **Rangliste:** Aktiviert die Forderungspyramide.
+- **Meisterschaft:** Schaltet den Pokalreiter für Vereinsmeisterschaften frei.
 - **Arbeitseinsätze:** Steuert die Erfassung von Helferstunden auf dem Dashboard.
 - **Architektonische Garantie:** Bereits vorhandene Daten werden beim Deaktivieren eines Moduls niemals gelöscht, sondern bleiben geschützt in Firestore erhalten.`
       },
       {
         id: 'gastspiel-berechnungsmodi',
         title: 'Gastspielabrechnung & Tarifmodelle',
-        summary: 'Platzbasis (Pauschal) vs. Spielerbasis (Personenbezogen) und Timeline-Steuerung.',
+        summary: 'Platzbasis (Pauschal) vs. Spielerbasis (Personenbezogen) und Timelinesteuerung.',
         keywords: ['gastspiel', 'tarif', 'berechnung', 'platzbasis', 'spielerbasis', 'gebühr'],
         content: `### Die beiden mathematischen Berechnungsmodi
 
-In den Gastspiel-Einstellungen kann zwischen zwei Verrechnungsmethoden gewählt werden:
+In den Gastspieleinstellungen kann zwischen zwei Verrechnungsmethoden gewählt werden:
 
 1. **Modus Platzbasis (Pauschal):**
    - Die Gebühr fällt einmalig pro gebuchte Stunde an, unabhängig davon, ob 1, 2 oder 3 Gäste auf dem Platz stehen.
@@ -255,38 +255,38 @@ In den Gastspiel-Einstellungen kann zwischen zwei Verrechnungsmethoden gewählt 
         title: 'Die „Gültig Ab“-Timeline für Arbeitseinsätze',
         summary: 'Historische Interpolation verhindert rückwirkende Verfälschungen alter Saisonjahre.',
         keywords: ['timeline', 'arbeitseinsatz', 'helferstunden', 'gültig ab', 'interpolation', 'ersatzgebühr'],
-        content: `### Chronologische Jahres-Timeline
+        content: `### Chronologische Jahrestimeline
 
 Vereine passen Pflichtstunden oder Stundensätze gelegentlich an (z. B. Erhöhung von 10 auf 12 Stunden im Jahr 2026):
 - **Historische Interpolation:** Das System sucht für ein gewähltes Kalenderjahr rückwärts in der Timeline nach der ersten Regel mit \`Startjahr <= Zieljahr\`.
 - **Zukunftssicherheit:** Administratoren können bereits im Herbst die neuen Tarife für die kommende Saison hinterlegen, ohne laufende Berechnungen des aktuellen Jahres zu verfälschen.
-- **System-Fallback:** Ist die Timeline komplett leer, greifen 10 Pflichtstunden und 15,00 € Ersatzgebühr als Ausfallsicherung.`
+- **Systemfallback:** Ist die Timeline komplett leer, greifen 10 Pflichtstunden und 15,00 € Ersatzgebühr als Ausfallsicherung.`
       },
       {
         id: 'immutable-rate-konzept',
         title: 'Historische Datensicherheit & Immutable-Rate-Konzept',
-        summary: 'Revisionssichere Finanzreports durch Snapshot-Sicherung in Buchungen.',
+        summary: 'Revisionssichere Finanzreports durch Snapshotsicherung in Buchungen.',
         keywords: ['snapshot', 'immutable', 'datensicherheit', 'revisionssicher', 'finanzen', 'report'],
         content: `### Schutz historischer Finanzberichte
 
 - **Buchungsspezifischer Snapshot:** Bei jeder Buchung mit Gästen wird der zum Buchungszeitpunkt gültige Tarif als feste Momentaufnahme (\`guestFee\`, \`guestBillingMode\`) direkt in das Buchungsdokument geschrieben.
-- **Priorität bei der Report-Generierung:**
-  1. Nutze Buchungs-Snapshot (falls vorhanden).
-  2. ELSE: Ermittle Tarif via Jahres-Timeline interpoliert für das Buchungsdatum.
-  3. ELSE: Nutze globalen Standard-Fallback.
+- **Priorität bei der Reportgenerierung:**
+  1. Nutze Buchungssnapshot (falls vorhanden).
+  2. ELSE: Ermittle Tarif via Jahrestimeline interpoliert für das Buchungsdatum.
+  3. ELSE: Nutze globalen Standardfallback.
 - **Ergebnis:** Auch wenn Tarife Jahre später angepasst werden, bleiben die Umsätze alter Geschäftsjahre exakt unverändert.`
       },
       {
         id: 'club-branding-design',
-        title: 'Club-Branding, Farbwelten & Desktop Bento-Layout',
+        title: 'Clubbranding, Farbwelten & Desktop Bentolayout',
         summary: 'Anpassung von Primär- und Akzentfarben, Logos, Favicon, Begrüßungsbannern und Bento-Grid Spacing.',
         keywords: ['branding', 'design', 'farben', 'logo', 'banner', 'anpassung', 'verein', 'bento', 'spacing', 'raster'],
-        content: `### Visuelle Identität & Desktop Bento-Layout
+        content: `### Visuelle Identität & Desktop Bentolayout
 
 Unter **Einstellungen ➔ Design & Layout**:
 - **Farben:** Frei wählbare Primär- und Akzentfarben (inklusive automatischer Kontrastüberprüfung für Buttons und Menüleisten).
-- **Logos & Banner:** Upload für Vereinswappen (Header), Favicon (Browser-Tab) sowie stimmungsvolle Hintergrundbilder für die Anmeldeseite.
-- **Bento-Grid & Spacing-Harmonisierung (Desktop):** Alle Hauptansichten und Administrationsbereiche folgen einheitlichen Design-Tokens (horizontale und vertikale Abstände einheitlich 16–20px, Sektionsabstände 16–24px), sodass Dashboards und Sidebars ohne überbreite Lücken kompakt und übersichtlich wirken.
+- **Logos & Banner:** Upload für Vereinswappen (Header), Favicon (Browsertab) sowie stimmungsvolle Hintergrundbilder für die Anmeldeseite.
+- **Bento-Grid & Spacingharmonisierung (Desktop):** Alle Hauptansichten und Administrationsbereiche folgen einheitlichen Design-Tokens (horizontale und vertikale Abstände einheitlich 16–20px, Sektionsabstände 16–24px), sodass Dashboards und Sidebars ohne überbreite Lücken kompakt und übersichtlich wirken.
 - **Multi-Tenant URL:** Automatische Erkennung des Vereinsnamens anhand der Subdomain oder des URL-Pfads.`
       }
     ]

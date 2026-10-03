@@ -66,11 +66,11 @@ export default function AdminChangelog({
         <div className="relative z-10">
           <div className="space-y-1">
             <h1 className="text-xl font-bold uppercase tracking-tight text-[var(--color-primary)] flex items-center gap-2">
-              <i className="fa-solid fa-clock-rotate-left"></i> System-Updates &
+              <i className="fa-solid fa-clock-rotate-left"></i> Systemupdates &
               Changelog
             </h1>
             <p className="text-xs text-slate-400 font-medium leading-relaxed max-w-none">
-              Hier findest du alle zentralen Kern-Updates, neue Features und
+              Hier findest du alle zentralen Kernupdates, neue Features und
               Korrekturen der Plattform. Dieses Protokoll wird laufend vom
               System-Admin gepflegt.
             </p>
@@ -130,8 +130,8 @@ export default function AdminChangelog({
               Keine Changelogs eingetragen
             </h3>
             <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto mt-1.5 leading-relaxed">
-              Es sind momentan noch keine globalen Feature-Updates oder
-              Releasenotizen im System-Journal vermerkt.
+              Es sind momentan noch keine globalen Featureupdates oder
+              Releasenotizen im Systemjournal vermerkt.
             </p>
           </div>
         )}
@@ -147,8 +147,8 @@ export default function AdminChangelog({
             Fragen oder Feedback zu neuen Features?
           </strong>{" "}
           Dieses System wird kontinuierlich weiterentwickelt. Bei Wünschen zu
-          weiteren Regularien oder Layout-Vorlagen für deinen Verein wende dich
-          bitte wie gewohnt direkt an den System-Support.
+          weiteren Regularien oder Layoutvorlagen für deinen Verein wende dich
+          bitte wie gewohnt direkt an den Systemsupport.
         </p>
       </div>
     </div>

@@ -38,7 +38,7 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
       {/* Visual Pipeline Flow Header */}
       <div>
         <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-          Turnier-Ablauf & Pipeline-Stufen
+          Turnierablauf & Pipelinestufen
         </span>
         <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
           {stages
@@ -73,7 +73,7 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
       <div className="p-4 bg-white border border-slate-200/80 rounded-2xl space-y-3 shadow-xs">
         <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
           <Calendar className="w-4 h-4 text-[var(--color-primary)]" />
-          Runden-Fristen (Deadlines)
+          Rundenfristen (Deadlines)
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {stages.map((stage) => {
@@ -196,7 +196,7 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
         </div>
       </div>
 
-      {/* Ranglisten-Option */}
+      {/* Ranglistenoption */}
       {onChangeUseRankings && (
         <div className="p-4 bg-white border border-slate-200/80 rounded-2xl space-y-2 shadow-xs">
           <div className="flex items-center justify-between gap-3">
@@ -227,7 +227,7 @@ export const ChampionshipPipelineBuilder: React.FC<ChampionshipPipelineBuilderPr
         <HelpCircle className="w-5 h-5 text-[var(--color-primary)] shrink-0 mt-0.5" />
         <div className="text-xs text-emerald-950 space-y-1.5 font-medium leading-relaxed">
           <p className="font-bold text-slate-900">
-            Transparenz & Fairness-Regeln der Vereinsmeisterschaft:
+            Transparenz & Fairnessregeln der Vereinsmeisterschaft:
           </p>
           <ul className="list-disc list-inside space-y-1 text-slate-700">
             <li>

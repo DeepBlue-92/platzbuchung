@@ -185,7 +185,7 @@ export const ChampionshipAuditLogView: React.FC<ChampionshipAuditLogViewProps> =
                 Audit-Log (Revisionsverlauf)
               </h2>
               <p className="text-xs text-slate-500 font-medium">
-                Lückenlose Protokollierung aller Ergebnis-Einträge und nachträglichen Korrekturen
+                Lückenlose Protokollierung aller Ergebniseinträge und nachträglichen Korrekturen
               </p>
             </div>
           </div>
@@ -208,7 +208,7 @@ export const ChampionshipAuditLogView: React.FC<ChampionshipAuditLogViewProps> =
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
           <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 block">
-            Gesamt-Einträge
+            Gesamteinträge
           </span>
           <span className="text-2xl font-black text-slate-900 mt-1 block">
             {auditLog.length}
@@ -216,7 +216,7 @@ export const ChampionshipAuditLogView: React.FC<ChampionshipAuditLogViewProps> =
         </div>
         <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs">
           <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 block">
-            Erst-Ergebnisse
+            Erstergebnisse
           </span>
           <span className="text-2xl font-black text-emerald-700 mt-1 block">
             {createCount}

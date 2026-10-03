@@ -90,16 +90,14 @@ export const WorkletChampionship: React.FC<WorkletChampionshipProps> = ({
           )}
         </div>
 
-        {/* Structured Container */}
-        <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 sm:p-3.5">
-          {/* Content */}
-          {isLoading ? (
-            <div className="py-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-              <i className="fa-solid fa-spinner fa-spin"></i>
-              <span>Lade Meisterschaft...</span>
-            </div>
-          ) : activeTournament && highlightMatches.length > 0 ? (
-            <div className="space-y-3">
+        {/* Content */}
+        {isLoading ? (
+          <div className="py-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <i className="fa-solid fa-spinner fa-spin"></i>
+            <span>Lade Meisterschaft...</span>
+          </div>
+        ) : activeTournament && highlightMatches.length > 0 ? (
+          <div className="space-y-3">
             {highlightMatches.map((m: Match) => {
               const p1Name = formatParticipantById(
                 m.participant1Id,
@@ -203,7 +201,6 @@ export const WorkletChampionship: React.FC<WorkletChampionshipProps> = ({
             <p className="text-xs font-semibold">Aktuell keine aktive Meisterschaft eingeteilt.</p>
           </div>
         )}
-        </div>
       </div>
 
       {/* Footer Link */}

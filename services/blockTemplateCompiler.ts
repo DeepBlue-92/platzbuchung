@@ -56,10 +56,10 @@ export const EMAIL_FONT_OPTIONS = [
 
 /**
  * Mapping of variable keys to user-facing badge labels.
- * E.g. user_name -> "Spieler-Name"
+ * E.g. user_name -> "Spielername"
  */
 export const VARIABLE_BADGE_MAP: Record<string, string> = {
-  user_name: "Spieler-Name",
+  user_name: "Spielername",
   court_name: "Platz-Bezeichnung",
   date: "Datum",
   time: "Uhrzeit",
@@ -67,21 +67,21 @@ export const VARIABLE_BADGE_MAP: Record<string, string> = {
   old_date: "Vorheriges Datum",
   old_time: "Vorherige Uhrzeit",
   players: "Mitspieler / Partner",
-  cancellation_link: "Stornierungs-Link",
+  cancellation_link: "Stornierungslink",
   club_name: "Vereinsname",
-  booking_id: "Buchungs-Nummer",
-  league_name: "Liga-Name",
-  author_name: "Verfasser-Name",
-  post_title: "Beitrags-Titel",
-  post_content: "Beitrags-Text",
-  league_link: "Hobbyliga-Link",
+  booking_id: "Buchungsnummer",
+  league_name: "Liganame",
+  author_name: "Verfassername",
+  post_title: "Beitragstitel",
+  post_content: "Beitragstext",
+  league_link: "Hobbyligalink",
   submitter_name: "Eintragender Spieler",
-  opponent_name: "Gegner-Name",
-  result_score: "Match-Ergebnis",
-  match_date: "Match-Datum",
-  match_link: "Match-Link",
-  booking_link: "Buchungs-Link",
-  activation_link: "Aktivierungs-Link",
+  opponent_name: "Gegnername",
+  result_score: "Matchergebnis",
+  match_date: "Matchdatum",
+  match_link: "Matchlink",
+  booking_link: "Buchungslink",
+  activation_link: "Aktivierungslink",
   password_reset_link: "Passwort-Reset-Link",
   link_validity_hours: "Gültigkeitsdauer",
 };
@@ -102,17 +102,17 @@ export const BADGE_TO_VARIABLE_MAP: Record<string, string> = Object.entries(
  * Available dynamic link targets for Button blocks
  */
 export const AVAILABLE_DYNAMIC_LINKS = [
-  { key: "activation_link", label: "Aktivierungs-Link (Initiale Passwortvergabe)", description: "Generiert sicheren Token-Link {{activation_link}}" },
+  { key: "activation_link", label: "Aktivierungslink (Initiale Passwortvergabe)", description: "Generiert sicheren Token-Link {{activation_link}}" },
   { key: "password_reset_link", label: "Passwort-Reset-Link", description: "Generiert sicheren Token-Link {{password_reset_link}}" },
-  { key: "cancellation_link", label: "Stornierungs-Link", description: "Direktlink zur Stornierung / Buchungsübersicht" },
-  { key: "cancellation_link", label: "Umbuchungs-Link", description: "Direktlink zur Umbuchung / Bearbeitung" },
-  { key: "league_link", label: "Hobbyliga-Link", description: "Direktlink zur Hobbyliga & Pinnwand" },
-  { key: "match_link", label: "Match-Link", description: "Direktlink zur Spielansicht & Bestätigung" },
-  { key: "booking_link", label: "Buchungs-Link", description: "Direktlink zum Buchungskalender" },
+  { key: "cancellation_link", label: "Stornierungslink", description: "Direktlink zur Stornierung / Buchungsübersicht" },
+  { key: "cancellation_link", label: "Umbuchungslink", description: "Direktlink zur Umbuchung / Bearbeitung" },
+  { key: "league_link", label: "Hobbyligalink", description: "Direktlink zur Hobbyliga & Pinnwand" },
+  { key: "match_link", label: "Matchlink", description: "Direktlink zur Spielansicht & Bestätigung" },
+  { key: "booking_link", label: "Buchungslink", description: "Direktlink zum Buchungskalender" },
 ];
 
 /**
- * Converts badge tokens like "[Spieler-Name]" or "Spieler-Name" to Handlebars tags "{{{user_name}}}"
+ * Converts badge tokens like "[Spielername]" or "Spielername" to Handlebars tags "{{{user_name}}}"
  */
 export function convertBadgesToHandlebars(text: string): string {
   if (!text) return "";
@@ -616,7 +616,7 @@ export function migrateHeaderToColumns(block: TemplateBlock): TemplateBlock {
       type: "image",
       config: {
         imageUrl: cfg.logoUrl || "",
-        altText: cfg.logoAlt || "Vereins-Logo",
+        altText: cfg.logoAlt || "Vereinslogo",
         widthUnit: "%",
         widthValue: 100,
         align: (cfg.textAlign === "right" ? "right" : "left") as "left" | "center" | "right",
@@ -879,7 +879,7 @@ export function createColumnsBlock(
 
 /**
  * Factory for creating a new Header block (Kopfzeile)
- * 2-Spalten-Layout: Quadratisches Logo links, frei formatierbarer Text rechts (vertikal zentriert, 16px Gap)
+ * 2-Spaltenlayout: Quadratisches Logo links, frei formatierbarer Text rechts (vertikal zentriert, 16px Gap)
  */
 export function createHeaderBlock(
   initialText?: string,
@@ -917,7 +917,7 @@ export function createTextBlock(initialContent?: string, columnSpan: "full" | "h
     config: {
       content:
         initialContent ||
-        "Hallo [Spieler-Name],\n\nhier ist eine wichtige Benachrichtigung zu deiner Buchung auf [Platz-Bezeichnung] am [Datum].",
+        "Hallo [Spielername],\n\nhier ist eine wichtige Benachrichtigung zu deiner Buchung auf [Platz-Bezeichnung] am [Datum].",
       fontFamily: "sans",
       fontSize: 15,
       lineHeight: 1.6,

@@ -58,7 +58,7 @@ export const HobbyligaLetztesErgebnis: React.FC<HobbyligaLetztesErgebnisProps> =
     <div className="bg-[var(--bg-surface,white)] rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col p-5 md:p-6 space-y-4">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <i className="fa-solid fa-clock-rotate-left text-[var(--color-primary)]"></i> Match-Historie
+          <i className="fa-solid fa-clock-rotate-left text-[var(--color-primary)]"></i> Matchhistorie
         </h3>
         
         {/* Filter Dropdown */}
@@ -261,7 +261,7 @@ export const HobbyligaLetztesErgebnis: React.FC<HobbyligaLetztesErgebnisProps> =
                   <button
                     onClick={() => onCancelMatch && onCancelMatch(latestCompletedMatch)}
                     className="py-1.5 px-3 border border-slate-200 bg-white text-slate-600 text-xs font-medium rounded-xl hover:bg-slate-50 hover:text-red-600 hover:border-red-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                    title="Match-Ergebnis stornieren und Punkte zurücksetzen"
+                    title="Matchergebnis stornieren und Punkte zurücksetzen"
                   >
                     <i className="fa-solid fa-rotate-left text-[10px]" /> Stornieren
                   </button>

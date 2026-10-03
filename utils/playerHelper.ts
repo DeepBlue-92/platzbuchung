@@ -33,7 +33,7 @@ export function isRawUid(str: string): boolean {
  * 1. displayName / klarname (if not a raw UID)
  * 2. firstName + lastName
  * 3. name (if not a raw UID)
- * 4. E-Mail-Präfix (part before the @)
+ * 4. E-Mailpräfix (part before the @)
  * 5. Fallback: "Mitglied"
  *
  * Guaranteed to NEVER output a cryptic raw UID.
@@ -63,7 +63,7 @@ export function resolvePlayerDisplayName(
       }
     }
 
-    // 4. E-Mail-Präfix
+    // 4. E-Mailpräfix
     const email = user.email || fallbackEmailOrId;
     if (email && typeof email === 'string' && email.includes('@')) {
       const prefix = email.split('@')[0].trim();

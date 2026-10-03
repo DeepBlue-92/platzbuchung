@@ -363,7 +363,7 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Turnier-Vorlagen</span>
+            <span>Turniervorlagen</span>
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                 subTab === 'templates'
@@ -400,9 +400,9 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-black text-slate-900">Gespeicherte Turnier-Vorlagen</h3>
+              <h3 className="text-sm font-black text-slate-900">Gespeicherte Turniervorlagen</h3>
               <p className="text-xs text-slate-500">
-                Wiederverwendbare Regel-Sets für Sommer- und Wintermeisterschaften.
+                Wiederverwendbare Regelsets für Sommer- und Wintermeisterschaften.
               </p>
             </div>
             <button
@@ -420,7 +420,7 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
               <Layers className="w-10 h-10 text-slate-300 mx-auto" />
               <div className="text-sm font-bold text-slate-800">Keine Vorlagen vorhanden</div>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Erstelle eine erste Vorlage, um das Regelwerk (Satz-Format, Gruppenphase, K.-o.-Baum)
+                Erstelle eine erste Vorlage, um das Regelwerk (Satzformat, Gruppenphase, K.-o.-Baum)
                 festzulegen.
               </p>
               <button
@@ -477,7 +477,7 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
                       {/* Pipeline summary */}
                       <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5 text-[11px] text-slate-600">
                         <div className="font-bold text-slate-800 text-[10px] uppercase tracking-wider">
-                          Phasen-Pipeline:
+                          Phasenpipeline:
                         </div>
                         <div className="space-y-1">
                           {groupStage && (
@@ -700,7 +700,7 @@ export const ChampionshipAdminTab: React.FC<ChampionshipAdminTabProps> = ({
                             type="button"
                             onClick={() => onNavigateToPlayerView(tourn.id)}
                             className="p-2 text-slate-500 hover:text-[var(--color-primary)] hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-                            title="Zur Meisterschafts-Ansicht"
+                            title="Zur Meisterschaftsansicht"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>

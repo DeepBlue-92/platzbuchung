@@ -410,7 +410,7 @@ export default function SuperAdminCreateUserModal({ onClose, clubs, onUserCreate
                           className="bg-white border border-slate-300 text-slate-700 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-[#1b4332] focus:ring-1 focus:ring-[#1b4332] font-sans font-medium"
                         >
                           <option value={Role.MITGLIED}>Spieler (Standard)</option>
-                          <option value={Role.ADMIN}>Vereins-Admin</option>
+                          <option value={Role.ADMIN}>Vereinsadmin</option>
                         </select>
                       </div>
                     )}

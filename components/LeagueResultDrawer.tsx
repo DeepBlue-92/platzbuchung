@@ -367,11 +367,11 @@ export function LeagueResultDrawer({
             const tb1 = typeof sets[i].tb1 === 'number' ? sets[i].tb1 as number : NaN;
             const tb2 = typeof sets[i].tb2 === 'number' ? sets[i].tb2 as number : NaN;
             if (isNaN(tb1) || isNaN(tb2)) {
-              setError(`Tiebreak-Ergebnis in Satz ${i+1} fehlt.`);
+              setError(`Tiebreakergebnis in Satz ${i+1} fehlt.`);
               return;
             }
             if (tb1 < 7 || tb1 - tb2 < 2) {
-              setError(`Ungültiges Tiebreak-Ergebnis in Satz ${i+1} (p1).`);
+              setError(`Ungültiges Tiebreakergebnis in Satz ${i+1} (p1).`);
               return;
             }
             p1Wins++;
@@ -380,11 +380,11 @@ export function LeagueResultDrawer({
             const tb1 = typeof sets[i].tb1 === 'number' ? sets[i].tb1 as number : NaN;
             const tb2 = typeof sets[i].tb2 === 'number' ? sets[i].tb2 as number : NaN;
             if (isNaN(tb1) || isNaN(tb2)) {
-              setError(`Tiebreak-Ergebnis in Satz ${i+1} fehlt.`);
+              setError(`Tiebreakergebnis in Satz ${i+1} fehlt.`);
               return;
             }
             if (tb2 < 7 || tb2 - tb1 < 2) {
-              setError(`Ungültiges Tiebreak-Ergebnis in Satz ${i+1} (p2).`);
+              setError(`Ungültiges Tiebreakergebnis in Satz ${i+1} (p2).`);
               return;
             }
             p2Wins++;
@@ -569,7 +569,7 @@ export function LeagueResultDrawer({
                   {isEditMode ? 'Ergebnis bearbeiten' : 'Ergebnis eintragen'}
                 </div>
                 <div className="text-lg font-black flex items-center gap-2 mt-0.5 text-white truncate">
-                  <span>{formattedDate || 'Hobbyliga-Match'}</span>
+                  <span>{formattedDate || 'Hobbyligamatch'}</span>
                   {displayCourt && (
                     <>
                       <span>•</span>
@@ -578,7 +578,7 @@ export function LeagueResultDrawer({
                   )}
                 </div>
                 <div className="text-xs text-white/80 mt-0.5 font-medium">
-                  {isEditMode ? 'Korrektur innerhalb der 24h-Frist' : 'Hobbyliga-Match erfassen'}
+                  {isEditMode ? 'Korrektur innerhalb der 24h-Frist' : 'Hobbyligamatch erfassen'}
                 </div>
               </div>
               <button
@@ -612,7 +612,7 @@ export function LeagueResultDrawer({
                   <div className="flex items-center justify-between pb-2 border-b border-slate-200/80">
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                       <i className="fa-solid fa-circle-info text-slate-400"></i>
-                      Match-Rahmendaten
+                      Matchrahmendaten
                     </span>
                   </div>
 
@@ -801,7 +801,7 @@ export function LeagueResultDrawer({
                     <div className="flex items-start gap-2">
                       <i className="fa-solid fa-triangle-exclamation text-rose-600 text-sm mt-0.5 shrink-0"></i>
                       <div className="text-xs text-rose-800 leading-relaxed">
-                        <strong className="font-bold">Hinweis Spielabbruch:</strong> Das Match wird als abgebrochen gewertet. Es werden <strong>weder ein Sieger noch Ranglisten-Punkte</strong> vergeben.
+                        <strong className="font-bold">Hinweis Spielabbruch:</strong> Das Match wird als abgebrochen gewertet. Es werden <strong>weder ein Sieger noch Ranglistenpunkte</strong> vergeben.
                       </div>
                     </div>
                     <div className="space-y-1.5">

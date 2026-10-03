@@ -458,7 +458,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <label className="block text-xs font-bold text-slate-800">
-            Saison-Fristen & Finaltag (Meisterschaftsebene)
+            Saisonfristen & Finaltag (Meisterschaftsebene)
           </label>
           <span className="text-[11px] text-slate-500 font-medium">
             Gilt für diese Meisterschaft
@@ -651,10 +651,10 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
             <div className="space-y-4">
               <div>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
-                  1. Wähle eine Spiel-Vorlage
+                  1. Wähle eine Spielvorlage
                 </h4>
                 <p className="text-xs text-slate-600">
-                  Die gewählte Vorlage bestimmt automatisch Spielmodus, Sätze, Tiebreaks und die Phasen-Pipeline.
+                  Die gewählte Vorlage bestimmt automatisch Spielmodus, Sätze, Tiebreaks und die Phasenpipeline.
                 </p>
               </div>
 
@@ -663,7 +663,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
                   <Layers className="w-10 h-10 text-slate-400 mx-auto" />
                   <p className="text-sm font-bold text-slate-800">Keine Vorlagen vorhanden</p>
                   <p className="text-xs text-slate-500 max-w-md mx-auto">
-                    Um eine Vereinsmeisterschaft zu starten, wird eine Spiel-Vorlage benötigt (z. B. Einzel, Doppel, Gruppenphase mit K.-o.-Runde).
+                    Um eine Vereinsmeisterschaft zu starten, wird eine Spielvorlage benötigt (z. B. Einzel, Doppel, Gruppenphase mit K.-o.-Runde).
                   </p>
                   {onCreateNewTemplate && (
                     <button
@@ -837,7 +837,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
                 <div className="lg:col-span-7 p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col min-h-[440px] overflow-y-auto space-y-3 max-h-[460px]">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-slate-800">
-                      {groups.length > 0 ? 'Gruppen-Einteilung' : 'Teilnehmerfeld'}
+                      {groups.length > 0 ? 'Gruppeneinteilung' : 'Teilnehmerfeld'}
                     </span>
                     <span className="text-[11px] text-slate-500 font-medium">
                       Gesamt: {participants.length}
@@ -1032,10 +1032,10 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
             <div className="space-y-4">
               <div>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
-                  1. Wähle eine Spiel-Vorlage
+                  1. Wähle eine Spielvorlage
                 </h4>
                 <p className="text-xs text-slate-600">
-                  Die gewählte Vorlage bestimmt automatisch Spielmodus, Sätze, Tiebreaks und die Phasen-Pipeline.
+                  Die gewählte Vorlage bestimmt automatisch Spielmodus, Sätze, Tiebreaks und die Phasenpipeline.
                 </p>
               </div>
 
@@ -1044,7 +1044,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
                   <Layers className="w-8 h-8 text-slate-400 mx-auto mb-2" />
                   <p className="text-xs font-bold text-slate-700">Keine Vorlagen vorhanden</p>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Bitte erstelle zuerst im Tab „Turnier-Vorlagen“ eine Vorlage.
+                    Bitte erstelle zuerst im Tab „Turniervorlagen“ eine Vorlage.
                   </p>
                 </div>
               ) : (
@@ -1208,7 +1208,7 @@ export const ChampionshipTournamentStartWizard: React.FC<ChampionshipTournamentS
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col h-80 overflow-y-auto space-y-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-slate-800">
-                      {groups.length > 0 ? 'Gruppen-Einteilung' : 'Teilnehmerfeld'}
+                      {groups.length > 0 ? 'Gruppeneinteilung' : 'Teilnehmerfeld'}
                     </span>
                     <span className="text-[11px] text-slate-500 font-medium">
                       Gesamt: {participants.length}

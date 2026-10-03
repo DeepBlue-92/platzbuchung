@@ -25,7 +25,7 @@ export const HobbyligaMatchHistorie: React.FC<HobbyligaMatchHistorieProps> = ({
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
           <i className="fa-solid fa-list-check text-[var(--color-primary)]" />
-          Match-Historie & Formel-Aufschlüsselung
+          Matchhistorie & Formelaufschlüsselung
         </h3>
         <span className="text-xs text-slate-400 font-semibold">
           {userCompletedMatches.length} {userCompletedMatches.length === 1 ? 'Match' : 'Matches'} gewertet
@@ -67,7 +67,7 @@ export const HobbyligaMatchHistorie: React.FC<HobbyligaMatchHistorieProps> = ({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-900 text-sm truncate">
-                          Manuelle Punkte-Korrektur
+                          Manuelle Punktekorrektur
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800 border border-indigo-200">
                           ADMIN_CORRECTION

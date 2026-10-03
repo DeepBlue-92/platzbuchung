@@ -548,20 +548,20 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
             type="button"
             onClick={onBack}
             className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 font-bold text-xs transition-all cursor-pointer shadow-xs flex items-center gap-2 shrink-0"
-            title="Zurück zur Vorlagen-Übersicht"
+            title="Zurück zur Vorlagenübersicht"
           >
             <ArrowLeft className="w-4 h-4 text-slate-500" />
-            <span>← Zurück zur Vorlagen-Übersicht</span>
+            <span>← Zurück zur Vorlagenübersicht</span>
           </button>
 
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg sm:text-xl font-black text-slate-900 leading-tight">
                 {isLocked
-                  ? 'Turnier-Vorlage ansehen'
+                  ? 'Turniervorlage ansehen'
                   : isEditing
-                  ? 'Turnier-Vorlage bearbeiten'
-                  : 'Neue Turnier-Vorlage erstellen'}
+                  ? 'Turniervorlage bearbeiten'
+                  : 'Neue Turniervorlage erstellen'}
               </h2>
               {isLocked && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
@@ -571,7 +571,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
               )}
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Konfiguriere Disziplin, Satz-Format und den chronologischen Phasenablauf.
+              Konfiguriere Disziplin, Satzformat und den chronologischen Phasenablauf.
             </p>
           </div>
         </div>
@@ -661,7 +661,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
                 value={title || ''}
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={isLocked}
-                placeholder="z. B. Vereinsmeisterschaft Herren-Einzel (Gruppen & K.-o.)"
+                placeholder="z. B. Vereinsmeisterschaft Herreneinzel (Gruppen & K.-o.)"
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-slate-100 disabled:text-slate-500"
                 required
               />
@@ -709,7 +709,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
           </div>
         </div>
 
-        {/* SECTION 2: Phasen-Pipeline (Chronological Layout) */}
+        {/* SECTION 2: Phasenpipeline (Chronological Layout) */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-6">
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
             <div className="w-7 h-7 rounded-xl bg-emerald-50 text-[var(--color-primary)] font-black text-xs flex items-center justify-center">
@@ -717,7 +717,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">
-                Phasen-Pipeline
+                Phasenpipeline
               </h3>
               <p className="text-xs text-slate-500 font-medium">
                 Chronologischer Ablauf von Vorrunde bis Endrunde (von oben nach unten)
@@ -751,7 +751,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
                           value={stage.name || ''}
                           onChange={(e) => handleUpdateStage(idx, { name: e.target.value })}
                           disabled={isLocked}
-                          placeholder="Phasen-Name (z. B. Vorrunde)"
+                          placeholder="Phasenname (z. B. Vorrunde)"
                           className="font-bold text-sm text-slate-900 bg-white border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:bg-transparent disabled:border-transparent min-w-[200px]"
                         />
 
@@ -1075,7 +1075,7 @@ export const ChampionshipTemplateEditor: React.FC<ChampionshipTemplateEditorProp
             {/* Narrative Chain Breakdown */}
             <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200/60">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-                Turnier-Kette
+                Turnierkette
               </span>
               <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700 leading-relaxed">
                 {pipelineSummary.steps.map((step, sIdx) => (

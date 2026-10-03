@@ -107,33 +107,29 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
   };
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden space-y-0">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden space-y-0">
       {/* Table Header Bar */}
-      <div className="p-4 sm:p-5 bg-slate-50/70 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
         {/* Title and View Tabs */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-2xs">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-black text-slate-900">
-                Vorlagen-Bibliothek
-              </h2>
-              <p className="text-[11px] text-slate-600 font-medium">
-                {activeTemplates.length} aktive {activeTemplates.length === 1 ? "Vorlage" : "Vorlagen"} im Verein hinterlegt
-              </p>
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="text-left">
+            <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+              <span>Vorlagen-Bibliothek</span>
+            </h3>
+            <p className="text-xs text-slate-500 font-normal mt-0.5">
+              {activeTemplates.length} aktive {activeTemplates.length === 1 ? "Vorlage" : "Vorlagen"} im Verein hinterlegt
+            </p>
           </div>
 
           {/* Toggle between Active & Trash */}
-          <div className="flex items-center bg-slate-200/70 p-1 rounded-xl text-xs font-bold ml-0 sm:ml-4">
+          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/80 text-xs font-bold gap-1">
             <button
               type="button"
               onClick={() => setShowTrash(false)}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 !showTrash
-                  ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                  ? "bg-white text-slate-900 shadow-xs font-bold"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -144,7 +140,7 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
               onClick={() => setShowTrash(true)}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 showTrash
-                  ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                  ? "bg-white text-slate-900 shadow-xs font-bold"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -159,7 +155,7 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
           <button
             type="button"
             onClick={() => setIsCreateModalOpen(true)}
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[var(--color-primary)] hover:brightness-95 text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Neue Vorlage anlegen</span>
@@ -185,16 +181,16 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
       )}
 
       {/* Search and Filters Bar */}
-      <div className="px-4 py-3 bg-white border-b border-slate-100 flex flex-col sm:flex-row items-center gap-3">
+      <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-slate-100 flex flex-col sm:flex-row items-center gap-3">
         {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Vorlage suchen..."
-            className="w-full pl-9 pr-3.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
+            className="w-full pl-9 pr-3.5 h-10 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/10 focus:border-[var(--color-primary)] transition-all font-normal"
           />
         </div>
 
@@ -204,7 +200,7 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
           <select
             value={filterEventType}
             onChange={(e) => setFilterEventType(e.target.value)}
-            className="w-full sm:w-auto px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 cursor-pointer"
+            className="w-full sm:w-auto h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-[var(--color-primary)] cursor-pointer"
           >
             <option value="all">Alle Event-Typen</option>
             {NOTIFICATION_EVENT_DEFINITIONS.map((def) => (
@@ -229,7 +225,7 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
           <thead>
             <tr className="bg-slate-50/80 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <th className="py-3 px-4 sm:px-5">Name der Vorlage</th>
-              <th className="py-3 px-4">Event-Typ</th>
+              <th className="py-3 px-4">Eventtyp</th>
               <th className="py-3 px-4">Status</th>
               <th className="py-3 px-4 text-right">Aktionen</th>
             </tr>
@@ -305,7 +301,7 @@ export const TemplateLibraryTable: React.FC<TemplateLibraryTableProps> = ({
                       </div>
                     </td>
 
-                    {/* 2. Event-Typ */}
+                    {/* 2. Eventtyp */}
                     <td className="py-3.5 px-4 text-sm font-normal text-slate-600">
                       {eventDef?.label || tmpl.eventType}
                     </td>

@@ -49,7 +49,7 @@ const Layout: React.FC<LayoutProps> = ({
   onShowImpressum,
   onShowProfile,
   news,
-  clubName = "Tennis-Club",
+  clubName = "Tennisclub",
   logoUrl = "https://lirp.cdn-website.com/236a6a55/dms3rep/multi/opt/Wappen-1920w.jpg",
   bannerUrl = "https://lirp.cdn-website.com/236a6a55/dms3rep/multi/opt/banner_platzreservierung_1-1920w.png",
   bannerPosition = "50% 50%",
@@ -206,10 +206,10 @@ const Layout: React.FC<LayoutProps> = ({
       <div className="flex flex-col min-h-screen bg-slate-100 w-full font-sans text-slate-900">
         {/* Clean Static Header */}
         <header
-          className="w-full h-14 relative shadow-md shrink-0 z-[60] text-white flex items-center px-4 md:px-6"
+          className="w-full h-14 relative shadow-md shrink-0 z-[60] text-white flex items-center"
           style={{ backgroundColor: primaryColor }}
         >
-          <div className="flex items-center gap-3">
+          <div className="max-w-[1600px] w-full mx-auto px-3 sm:px-4 flex items-center gap-3">
             {logoUrl && (
               <img
                 src={logoUrl}
@@ -273,8 +273,8 @@ const Layout: React.FC<LayoutProps> = ({
           </AnimatePresence>
         </div>
 
-        <div className="absolute inset-0 flex items-center px-4 md:px-6 z-20">
-          <div className="flex items-center justify-between w-full gap-4 transition-all duration-300 ease-in-out">
+        <div className="absolute inset-0 flex items-center z-20 pointer-events-none">
+          <div className="max-w-[1600px] w-full mx-auto px-3 sm:px-4 flex items-center justify-between gap-4 transition-all duration-300 ease-in-out pointer-events-auto">
             <div className="flex items-center gap-4 min-w-0 shrink transition-all duration-300 ease-in-out">
               <motion.div
                 ref={topLeftDropdownRef}
@@ -487,9 +487,9 @@ const Layout: React.FC<LayoutProps> = ({
                   <button
                     type="button"
                     onClick={onOpenLogin || onLogout}
-                    className="bg-white/20 hover:bg-white/30 text-white transition-all px-3.5 sm:px-4 h-7 lg:h-8 rounded-full border border-white/25 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider shrink-0 cursor-pointer"
+                    className="bg-[var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_85%,black)] text-white transition-all px-3.5 sm:px-4 h-7 lg:h-8 rounded-full border border-white/20 active:scale-95 shadow-md flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0 cursor-pointer"
                   >
-                    <LogIn className="w-3.5 h-3.5 shrink-0" strokeWidth={2.2} />
+                    <LogIn className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
                     <span>Anmelden</span>
                   </button>
                 </div>
@@ -518,33 +518,62 @@ const Layout: React.FC<LayoutProps> = ({
       </main>
 
       <footer
-        className="hidden md:block py-2 text-center w-full border-t border-white/10 px-6"
+        className="hidden md:block py-2.5 text-center w-full border-t border-white/10 px-6 select-none"
         style={{ backgroundColor: primaryColor }}
       >
-        <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-12">
-          <button
-            onClick={onShowHelp}
-            className="uppercase tracking-widest text-white/60 hover:text-[var(--color-accent-3)] transition-colors flex items-center gap-2 py-1 text-[10px] font-medium"
-          >
-            <i className="fa-solid fa-info-circle"></i> Hilfe & Funktionen
-          </button>
-          {!hideWebsiteLink && (
-            <a
-              href={clubUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-black uppercase tracking-[0.4em] text-white/40 hover:text-[var(--color-accent-3)] transition-colors text-[10px] flex items-center gap-2"
-            >
-              {clubName}{" "}
-              <i className="fa-solid fa-external-link text-[9px]"></i>
-            </a>
+        <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 text-[11px] font-medium text-white/70">
+          {logoUrl ? (
+            <div className="flex items-center gap-2 text-white/90 font-medium">
+              <img
+                src={logoUrl}
+                alt={`${clubName} Logo`}
+                className="w-4 h-4 object-contain drop-shadow-sm shrink-0"
+              />
+              <span>{clubName}</span>
+            </div>
+          ) : (
+            <span className="text-white/90 font-medium">{clubName}</span>
           )}
-          <button
-            onClick={onShowImpressum}
-            className="uppercase tracking-widest text-white/60 hover:text-[var(--color-accent-3)] transition-colors flex items-center gap-2 py-1 text-[10px] font-medium"
-          >
-            <i className="fa-solid fa-scale-balanced"></i> Impressum
-          </button>
+
+          <span className="text-white/20 select-none">|</span>
+
+          {onShowHelp && (
+            <>
+              <button
+                type="button"
+                onClick={onShowHelp}
+                className="text-white/70 hover:text-white transition-colors cursor-pointer"
+              >
+                Hilfe
+              </button>
+              <span className="text-white/20 select-none">|</span>
+            </>
+          )}
+
+          {onShowImpressum && (
+            <button
+              type="button"
+              onClick={onShowImpressum}
+              className="text-white/70 hover:text-white transition-colors cursor-pointer"
+            >
+              Impressum
+            </button>
+          )}
+
+          {!hideWebsiteLink && (
+            <>
+              <span className="text-white/20 select-none">|</span>
+              <a
+                href={clubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/70 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <span>Website</span>
+                <i className="fa-solid fa-external-link text-[8.5px] text-white/40"></i>
+              </a>
+            </>
+          )}
         </div>
       </footer>
     </div>

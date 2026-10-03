@@ -59,12 +59,12 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
 
-  // Reset der aktuellen Seite auf Seite 1, sobald ein Vereins- oder Geschlechter-Filter geändert wird
+  // Reset der aktuellen Seite auf Seite 1, sobald ein Vereins- oder Geschlechterfilter geändert wird
   useEffect(() => {
     setCurrentPage(1);
   }, [filterClub, filterGender]);
 
-  // Klick außerhalb oder Escape schließt das Vereins-Dropdown
+  // Klick außerhalb oder Escape schließt das Vereinsdropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (clubMenuRef.current && !clubMenuRef.current.contains(event.target as Node)) {
@@ -90,7 +90,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
   const availableClubs = useMemo<ClubOption[]>(() => {
     const clubsMap = new Map<string, { displayName: string; logoUrl?: string }>();
 
-    // 1. Primär: Offizielle Vereine aus participatingClubs (aus der clubs-Collection / System-Stammdaten)
+    // 1. Primär: Offizielle Vereine aus participatingClubs (aus der clubs-Collection / Systemstammdaten)
     if (Array.isArray(participatingClubs)) {
       participatingClubs.forEach((c) => {
         const raw = c.vereinsId || c.id || c.clubName;
@@ -104,7 +104,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
       });
     }
 
-    // 2. Sekundär: Saubere Vereins-Zuordnungen aus Profil- und Nutzerdaten
+    // 2. Sekundär: Saubere Vereinszuordnungen aus Profil- und Nutzerdaten
     filteredSortedProfiles.forEach((p) => {
       const u = getUserObject(p.userId);
       const candidates: string[] = [];
@@ -206,7 +206,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
         }
       }
 
-      // 2. Geschlechter-Filter: Ausschließlich 3 Zustände: 'all', 'm' (Herren), 'w' (Damen)
+      // 2. Geschlechterfilter: Ausschließlich 3 Zustände: 'all', 'm' (Herren), 'w' (Damen)
       if (filterGender !== 'all') {
         const rawGender = (u?.gender || '').toLowerCase().trim();
         if (filterGender === 'm') {
@@ -232,7 +232,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
     });
   }, [filteredSortedProfiles, filterClub, filterGender, getUserObject]);
 
-  // Dynamische Vermessung der Container-Höhe und Zeilenhöhe via ResizeObserver
+  // Dynamische Vermessung der Containerhöhe und Zeilenhöhe via ResizeObserver
   useEffect(() => {
     const container = listContainerRef.current;
     if (!container) return;
@@ -306,7 +306,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
     }
   }, [currentPage, totalPages]);
 
-  // Zurücksetzen des Scroll-Zustands bei Seitenwechsel (stets oberste Position fixiert)
+  // Zurücksetzen des Scrollzustands bei Seitenwechsel (stets oberste Position fixiert)
   useEffect(() => {
     if (listContainerRef.current) {
       listContainerRef.current.scrollTop = 0;
@@ -443,7 +443,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
 
                 <div className="my-1 border-t border-slate-100" />
 
-                {/* Optionen: Alle Vereine mit Favicon/Wappen-Icon */}
+                {/* Optionen: Alle Vereine mit Favicon/Wappenicon */}
                 {availableClubs.map((club) => {
                   const isSelected = filterClub === club.canonicalId;
                   return (
@@ -517,7 +517,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
               getUserRank(profile.userId) ?? (safeCurrentPage - 1) * pageSize + idx + 1;
             const userObj = getUserObject(profile.userId);
 
-            // Rangliste (#1, #2...): Einheitliche, dezente Trophäen-/Rang-Badges
+            // Rangliste (#1, #2...): Einheitliche, dezente Trophäen-/Rangbadges
             // Platz 1: warmes, dezentes Gold (bg-amber-50 border-amber-200 text-amber-800 font-semibold)
             // Andere Ränge: bg-slate-50 border border-slate-200 text-slate-700 font-semibold
             const rankClass =
@@ -525,7 +525,7 @@ export const HobbyligaKompaktRangliste: React.FC<HobbyligaKompaktRanglisteProps>
                 ? 'bg-amber-50 border border-amber-200 text-amber-800 font-semibold'
                 : 'bg-slate-50 border border-slate-200 text-slate-700 font-semibold';
 
-            // Vereinsname für Untertitel (bereinigt & ohne technische System-Einträge)
+            // Vereinsname für Untertitel (bereinigt & ohne technische Systemeinträge)
             const rawClub = userObj?.vereinsId || profile.clubId;
             const displayClubName = rawClub
               ? getSanitizedClubDisplayName(rawClub, participatingClubs)

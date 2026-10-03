@@ -30,16 +30,16 @@ export const USER_HELP_CATEGORIES: HelpCategory[] = [
 
 1. **Belegungsplan öffnen:** Wähle in der Navigation die **Reservierung** aus.
 2. **Tag & Zeit auswählen:** Klicke im Wochen- oder Tagesplan auf ein freies, weißes Zeitfenster des gewünschten Platzes.
-3. **Spielart & Partner festlegen:** Es öffnet sich der Buchungs-Slider. Wähle aus, ob du ein **Einzel** (1 Mitspieler) oder **Doppel** (3 Mitspieler) spielen möchtest.
+3. **Spielart & Partner festlegen:** Es öffnet sich der Buchungsslider. Wähle aus, ob du ein **Einzel** (1 Mitspieler) oder **Doppel** (3 Mitspieler) spielen möchtest.
 4. **Partner auswählen:** Tippe den Namen deines Mitspielers in das Suchfeld ein und wähle ihn aus der Liste aus.
 5. **Reservierung bestätigen:** Klicke unten auf **„Jetzt buchen“**. Der Platz ist sofort für dich und deine Partner reserviert und wird farbig im Kalender angezeigt.`
       },
       {
         id: 'tages-vs-wochenplan',
         title: 'Tagesplan vs. Wochenplan (Mobil vs. Computer)',
-        summary: 'Optimale Übersicht auf Smartphone und Desktop-Bildschirm.',
+        summary: 'Optimale Übersicht auf Smartphone und Desktopbildschirm.',
         keywords: ['ansicht', 'smartphone', 'mobil', 'wochenplan', 'tagesplan', 'wechseln', 'bento'],
-        content: `### Flexible Kalenderansichten & Desktop Bento-Design
+        content: `### Flexible Kalenderansichten & Desktop Bentodesign
 
 - **Auf dem Smartphone / Mobilgerät:** Das System öffnet standardmäßig den übersichtlichen **Tagesplan**. Hier siehst du alle Plätze nebeneinander im direkten Stundenraster von morgens bis abends.
 - **Am Computer / Desktop:** Hier startet standardmäßig der **Wochenplan**, der dir die gesamten 7 Wochentage auf einen Blick darstellt. Alle Hauptseiten (Hobbyliga, Platzbuchung, Veranstaltungen, Rangliste) sind in einem bündigen Bento-Grid-Layout mit einheitlichen, gleichmäßigen Abständen (16–20px) aufgebaut.
@@ -56,7 +56,7 @@ export const USER_HELP_CATEGORIES: HelpCategory[] = [
 Falls du oder deine Mitspieler verhindert seid, storniere den Platz bitte rechtzeitig, damit andere Clubmitglieder spielen können:
 
 1. Klicke im Belegungsplan direkt auf deine **bereits bestehende Buchung**.
-2. Im geöffneten Detail-Fenster findest du den roten Button **„Buchung stornieren“**.
+2. Im geöffneten Detailfenster findest du den roten Button **„Buchung stornieren“**.
 3. Bestätige die Sicherheitsabfrage.
 4. Der Zeitslot wird sofort wieder freigegeben und steht allen Mitgliedern zur Verfügung.
 
@@ -92,7 +92,7 @@ Um allen Mitgliedern faire Spielmöglichkeiten zu garantieren, gelten clubweit f
     id: 'mitspieler-gaeste',
     title: 'Mitspieler & Gäste einladen',
     iconName: 'Users',
-    description: 'Partner finden, Gastspieler mitbringen, Doppel-Matches organisieren und Hobbyliga.',
+    description: 'Partner finden, Gastspieler mitbringen, Doppelmatches organisieren und Hobbyliga.',
     articles: [
       {
         id: 'mitspieler-auswaehlen',
@@ -101,7 +101,7 @@ Um allen Mitgliedern faire Spielmöglichkeiten zu garantieren, gelten clubweit f
         keywords: ['mitspieler', 'partner', 'suche', 'name', 'liste', 'auswählen'],
         content: `### Mitspieler hinzufügen
 
-Im Buchungsdialog kannst du deine Mitspieler bequem über ein Schnellsuche-Feld finden:
+Im Buchungsdialog kannst du deine Mitspieler bequem über ein Schnellsuchefeld finden:
 1. Beginne den Nachnamen oder Vornamen deines Partners in das Suchfeld einzutippen.
 2. Das System filtert in Echtzeit alle aktiven Vereinsmitglieder.
 3. Klicke auf den gewünschten Namen, um ihn als Spieler 2 (oder Spieler 3 und 4 beim Doppel) zu übernehmen.
@@ -109,21 +109,21 @@ Im Buchungsdialog kannst du deine Mitspieler bequem über ein Schnellsuche-Feld 
       },
       {
         id: 'mit-gaesten-spielen',
-        title: 'Mit Gastspielern (Nicht-Mitgliedern) spielen',
+        title: 'Mit Gastspielern (Nichtmitgliedern) spielen',
         summary: 'Freunde, Verwandte oder externe Tennisspieler einladen und abrechnen.',
         keywords: ['gast', 'gäste', 'gastspieler', 'extern', 'gebühr', 'gastgebühr'],
         content: `### Gastspieler einladen
 
-Mitglieder können jederzeit Gäste zu einem gemeinsamen Match mitbringen, sofern das Gastspiel-Modul im Verein aktiv ist:
+Mitglieder können jederzeit Gäste zu einem gemeinsamen Match mitbringen, sofern das Gastspielmodul im Verein aktiv ist:
 
-1. Wähle im Buchungs-Slider bei der Spielerauswahl die Option **„Gast“**.
+1. Wähle im Buchungsslider bei der Spielerauswahl die Option **„Gast“**.
 2. Trage den Vor- und Nachnamen deines Gastes ein.
 3. Das System berechnet automatisch die clubübliche Gastspielgebühr (entweder pauschal pro Platzstunde oder pro Gast).
 4. Die Abrechnung erfolgt über das Mitgliedskonto des buchenden Spielers gemäß der Vereinssatzung.`
       },
       {
         id: 'spielpartner-boerse',
-        title: 'Die Spielpartner-Börse',
+        title: 'Die Spielpartnerbörse',
         summary: 'Neue Spielpartner im Club kennenlernen und Verabredungen treffen.',
         keywords: ['börse', 'spielpartner', 'partnerbörse', 'kontakt', 'spielstärke', 'treffen'],
         content: `### Finde passende Spielpartner im Club
@@ -135,24 +135,24 @@ Du suchst spontan jemanden für ein Match?
       },
       {
         id: 'hobbyliga-matches',
-        title: 'Hobbyliga-Spiele buchen & erfassen',
+        title: 'Hobbyligaspiele buchen & erfassen',
         summary: 'Spiele für die vereinsinterne Hobbyliga reservieren und austragen.',
         keywords: ['hobbyliga', 'hobby', 'liga', 'forderung', 'punkte', 'reiter'],
         content: `### Hobbyliga im Buchungssystem
 
 Wenn du an der Hobbyliga teilnimmst:
-- Im Buchungs-Slider erscheint ein eigener Reiter **„Hobbyliga-Spiel“**.
-- Wähle deinen Hobbyliga-Gegner direkt aus der Ligaliste aus.
-- Nach dem Spiel tragt ihr das Ergebnis direkt im Hobbyliga-Bereich ein. Das System berechnet die Punkte nach offiziellem Schlüssel und aktualisiert die Tabelle.`
+- Im Buchungsslider erscheint ein eigener Reiter **„Hobbyligaspiel“**.
+- Wähle deinen Hobbyligagegner direkt aus der Ligaliste aus.
+- Nach dem Spiel tragt ihr das Ergebnis direkt im Hobbyligabereich ein. Das System berechnet die Punkte nach offiziellem Schlüssel und aktualisiert die Tabelle.`
       },
       {
         id: 'veranstaltungen-teilnahme',
-        title: 'Veranstaltungen & Club-Turniere ansehen & anmelden',
-        summary: 'Turniere, Schleifchenturniere und Club-Feste mit einem Klick beitreten.',
+        title: 'Veranstaltungen & Clubturniere ansehen & anmelden',
+        summary: 'Turniere, Schleifchenturniere und Clubfeste mit einem Klick beitreten.',
         keywords: ['veranstaltung', 'event', 'turnier', 'anmelden', 'austragen', 'schleifchenturnier'],
-        content: `### Club-Veranstaltungen im Überblick
+        content: `### Clubveranstaltungen im Überblick
 
-- **Kopfzeile & Übersicht:** Der Bereich **Veranstaltungen** bietet eine einheitliche Kopfzeile mit Party-Icon und Untertitel („Anmeldung zu Turnieren und anderen Events“) analog zur Rangliste. Das Hilfebanner mit Bedienungshinweisen ist direkt über der Kopfzeile platziert.
+- **Kopfzeile & Übersicht:** Der Bereich **Veranstaltungen** bietet eine einheitliche Kopfzeile mit Partyicon und Untertitel („Anmeldung zu Turnieren und anderen Events“) analog zur Rangliste. Das Hilfebanner mit Bedienungshinweisen ist direkt über der Kopfzeile platziert.
 - **Teilnahme anmelden:** Klicke bei einem anstehenden Event auf den Button **„Anmelden“**, um deinen Namen auf die Teilnehmerliste zu setzen.
 - **Wieder austragen:** Falls du verhindert bist, klicke erneut auf **„Abmelden“**, um deinen Platz für andere Mitglieder freizugeben.
 - **Kommentare & Wünsche:** Bei vielen Events steht dir ein Notizfeld zur Verfügung (z. B. für Spielstärken oder Speisewünsche).`
@@ -172,7 +172,7 @@ Wenn du an der Hobbyliga teilnimmst:
         keywords: ['profil', 'daten', 'telefon', 'email', 'adresse', 'ändern', 'speichern'],
         content: `### Profil bearbeiten
 
-1. Klicke in der oberen Menüleiste auf dein **Profilbild / Avatar** oder auf das Zahnrad-Symbol.
+1. Klicke in der oberen Menüleiste auf dein **Profilbild / Avatar** oder auf das Zahnradsymbol.
 2. Im Fenster **„Mein Profil“** kannst du deine Kontaktdaten (Telefonnummer, E-Mail-Adresse) sowie Geburtsdatum und Geschlecht aktualisieren.
 3. Klicke unten auf **„Änderungen speichern“**.`
       },
@@ -191,12 +191,12 @@ Wenn du an der Hobbyliga teilnimmst:
       {
         id: 'avatar-profilbild',
         title: 'Profilbild & Avatar anpassen',
-        summary: 'Lade ein persönliches Foto hoch oder wähle schicke Initialen-Farben.',
+        summary: 'Lade ein persönliches Foto hoch oder wähle schicke Initialenfarben.',
         keywords: ['avatar', 'bild', 'foto', 'profilbild', 'hochladen', 'initialen'],
         content: `### Dein Foto im System
 
-- Klicke im Profil auf das Kamera-Symbol deines Avatars.
-- Du kannst entweder ein eigenes **Foto von deinem Smartphone oder Computer hochladen** (mit praktischem Bildausschnitt-Werkzeug zum Zuschneiden) oder ein **Initialen-Icon** in deiner Lieblingsfarbe wählen.
+- Klicke im Profil auf das Kamerasymbol deines Avatars.
+- Du kannst entweder ein eigenes **Foto von deinem Smartphone oder Computer hochladen** (mit praktischem Bildausschnittwerkzeug zum Zuschneiden) oder ein **Initialenicon** in deiner Lieblingsfarbe wählen.
 - Dein Profilbild wird im Kalender, in der Rangliste und bei Meisterschaften für deine Clubkollegen sichtbar.`
       },
       {
@@ -204,7 +204,7 @@ Wenn du an der Hobbyliga teilnimmst:
         title: 'Privatsphäre & Sichtbarkeit von Kontaktdaten',
         summary: 'Entscheide selbst, wer deine E-Mail oder Telefonnummer sehen darf.',
         keywords: ['privatsphäre', 'datenschutz', 'telefonnummer', 'sichtbarkeit', 'verbergen'],
-        content: `### Datenschutz-Einstellungen
+        content: `### Datenschutzeinstellungen
 
 In deinem Profil unter **„Privatsphäre & App-Anzeige“** findest du zwei wichtige Schalter:
 - **E-Mail und Telefonnummer für andere Spieler anzeigen:** Wenn aktiviert, können andere Clubmitglieder in der Partnerbörse oder Rangliste deine Telefonnummer oder E-Mail sehen, um Verabredungen zu erleichtern. Ist der Haken deaktiviert, bleiben deine Daten vertraulich.
@@ -221,16 +221,16 @@ Zu Beginn einer neuen Saison oder nach Aktualisierung von Vereinsregeln bittet d
 - Überprüfe kurz, ob Handynummer und E-Mail noch aktuell sind.
 - Klicke auf **„Bestätigen“**, um das Fenster dauerhaft zu schließen.
 - Falls du gerade in Eile bist, kannst du auf **„Später anzeigen“** klicken; das Fenster erscheint dann beim nächsten Login erneut.
-- **ACE Begrüßungs-Sprechblase:** Sobald du das Onboarding zum ersten Mal erfolgreich abgeschlossen hast, begrüßt dich unser Club-Assistent **ACE** mit einer kleinen Sprechblase am unteren Bildschirmrand. Du kannst direkt darauf tippen, um Fragen zu stellen, oder sie mit dem Schließen-Symbol sofort ausblenden (sie schließt sich nach 8 Sekunden auch automatisch).`
+- **ACE Begrüßungssprechblase:** Sobald du das Onboarding zum ersten Mal erfolgreich abgeschlossen hast, begrüßt dich unser Clubassistent **ACE** mit einer kleinen Sprechblase am unteren Bildschirmrand. Du kannst direkt darauf tippen, um Fragen zu stellen, oder sie mit dem Schließensymbol sofort ausblenden (sie schließt sich nach 8 Sekunden auch automatisch).`
       },
       {
         id: 'ace-tennis-assistent',
-        title: 'Der Club-Assistent „ACE“ & Begrüßungshinweis',
+        title: 'Der Clubassistent „ACE“ & Begrüßungshinweis',
         summary: 'Dein persönlicher KI-Assistent für Tennisregeln, Buchungshilfen und Meisterschaftsfristen.',
         keywords: ['ace', 'assistent', 'ki', 'tennisball', 'maskottchen', 'begrüßung', 'sprechblase', 'hilfe', 'regeln'],
-        content: `### Tennis-Assistent „ACE“
+        content: `### Tennisassistent „ACE“
 
-Unten rechts findest du unseren interaktiven Club-Assistenten **ACE** (das Tennisball-Maskottchen mit Stirnband):
+Unten rechts findest du unseren interaktiven Clubassistenten **ACE** (das Tennisballmaskottchen mit Stirnband):
 - **Automatische Begrüßung:** Wenn du zum ersten Mal das Mitglieder-Onboarding abschließt, stellt sich ACE mit einer dezenten Sprechblase vor („Hi, ich bin ACE! 👋“). Die Sprechblase blendet sich nach 8 Sekunden automatisch aus oder kann mit dem Kreuz geschlossen werden.
 - **Direkte Antworten:** Klicke einfach auf ACE oder die Sprechblase, um Regelfragen zu stellen (z. B. zu Tie-Break, Netzberührung, Linienbällen) oder Fragen zu Buchungsregeln und Meisterschaften beantwortet zu bekommen.
 - **Deaktivieren:** Falls du ACE nicht benötigst, kannst du ihn jederzeit in deinem Profil unter *Privatsphäre & App-Anzeige* mit dem Schalter *„Assistent "Ace" aktivieren“* oder direkt im Menü des Assistenten dauerhaft ausschalten.`
@@ -251,12 +251,12 @@ Unten rechts findest du unseren interaktiven Club-Assistenten **ACE** (das Tenni
         content: `### Die Vereinsmeisterschaft im Überblick
 
 Die Vereinsmeisterschaft wird direkt über die Web-App organisiert:
-- **Zugang:** Klicke in der Menüleiste auf das Pokal-Symbol **„Meisterschaft“** (auf dem Smartphone unter *„Weiteres“*).
-- **Phasen-Navigation:** Über die nummerierten Bento-Karten oben wechselst du gezielt zwischen den Phasen:
+- **Zugang:** Klicke in der Menüleiste auf das Pokalsymbol **„Meisterschaft“** (auf dem Smartphone unter *„Weiteres“*).
+- **Phasennavigation:** Über die nummerierten Bentokarten oben wechselst du gezielt zwischen den Phasen:
   1. **Gruppenphase:** Tabellenstände und Gruppenpartien.
-  2. **Halbfinale:** Die qualifizierten Halbfinal-Partien im direkten Duell.
+  2. **Halbfinale:** Die qualifizierten Halbfinalpartien im direkten Duell.
   3. **Endrunde / Finaltag:** Großes Finale und Platzierungsspiele (z. B. Spiel um Platz 3).
-- **Fokussierte Ansicht:** Die Ansicht filtert streng nach dem ausgewählten Phasen-Tab, sodass immer nur die aktuell relevanten Matches ohne visuellen Ballast angezeigt werden. Der Wechsel zwischen den Phasen (sowie zwischen den Ranglisten-Kategorien) erfolgt über eine sanfte, extrem schnelle Verblassen-Animation (150 ms) für ein flüssiges Nutzungserlebnis ohne störende Wartezeiten.
+- **Fokussierte Ansicht:** Die Ansicht filtert streng nach dem ausgewählten Phasentab, sodass immer nur die aktuell relevanten Matches ohne visuellen Ballast angezeigt werden. Der Wechsel zwischen den Phasen (sowie zwischen den Ranglistenkategorien) erfolgt über eine sanfte, extrem schnelle Verblassen-Animation (150 ms) für ein flüssiges Nutzungserlebnis ohne störende Wartezeiten.
 - **Phasenspezifische Begegnungen:** Unterhalb der Tabelle bzw. der Tabs findest du direkt die Partien unter der Überschrift **„Begegnungen [Name der Phase]“** (z. B. *Begegnungen Gruppenphase*, *Begegnungen Halbfinale*, *Begegnungen Endrunde / Finaltag*). Ein Klick auf eine Zeile in der Tabelle filtert die Begegnungen gezielt auf die Partien des ausgewählten Spielers.`
       },
       {
@@ -264,7 +264,7 @@ Die Vereinsmeisterschaft wird direkt über die Web-App organisiert:
         title: 'Mein Status & Fristen einsehen',
         summary: 'Dein persönliches Cockpit für anstehende Meisterschaftsspiele.',
         keywords: ['status', 'gegner', 'frist', 'deadline', 'termin', 'nächstes spiel'],
-        content: `### Dein persönlicher Meisterschafts-Status
+        content: `### Dein persönlicher Meisterschaftsstatus
 
 Sobald du für eine Meisterschaft eingeteilt bist, siehst du ganz oben deine persönliche Infokarte:
 - Wer ist dein **nächster Gegner**?
@@ -279,7 +279,7 @@ Sobald du für eine Meisterschaft eingeteilt bist, siehst du ganz oben deine per
         content: `### Spielergebnis erfassen
 
 Nachdem ihr euer Match beendet habt:
-1. Öffne die Meisterschaftsseite und klicke bei deiner Partie auf **„Ergebnis eintragen“** (oder klicke einfach direkt auf die Bento-Spielkarte). Der grüne Hover-Rahmen und der Klick-Cursor werden nur angezeigt, wenn du zur Ergebniseingabe für diese Partie berechtigt bist.
+1. Öffne die Meisterschaftsseite und klicke bei deiner Partie auf **„Ergebnis eintragen“** (oder klicke einfach direkt auf die Bentospielkarte). Der grüne Hoverrahmen und der Klickcursor werden nur angezeigt, wenn du zur Ergebniseingabe für diese Partie berechtigt bist.
 2. Trage die Games für Satz 1 und Satz 2 ein (z. B. 6:4, 3:6).
 3. Bei Satzgleichstand (1:1 Sätze) wird der 3. Satz als **Match-Tiebreak bis 10 Punkte** ausgetragen und eingetragen (z. B. 10:7).
 4. Klicke auf **„Ergebnis speichern“**.
@@ -287,7 +287,7 @@ Nachdem ihr euer Match beendet habt:
       },
       {
         id: 'tabellenwertung-kriterien',
-        title: 'Tabellenwertung & Tie-Break-Kriterien',
+        title: 'Tabellenwertung & Tiebreakkriterien',
         summary: 'Wer kommt weiter bei Punktgleichheit in der Gruppe?',
         keywords: ['tabelle', 'punktgleich', 'kriterien', 'direkter vergleich', 'satzdifferenz', 'spalten'],
         content: `### Tabellenspalten & Kriterien bei Punktgleichheit
@@ -332,10 +332,10 @@ Stehen nach Abschluss der Gruppenphase zwei oder mehr Spieler punktgleich, entsc
         title: 'Ballmaschine buchen & nutzen',
         summary: 'Ausleihe und Zuzahlung für Vereine mit elektronischer Ballwurfmaschine.',
         keywords: ['ballmaschine', 'bälle', 'training', 'zubuchen', 'gebühr'],
-        content: `### Ballmaschinen-Verleih
+        content: `### Ballmaschinenverleih
 
 Verfügt dein Verein über eine Ballmaschine:
-- Kannst du im Buchungs-Slider den Haken **„Ballmaschine zubuchen“** setzen.
+- Kannst du im Buchungsslider den Haken **„Ballmaschine zubuchen“** setzen.
 - Die Ballmaschine steht auf den dafür freigegebenen Plätzen bereit.
 - Bitte beachte die clubinternen Einweisungsvorschriften und gehe pfleglich mit Bällen und Fernbedienung um.`
       },
@@ -344,7 +344,7 @@ Verfügt dein Verein über eine Ballmaschine:
         title: 'Arbeitseinsätze & Helferstunden',
         summary: 'So behältst du deine geleisteten Stunden und Pflichtstunden im Blick.',
         keywords: ['arbeitseinsatz', 'helferstunden', 'stunden', 'arbeitsdienst', 'ersatzgebühr'],
-        content: `### Arbeitsdienst-Erfassung
+        content: `### Arbeitsdiensterfassung
 
 Viele Tennisvereine verlangen von aktiven Erwachsenen eine bestimmte Anzahl an Helferstunden pro Jahr (z. B. Platzinstandsetzung im Frühjahr oder Pflege der Außenanlagen):
 - Auf deinem **Dashboard** siehst du im Modul „Meine Arbeitsstunden“ deinen aktuellen Fortschrittsbalken (z. B. *7 von 10 Stunden geleistet*).

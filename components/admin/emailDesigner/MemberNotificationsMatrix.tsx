@@ -33,7 +33,7 @@ const MATRIX_COLUMNS: Array<{ key: NotificationEventKey; label: string }> = [
   { key: "RESERVATION_CANCELLED", label: "Stornierung" },
   { key: "RESERVATION_MODIFIED", label: "Umbuchung" },
   { key: "HOBBYLIGA_NEW_POST", label: "Hobbyliga Post" },
-  { key: "MATCH_RESULT_SUBMITTED", label: "Match-Ergebnis" },
+  { key: "MATCH_RESULT_SUBMITTED", label: "Matchergebnis" },
 ];
 
 const ITEMS_PER_PAGE = 30;
@@ -219,19 +219,20 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
   };
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-4">
-      {/* Header: Ohne (Massenverwaltung), ohne Untertitel */}
-      <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 text-slate-900">
-          <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shadow-2xs">
-            <Users className="w-4 h-4" />
-          </div>
-          <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
-            Individuelle Spieler-Benachrichtigungen
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+        <div className="text-left">
+          <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Users className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+            <span>Individuelle Spieler-Benachrichtigungen</span>
           </h3>
+          <p className="text-xs text-slate-500 font-normal mt-0.5">
+            E-Mail-Präferenzen der Mitglieder einsehen, anpassen und stapelweise konfigurieren.
+          </p>
         </div>
 
-        <div className="text-xs font-bold text-slate-400">
+        <div className="px-3.5 py-1.5 bg-slate-100 border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-700">
           {filteredUsers.length} {filteredUsers.length === 1 ? "Spieler" : "Spieler"}
           {searchQuery.trim() && usersList.length !== filteredUsers.length && (
             <span className="ml-1 text-slate-400 font-normal">
@@ -260,22 +261,22 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
       )}
 
       {/* Suchleiste & Speichern-Button */}
-      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
-        {/* Modernes, vergrößertes Suchfeld (h-11) mit schnellem Clear-Button */}
+      <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3.5">
+        {/* Modernes Suchfeld */}
         <div className="relative flex-1">
-          <Search className="w-5 h-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Spieler nach Name oder E-Mail filtern..."
-            className="w-full h-11 pl-11 pr-10 rounded-xl bg-white border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900 transition-all shadow-xs"
+            className="w-full h-10 pl-9 pr-9 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/10 focus:border-[var(--color-primary)] transition-all font-normal"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
               title="Suche leeren"
             >
               <X className="w-3.5 h-3.5" />
@@ -285,7 +286,7 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
 
         {/* Zähler-Info & Speichern-Button */}
         <div className="flex items-center justify-between md:justify-end gap-3 shrink-0">
-          <span className="text-xs sm:text-sm font-bold text-slate-600 whitespace-nowrap">
+          <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">
             {selectedUserIds.size} von {filteredUsers.length} markiert
           </span>
 
@@ -293,9 +294,9 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
             type="button"
             onClick={handleSaveUserSettings}
             disabled={!hasUnsavedChanges || isSaving}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer active:scale-95 ${
               hasUnsavedChanges
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/20"
+                ? "bg-[var(--color-primary)] hover:brightness-95 text-white"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
             }`}
             title={hasUnsavedChanges ? "Änderungen an den Spieler-Einstellungen speichern" : "Keine ungespeicherten Änderungen"}
@@ -313,7 +314,7 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
       </div>
 
       {/* Spieler-Matrix Tabelle */}
-      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs min-h-[580px] flex flex-col justify-between">
+      <div className="border border-slate-200/80 rounded-xl overflow-hidden bg-white shadow-2xs min-h-[580px] flex flex-col justify-between">
         <div className="overflow-x-auto flex-1">
           <table className="w-full min-w-[800px] table-fixed text-left text-xs border-collapse">
             <colgroup>
@@ -325,14 +326,14 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
               <col style={{ width: "135px" }} />
               <col style={{ width: "135px" }} />
             </colgroup>
-            <thead className="bg-slate-100/90 sticky top-0 z-10 border-b border-slate-200 select-none">
-              <tr className="text-[11px] font-black uppercase tracking-wider text-slate-600">
+            <thead className="bg-slate-50/70 sticky top-0 z-10 border-b border-slate-200 select-none">
+              <tr className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                 <th className="py-2.5 px-3 text-center">
                   <input
                     type="checkbox"
                     checked={isAllSelected}
                     onChange={handleToggleSelectAll}
-                    className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    className="h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
                     title="Alle sichtbar gefilterten Spieler an- oder abwählen"
                   />
                 </th>
@@ -391,7 +392,7 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleSingleSelect(item.memberKey)}
-                          className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          className="h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
                           title="Spieler markieren"
                         />
                       </td>
@@ -418,7 +419,7 @@ export const MemberNotificationsMatrix: React.FC<MemberNotificationsMatrixProps>
                               checked={!isGloballyOff && isUserOn}
                               disabled={isGloballyOff}
                               onChange={() => handleToggleUserEvent(item.memberKey, col.key)}
-                              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                              className="h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                               title={
                                 isGloballyOff
                                   ? "Global deaktiviert"

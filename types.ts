@@ -56,11 +56,11 @@ export interface Person {
   mustChangePassword?: boolean;
   clubs?: UserClub[];
   avatarUrl?: string | null; // WebP komprimiertes Profilbild (< 25 KB, permanent gecached)
-  avatarIcon?: string | null; // Zero-Bandwidth Vektor-Icon ID (z.B. "tennis-ball", "racket", "trophy")
+  avatarIcon?: string | null; // Zero-Bandwidth Vektoricon ID (z.B. "tennis-ball", "racket", "trophy")
   avatarColor?: string | null; // Freie Farbwahl für Icon-Avatar (z.B. "#1b4332", "#2563eb")
   onboarding_pending?: boolean; // Indicates if member onboarding is required
   onboardingPending?: boolean; // CamelCase alias for onboarding_pending
-  showAiAssistant?: boolean; // Club-Assistent ('Ace') aktivieren (Default: true)
+  showAiAssistant?: boolean; // Clubassistent ('Ace') aktivieren (Default: true)
   has_seen_ace_welcome?: boolean; // Whether the user has seen the Ace welcome callout bubble
   notification_settings?: UserNotificationSettings; // Notification event subscriptions
   notificationSettings?: UserNotificationSettings; // CamelCase alias
@@ -127,6 +127,11 @@ export interface Booking {
   guestFeePaid?: boolean;
   isPaid?: boolean;
   createdBy?: string;
+  bookedBy?: string;
+  userId?: string;
+  editingBookingId?: string;
+  actionPerformedBy?: string;
+  impersonatedBy?: string;
   color?: string;
   hasBallMachine?: boolean;
   parentLockId?: string;
@@ -408,6 +413,7 @@ export interface GlobalSystemSettings {
 
 export type BentoItemType =
   | "rich_text"
+  | "hero_banner"
   | "worklet_courts"
   | "worklet_events"
   | "worklet_championship"
@@ -421,7 +427,12 @@ export interface BentoItem {
   title: string;
   content: string; // Rich Text (formatted text/markdown/paragraphs)
   default_view?: "day" | "week"; // For worklet_courts
-  eyebrow?: string; // Optional custom eyebrow badge
+  eyebrow?: string; // Optional custom eyebrow badge (e.g. "GUTEN ABEND,")
+  image_url?: string; // For hero_banner (direct image web URL)
+  bg_color_start?: string; // For hero_banner (left background color hex)
+  bg_color_end?: string; // For hero_banner (gradient transition color hex)
+  cta_text?: string; // For hero_banner (optional button label)
+  cta_link?: string; // For hero_banner (optional button link / view)
   city?: string; // For worklet_weather
   latitude?: number; // For worklet_weather
   longitude?: number; // For worklet_weather

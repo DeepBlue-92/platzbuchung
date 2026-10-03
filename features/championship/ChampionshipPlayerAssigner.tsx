@@ -175,7 +175,7 @@ export const ChampionshipPlayerAssigner: React.FC<ChampionshipPlayerAssignerProp
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-base font-bold text-slate-900">
-              Teilnehmer & Gruppen-Zuweisung ({participants.length} gemeldet)
+              Teilnehmer & Gruppenzuweisung ({participants.length} gemeldet)
             </h3>
             <p className="text-xs text-slate-500 font-medium">
               {tournament.title} · Spieler per Klick zuweisen, Setzliste festlegen oder bei Verletzung als Walkover markieren.

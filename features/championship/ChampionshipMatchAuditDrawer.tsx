@@ -170,7 +170,7 @@ export const ChampionshipMatchAuditDrawer: React.FC<ChampionshipMatchAuditDrawer
               <span className="truncate">{tournament.title}</span>
             </div>
             <h2 className="text-xl font-black tracking-tight text-white mt-1">
-              Audit-Protokoll
+              Auditprotokoll
             </h2>
             <p className="text-xs text-white/80 font-medium mt-0.5 truncate">
               {match.roundLabel || 'Begegnung'} · {p1Name} vs. {p2Name}
@@ -369,7 +369,7 @@ export const ChampionshipMatchAuditDrawer: React.FC<ChampionshipMatchAuditDrawer
               ) : (
                 <div className="py-10 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
                   <AlertCircle className="w-5 h-5 text-slate-300" />
-                  <span>Für diese Partie liegen noch keine Audit-Einträge vor.</span>
+                  <span>Für diese Partie liegen noch keine Auditeinträge vor.</span>
                 </div>
               )}
             </div>

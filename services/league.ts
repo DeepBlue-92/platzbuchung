@@ -12,7 +12,7 @@ export const LEAGUES_COLLECTION = "leagues";
 export const DYNAMIC_LEAGUES_COLLECTION = "dynamic_leagues";
 
 export const BASE_RULE_EFFECTIVE_DATE = "2000-01-01";
-export const BASE_RULE_SYSTEM_STATUS = "System Default / Basis-Regelwerk";
+export const BASE_RULE_SYSTEM_STATUS = "System Default / Basisregelwerk";
 
 function baseRuleId(leagueId: string): string {
   return `base_rule_${leagueId}_20000101`;
@@ -417,7 +417,7 @@ export async function resetLeagueTestData(leagueId: string, leagueName?: string)
   const backup = await createGlobalBackup(
     "league-reset",
     undefined,
-    `Sicherheits-Snapshot vor Testdaten-Reset (Liga: ${leagueName || leagueId})`
+    `Sicherheitssnapshot vor Testdaten-Reset (Liga: ${leagueName || leagueId})`
   );
 
   const { writeBatch } = await import("firebase/firestore");
@@ -546,7 +546,7 @@ export async function ensureLeagueBaseRules(leagues: DynamicLeague[]): Promise<v
       leagueId: league.id,
       effective_date: BASE_RULE_EFFECTIVE_DATE,
       created_at: new Date("2000-01-01T00:00:00.000Z").toISOString(),
-      created_by: "System-Migration",
+      created_by: "Systemmigration",
       system_status: BASE_RULE_SYSTEM_STATUS,
       is_base_rule: true,
       base_points_win: Number(template.base_points_win ?? 5),
@@ -567,7 +567,7 @@ export async function saveLeagueConfigVersion(
   const isBase = configData.effective_date === BASE_RULE_EFFECTIVE_DATE || configData.is_base_rule === true;
 
   if (isBase && !configData.leagueId) {
-    throw new Error("Ein Basis-Regelwerk muss einer Liga zugeordnet sein.");
+    throw new Error("Ein Basisregelwerk muss einer Liga zugeordnet sein.");
   }
 
   if (!versionId) {
@@ -622,7 +622,7 @@ export async function deleteLeagueConfigVersion(versionId: string): Promise<void
   if (snap.exists()) {
     const data = snap.data() as LeagueConfigVersion;
     if (data.effective_date === BASE_RULE_EFFECTIVE_DATE || data.is_base_rule) {
-      throw new Error("Das Basis-Regelwerk (01.01.2000) ist unveränderlich und kann nicht gelöscht werden.");
+      throw new Error("Das Basisregelwerk (01.01.2000) ist unveränderlich und kann nicht gelöscht werden.");
     }
     if (data.effective_date) effectiveDate = data.effective_date;
   }
@@ -830,7 +830,7 @@ export async function updatePlayerLeagueAssignment(
       status: 'completed',
       isManualAdjustment: true,
       manualPointsValue: Number(options.manualPointsOverride),
-      manualAdjustmentReason: options.manualPointsReason || `Liga-Wechsel (${newLeagueId})`,
+      manualAdjustmentReason: options.manualPointsReason || `Ligawechsel (${newLeagueId})`,
       played_at: now,
       result: {
         winnerId: userId,

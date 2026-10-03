@@ -276,7 +276,7 @@ export function exportChampionshipToPdf(
 
       autoTable(doc, {
         startY: currentY,
-        head: [['Halbfinal-Partie', 'Begegnung', 'Ergebnis', 'Sieger / Finalist', 'Status']],
+        head: [['Halbfinalpartie', 'Begegnung', 'Ergebnis', 'Sieger / Finalist', 'Status']],
         body: hfRows,
         theme: 'grid',
         headStyles: {

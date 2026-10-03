@@ -32,9 +32,9 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
     setErrorMsg(null);
     try {
       await createGlobalBackup("super-admin");
-      setSuccessMsg("Globales System-Backup erfolgreich manuell erstellt.");
+      setSuccessMsg("Globales Systembackup erfolgreich manuell erstellt.");
     } catch (err: any) {
-      setErrorMsg("Fehler beim Erstellen des System-Backups: " + (err?.message || err));
+      setErrorMsg("Fehler beim Erstellen des Systembackups: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
               <i className="fa-solid fa-database"></i>
             </span>
             <h3 className="text-sm font-black uppercase text-[var(--color-primary)] tracking-wider">
-              Globales System-Backup &amp; Rollback
+              Globales Systembackup &amp; Rollback
             </h3>
           </div>
           <p className="text-xs text-slate-500 font-semibold leading-relaxed max-w-3xl">
@@ -104,7 +104,7 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
           className="bg-[var(--color-primary)] hover:bg-[#153326] disabled:bg-slate-300 text-white px-4 py-2.5 rounded-xl uppercase tracking-wider transition-all shadow-sm hover:shadow-md active:scale-95 border border-[var(--color-primary)] inline-flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap text-xs font-black shrink-0"
         >
           <i className="fa-solid fa-plus-circle text-sm"></i>
-          Neues System-Backup sichern
+          Neues Systembackup sichern
         </button>
       </div>
 
@@ -115,7 +115,7 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
           <span className="text-xs font-black text-[var(--color-primary)] uppercase tracking-wider animate-pulse">
             {isPerformingRollback
               ? "Systemweites Rollback wird ausgeführt... Bitte warten..."
-              : "System-Backup wird erstellt... Bitte warten..."}
+              : "Systembackup wird erstellt... Bitte warten..."}
           </span>
         </div>
       )}
@@ -272,7 +272,7 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
                     colSpan={4}
                     className="px-5 py-12 text-center text-slate-400 font-semibold italic"
                   >
-                    Bisher wurden keine globalen System-Backups gesichert. Klicken Sie oben auf &bdquo;Neues System-Backup sichern&ldquo;, um einen Snapshot zu erstellen.
+                    Bisher wurden keine globalen Systembackups gesichert. Klicken Sie oben auf &bdquo;Neues Systembackup sichern&ldquo;, um einen Snapshot zu erstellen.
                   </td>
                 </tr>
               )}
@@ -287,8 +287,8 @@ export default function ClubBackupsPanel({}: ClubBackupsPanelProps) {
           <i className="fa-solid fa-circle-info"></i>
         </div>
         <div className="text-xs text-slate-600 leading-relaxed font-semibold">
-          <strong className="text-amber-900">Automatische Bereinigung &amp; Sicherheit:</strong> Wöchentliche globale System-Backups bleiben aus Gründen der Kapazitäts- und Performanceoptimierung exakt{" "}
-          <strong className="text-amber-900">4 Wochen (28 Tage)</strong> lang gespeichert. Nach Ablauf dieses Zeitraums werden sie automatisch bereinigt. Manuelle System-Backups, die Sie über &bdquo;Neues System-Backup sichern&ldquo; anlegen, sowie automatische Sicherheits-Backups vor Rollbacks bleiben dauerhaft erhalten.
+          <strong className="text-amber-900">Automatische Bereinigung &amp; Sicherheit:</strong> Wöchentliche globale Systembackups bleiben aus Gründen der Kapazitäts- und Performanceoptimierung exakt{" "}
+          <strong className="text-amber-900">4 Wochen (28 Tage)</strong> lang gespeichert. Nach Ablauf dieses Zeitraums werden sie automatisch bereinigt. Manuelle Systembackups, die Sie über &bdquo;Neues Systembackup sichern&ldquo; anlegen, sowie automatische Sicherheits-Backups vor Rollbacks bleiben dauerhaft erhalten.
         </div>
       </div>
 

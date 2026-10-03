@@ -207,7 +207,7 @@ export default function SuperAdminPointsManagement({
     e.preventDefault();
     if (targetPlayers.length === 0) return;
     if (!correctionReason.trim()) {
-      setActionError('Bitte gib einen aussagekräftigen Grund für die Punkte-Korrektur an (z. B. "Manuelle Admin-Korrektur").');
+      setActionError('Bitte gib einen aussagekräftigen Grund für die Punktekorrektur an (z. B. "Manuelle Admin-Korrektur").');
       return;
     }
 
@@ -518,7 +518,7 @@ export default function SuperAdminPointsManagement({
                 <div>
                   <h3 className="font-black text-sm uppercase tracking-wider">
                     {targetPlayers.length === 1
-                      ? 'Punkte-Korrektur (Einzelspieler)'
+                      ? 'Punktekorrektur (Einzelspieler)'
                       : `Batch-Korrektur (${targetPlayers.length} Spieler)`}
                   </h3>
                   <p className="text-[11px] text-indigo-100 font-medium">

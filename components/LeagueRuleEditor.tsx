@@ -189,7 +189,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
           </div>
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-200">
-              Stichtag-Regelwerk Editor
+              Stichtagsregelwerk Editor
             </div>
             <h2 className="text-lg font-black tracking-tight flex items-center gap-2">
               Liga: {props.leagueName || props.leagueId}
@@ -250,7 +250,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
                 className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 cursor-pointer"
               >
                 <i className="fa-solid fa-plus text-[10px]"></i>
-                Neues Stichtag-Regelwerk anlegen
+                Neues Stichtagsregelwerk anlegen
               </button>
             )}
           </div>
@@ -261,7 +261,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
             </div>
           ) : existingVersions.length === 0 ? (
             <p className="text-xs text-slate-500 py-2">
-              Noch kein spezifisches Regelwerk für diese Liga hinterlegt. Das System verwendet das Basis-Regelwerk oder Fallback-Werte.
+              Noch kein spezifisches Regelwerk für diese Liga hinterlegt. Das System verwendet das Basisregelwerk oder Fallback-Werte.
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
@@ -466,7 +466,7 @@ export const LeagueRuleEditor: React.FC<LeagueRuleEditorProps> = (props) => {
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="bg-white p-3 rounded-lg border border-emerald-100 shadow-2xs">
-                <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Underdog-Sieg</div>
+                <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Underdogsieg</div>
                 <div className="text-[11px] text-slate-600">80 Pkt. schlägt 120 Pkt.</div>
                 <div className="text-lg font-black text-emerald-700 mt-1">
                   +{simUnderdog.total} <span className="text-xs font-semibold text-slate-500">Pkt.</span>

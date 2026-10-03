@@ -91,7 +91,7 @@ export const OnboardingHero: React.FC<OnboardingHeroProps> = ({
         id="onboarding-welcome-title"
         className="font-serif text-xl lg:text-2xl font-semibold text-slate-900 tracking-tight leading-snug"
       >
-        {welcomeTitle || "Willkommen in unserem Tennis-Club!"}
+        {welcomeTitle || "Willkommen in unserem Tennisclub!"}
       </h2>
 
       {/* Welcome Description Body Text in Clean Sans - Barrierefreies Dunkelgrau (#4B5563 / text-slate-600) */}

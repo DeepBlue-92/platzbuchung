@@ -58,7 +58,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
     return e.date.startsWith(selectedYear.toString());
   });
 
-  const categories = [...(settings?.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheim-Reinigung", "Bewirtung", "Sonstiges"])].sort((a, b) => a.localeCompare(b, "de"));
+  const categories = [...(settings?.arbeitseinsaetzeSettings?.categories ?? ["Platzpflege", "Clubheimreinigung", "Bewirtung", "Sonstiges"])].sort((a, b) => a.localeCompare(b, "de"));
   const visibility = settings?.arbeitseinsaetzeSettings?.visibility ?? "full";
   const interval = settings?.arbeitseinsaetzeSettings?.interval ?? "0.5";
   const maxDaysBack = settings?.arbeitseinsaetzeSettings?.maxDaysBack ?? 14;
@@ -630,7 +630,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
     }
     const step = Number(interval);
     if (Math.round(formHours * 100) % Math.round(step * 100) !== 0) {
-      setErrorMsg(`Bitte erfassen Sie die Stunden im ${interval}-Stunden-Takt.`);
+      setErrorMsg(`Bitte erfassen Sie die Stunden im ${interval}-Stundentakt.`);
       return;
     }
 
@@ -851,7 +851,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
             </div>
             <h2 className="text-sm xs:text-base font-black text-slate-800 uppercase tracking-wider sm:text-sm sm:font-bold sm:text-slate-700 sm:normal-case sm:tracking-normal">
               <span className="inline sm:hidden">Meine Arbeitsstunden {selectedYear}</span>
-              <span className="hidden sm:inline">Dein Arbeitsstunden-Fortschritt ({selectedYear})</span>
+              <span className="hidden sm:inline">Dein Arbeitsstundenfortschritt ({selectedYear})</span>
             </h2>
           </div>
           <div className="flex items-baseline gap-1 font-mono shrink-0">
@@ -2012,7 +2012,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100 shadow-sm">
                     {rules.length === 0 ? (
                       <div className="text-center text-slate-400 text-sm py-8 bg-white">
-                        Keine Regeln hinterlegt. Es gelten die System-Defaults.
+                        Keine Regeln hinterlegt. Es gelten die Systemdefaults.
                       </div>
                     ) : (
                       [...rules].sort((a, b) => b.gueltig_ab_jahr - a.gueltig_ab_jahr).map((rule: any) => (
@@ -2063,7 +2063,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
                     <h4 className="text-sm font-bold text-slate-800 mb-4">Arbeitseinsätze & Gebühren</h4>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 mb-2">
-                        Soll-Stunden pro Jahr
+                        Sollstunden pro Jahr
                       </label>
                       <div className="relative">
                         <input
@@ -2081,7 +2081,7 @@ const Arbeitseinsaetze: React.FC<ArbeitseinsaetzeProps> = ({
 
                     <div>
                       <label className="block text-xs font-bold text-slate-500 mb-2">
-                        Ersatzgebühr (bei Nicht-Erfüllung)
+                        Ersatzgebühr (bei Nichterfüllung)
                       </label>
                       <div className="relative">
                         <input

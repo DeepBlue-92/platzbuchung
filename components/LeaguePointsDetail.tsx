@@ -131,7 +131,7 @@ export function LeaguePointsDetail({
 
           <div className="space-y-1">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
-              Max. Gegner-Bonus
+              Max. Gegnerbonus
             </span>
             <span className="text-xl font-mono font-black text-emerald-400">
               +{config.maxBonusPoints} Pkt.
@@ -171,7 +171,7 @@ export function LeaguePointsDetail({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-medium">
-              Jedes absolvierte Match wird in der Hobbyliga belohnt. Unabhängig vom Ausgang erhält der Gewinner eine **Teilnahme-Basis von +{config.participationPoints} Punkten**. Der zusätzliche Gegner-Bonus richtet sich nach dem Ranking-Unterschied.
+              Jedes absolvierte Match wird in der Hobbyliga belohnt. Unabhängig vom Ausgang erhält der Gewinner eine **Teilnahme-Basis von +{config.participationPoints} Punkten**. Der zusätzliche Gegnerbonus richtet sich nach dem Ranking-Unterschied.
             </p>
 
             <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside font-medium">
@@ -208,14 +208,14 @@ export function LeaguePointsDetail({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-medium">
-              Zur Berechnung des Gegner-Bonus nutzt das System eine <strong>S-förmige logistische Kurve</strong>. Dies glättet extrem große Punkteunterschiede und verhindert unfaire Punkte-Sprünge ("Runaway Inflation").
+              Zur Berechnung des Gegnerbonus nutzt das System eine <strong>S-förmige logistische Kurve</strong>. Dies glättet extrem große Punkteunterschiede und verhindert unfaire Punkte-Sprünge ("Runaway Inflation").
             </p>
 
             {/* Formula Box & Dynamic Parameters */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 bg-slate-900 text-slate-100 rounded-xl p-4 font-mono text-xs space-y-1.5 border border-slate-800 flex flex-col justify-center">
                 <div className="text-[10px] font-sans font-bold uppercase tracking-wider text-indigo-300">
-                  Gegner-Bonus B(D) Formel:
+                  Gegnerbonus B(D) Formel:
                 </div>
                 <div className="text-indigo-200 font-bold text-sm overflow-x-auto py-1">
                   B(D) = {config.maxBonusPoints} / (1 + e<sup>-{config.logisticSteepnessK} &times; D</sup>)
@@ -250,7 +250,7 @@ export function LeaguePointsDetail({
                 <div className="flex items-center gap-2">
                   <i className="fa-solid fa-chart-area text-indigo-400 text-sm" />
                   <span className="text-xs font-bold text-slate-200">
-                    S-Kurven Diagramm: Gegner-Bonus B(D)
+                    S-Kurven Diagramm: Gegnerbonus B(D)
                   </span>
                 </div>
                 <div className="flex items-center gap-4 text-[11px] text-slate-400 font-mono">
@@ -434,7 +434,7 @@ export function LeaguePointsDetail({
                   </div>
 
                   <div className="bg-slate-900 rounded-xl p-3 border border-amber-900/40 flex flex-col justify-between space-y-1">
-                    <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider">Gegner-Bonus B(D)</span>
+                    <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider">Gegnerbonus B(D)</span>
                     <span className="text-lg sm:text-xl font-mono font-extrabold text-amber-400">+{simBonus.toFixed(1)} Pkt.</span>
                   </div>
 

@@ -56,11 +56,11 @@ export default function SuperAdminLeagueEligibilityList({ allPersons, dynamicLea
           <div className="flex items-center gap-2">
             <i className="fa-solid fa-users-viewfinder text-indigo-500 text-lg"></i>
             <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">
-              Test der Liga-Berechtigung
+              Test der Ligaberechtigung
             </h2>
           </div>
           <p className="text-xs text-slate-500 font-medium leading-relaxed mt-1 max-w-3xl">
-            Überprüfe, welche registrierten Benutzer anhand ihrer Profil-Daten (Alter, Geschlecht) 
+            Überprüfe, welche registrierten Benutzer anhand ihrer Profildaten (Alter, Geschlecht) 
             für eine spezifische Liga spielberechtigt sind.
           </p>
         </div>
@@ -133,7 +133,7 @@ export default function SuperAdminLeagueEligibilityList({ allPersons, dynamicLea
                 </div>
                 <h4 className="text-sm font-bold text-slate-700 mb-1">Keine berechtigten Spieler</h4>
                 <p className="text-xs text-slate-500">
-                  Für diese Liga-Kriterien konnten keine passenden Benutzer gefunden werden.
+                  Für diese Ligakriterien konnten keine passenden Benutzer gefunden werden.
                 </p>
               </div>
             )}

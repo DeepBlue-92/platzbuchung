@@ -19,10 +19,10 @@ export const OnboardingFieldMatrix: React.FC<OnboardingFieldMatrixProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-4">
         <h3 className="text-sm font-black text-[var(--color-primary)] uppercase flex items-center gap-2">
           <i className="fa-solid fa-table-cells"></i>{" "}
-          Feld-Berechtigungsmatrix
+          Feldberechtigungsmatrix
         </h3>
         <span className="text-[10px] text-slate-500 font-bold uppercase">
-          Bestimmt, wie jedes Bento-Feld dem Mitglied dargestellt wird
+          Bestimmt, wie jedes Bentofeld dem Mitglied dargestellt wird
         </span>
       </div>
 
@@ -109,7 +109,7 @@ export const OnboardingFieldMatrix: React.FC<OnboardingFieldMatrixProps> = ({
                 Profilbild & Avatar-Icon
               </h4>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Avatar-Uploader oder Vektor-Icon
+                Avatar-Uploader oder Vektoricon
               </p>
             </div>
           </div>

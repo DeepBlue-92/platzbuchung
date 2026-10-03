@@ -55,7 +55,7 @@ export default function ChangePasswordModal({ currentUser, onPasswordChanged }: 
           </div>
           <h1 className="text-xl font-black text-slate-800 mb-2">Sicherheitshinweis</h1>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Dein Administrator hat ein temporäres Einmal-Passwort für dich generiert. 
+            Dein Administrator hat ein temporäres Einmalpasswort für dich generiert. 
             Bitte lege nun ein neues, persönliches Passwort fest, um fortzufahren.
           </p>
         </div>

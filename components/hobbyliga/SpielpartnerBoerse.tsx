@@ -48,11 +48,11 @@ export const SpielpartnerBoerse: React.FC<SpielpartnerBoerseProps> = ({
               <i className="fa-solid fa-bullhorn text-base"></i>
             </span>
             <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">
-              Spielpartner-Börse
+              Spielpartnerbörse
             </h3>
           </div>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Signalisiere deine Verfügbarkeit für Hobbyliga-Einzelspiele und fordere Gegner heraus!
+            Signalisiere deine Verfügbarkeit für Hobbyligaeinzelspiele und fordere Gegner heraus!
           </p>
         </div>
         <div>
@@ -255,7 +255,7 @@ export const SpielpartnerBoerse: React.FC<SpielpartnerBoerseProps> = ({
           <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400 text-xl">
             <i className="fa-regular fa-comment-dots"></i>
           </div>
-          <h4 className="font-bold text-slate-700 text-sm">Noch keine Spielpartner-Anzeigen online</h4>
+          <h4 className="font-bold text-slate-700 text-sm">Noch keine Spielpartneranzeigen online</h4>
           <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
             Sei der Erste, der eine Anzeige schaltet und signalisiere deine Verfügbarkeit für das nächste Match.
           </p>

@@ -340,7 +340,7 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
         const s1_1 = parseInt(set1P1, 10);
         const s1_2 = parseInt(set1P2, 10);
         if (isNaN(s1_1) || isNaN(s1_2) || s1_1 < 0 || s1_2 < 0) {
-          setErrorMessage('Ungültige Spiele-Anzahl im 1. Satz.');
+          setErrorMessage('Ungültige Spieleanzahl im 1. Satz.');
           setSaving(false);
           return;
         }
@@ -359,7 +359,7 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
         const s2_1 = parseInt(set2P1, 10);
         const s2_2 = parseInt(set2P2, 10);
         if (isNaN(s2_1) || isNaN(s2_2) || s2_1 < 0 || s2_2 < 0) {
-          setErrorMessage('Ungültige Spiele-Anzahl im 2. Satz.');
+          setErrorMessage('Ungültige Spieleanzahl im 2. Satz.');
           setSaving(false);
           return;
         }
@@ -390,7 +390,7 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
           const s3_1 = parseInt(set3P1, 10);
           const s3_2 = parseInt(set3P2, 10);
           if (isNaN(s3_1) || isNaN(s3_2) || s3_1 < 0 || s3_2 < 0) {
-            setErrorMessage('Ungültige Punkte-Anzahl im Match-Tiebreak.');
+            setErrorMessage('Ungültige Punkteanzahl im Match-Tiebreak.');
             setSaving(false);
             return;
           }
@@ -539,7 +539,7 @@ export const ChampionshipResultModal: React.FC<ChampionshipResultModalProps> = (
             {!isWalkover && (
               <div className="space-y-3">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Satz-Ergebnisse
+                  Satzergebnisse
                 </label>
 
                 {/* Set 1 */}

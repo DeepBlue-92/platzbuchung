@@ -96,7 +96,7 @@ export const ChampionshipHeroStatus: React.FC<ChampionshipHeroStatusProps> = ({
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
               <Trophy className="w-3 h-3" />
-              Mein Meisterschafts-Status
+              Mein Meisterschaftsstatus
             </span>
             {myParticipant && (
               <span className="px-2 py-0.5 rounded-full bg-white/10 text-slate-300 text-[10px] font-bold">

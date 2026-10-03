@@ -704,7 +704,7 @@ export default function SuperAdminUserPurgeTab({
     setLoadingAction(`role_${userId}_${clubId}`);
     try {
       await updateUserTenantRole(userId, clubId, newRole);
-      const roleLabel = newRole === Role.ADMIN ? "Vereins-Admin" : "Mitglied / Spieler";
+      const roleLabel = newRole === Role.ADMIN ? "Vereinsadmin" : "Mitglied / Spieler";
       showToast(`Rolle für "${clubName}" erfolgreich auf "${roleLabel}" geändert.`);
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
@@ -1087,7 +1087,7 @@ export default function SuperAdminUserPurgeTab({
                                   }`}
                                   title={
                                     club.isAdmin
-                                      ? `${club.clubName} (Vereins-Admin)`
+                                      ? `${club.clubName} (Vereinsadmin)`
                                       : `${club.clubName} (Mitglied / Spieler)`
                                   }
                                 >
@@ -1278,7 +1278,7 @@ export default function SuperAdminUserPurgeTab({
                           }`}
                         >
                           <i className={`fa-solid fa-circle-check text-xs ${assignClubForm.role === Role.ADMIN ? "text-amber-600" : "text-slate-300"}`}></i>
-                          Vereins-Admin
+                          Vereinsadmin
                         </button>
                       </div>
                     </div>
@@ -1362,7 +1362,7 @@ export default function SuperAdminUserPurgeTab({
                 <div className="space-y-1.5 text-slate-600">
                   <p className="flex items-start gap-2">
                     <i className="fa-solid fa-trophy text-amber-600 mt-0.5"></i>
-                    <span><strong>Ligaspiele-Annullierung:</strong> Alle Hobbyliga-Matches dieser Person werden annulliert und die Punkte der Gegner chronologisch neu berechnet.</span>
+                    <span><strong>Ligaspiele-Annullierung:</strong> Alle Hobbyligamatches dieser Person werden annulliert und die Punkte der Gegner chronologisch neu berechnet.</span>
                   </p>
                   <p className="flex items-start gap-2">
                     <i className="fa-solid fa-user-xmark text-rose-600 mt-0.5"></i>
@@ -1470,7 +1470,7 @@ export default function SuperAdminUserPurgeTab({
                 <div className="space-y-1.5 text-slate-600">
                   <p className="flex items-start gap-2">
                     <i className="fa-solid fa-trophy text-amber-600 mt-0.5"></i>
-                    <span><strong>Ligaspiele-Annullierung:</strong> Alle Hobbyliga-Matches dieser Person werden annulliert und die Punkte der Gegner chronologisch neu berechnet.</span>
+                    <span><strong>Ligaspiele-Annullierung:</strong> Alle Hobbyligamatches dieser Person werden annulliert und die Punkte der Gegner chronologisch neu berechnet.</span>
                   </p>
                   <p className="flex items-start gap-2">
                     <i className="fa-solid fa-user-xmark text-rose-600 mt-0.5"></i>
@@ -1876,7 +1876,7 @@ export default function SuperAdminUserPurgeTab({
                               className="bg-white border border-slate-300 text-slate-700 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 font-sans font-medium"
                             >
                               <option value={Role.MITGLIED}>Spieler (Standard)</option>
-                              <option value={Role.ADMIN}>Vereins-Admin</option>
+                              <option value={Role.ADMIN}>Vereinsadmin</option>
                             </select>
                           </div>
                         )}
@@ -2061,7 +2061,7 @@ export default function SuperAdminUserPurgeTab({
                                 }`}
                               >
                                 <option value={Role.MITGLIED}>Mitglied / Spieler</option>
-                                <option value={Role.ADMIN}>Vereins-Admin</option>
+                                <option value={Role.ADMIN}>Vereinsadmin</option>
                               </select>
                               <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[10px]">
                                 {isUpdatingRole ? (

@@ -191,8 +191,8 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
 
   return (
     <div
-      className={`bg-slate-50 border border-slate-200/80 rounded-2xl ${
-        compact ? "p-2.5 sm:p-3 space-y-2.5" : "p-4 space-y-4"
+      className={`bg-slate-50/70 border border-slate-200/80 rounded-2xl ${
+        compact ? "p-3 space-y-3" : "p-4 sm:p-5 space-y-4"
       }`}
     >
       <div className={`flex flex-col sm:flex-row items-center ${compact ? "gap-3" : "gap-4"}`}>
@@ -205,8 +205,8 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
             avatarColor={activeAvatarColor}
             size={compact ? "lg" : "xl"}
             showBorder
-            borderColor="border-white shadow-md"
-            className="ring-2 ring-slate-200"
+            borderColor="border-white shadow-xs"
+            className="ring-2 ring-slate-200/80"
           />
 
           {activeAvatarUrl && (
@@ -216,7 +216,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 setSelectedImageSrc(activeAvatarUrl);
                 setCropModalOpen(true);
               }}
-              className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white border border-slate-300 shadow-sm flex items-center justify-center text-slate-600 hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
+              className="absolute -bottom-1 -right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white border border-slate-300 shadow-xs flex items-center justify-center text-slate-600 hover:text-[var(--color-primary)] hover:border-[var(--color-primary)] transition-colors cursor-pointer"
               title="Ausschnitt anpassen"
             >
               <Crop className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -225,23 +225,21 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
         </div>
 
         {/* Content & Actions */}
-        <div className="flex-1 min-w-0 text-center sm:text-left space-y-1.5">
+        <div className="flex-1 min-w-0 text-center sm:text-left space-y-1">
           {!hideTitle && (
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                Profilbild &amp; Avatar
-              </h4>
-            </div>
+            <h4 className="text-sm font-bold text-slate-900 tracking-tight">
+              Profilbild &amp; Avatar
+            </h4>
           )}
 
-          <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+          <p className="text-xs text-slate-500 font-normal leading-relaxed">
             {activeAvatarUrl
-              ? "Dein aktuelles Profilbild. Du kannst jederzeit ein neues hochladen oder ein Icon wählen."
+              ? "Aktuelles Profilbild gespeichert. Du kannst jederzeit ein neues Foto hochladen oder ein Icon wählen."
               : "Lade ein Foto hoch oder wähle eines unserer Sport-Icons als Profilbild."}
           </p>
 
           {/* Buttons */}
-          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-0.5">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1.5">
             <input
               ref={fileInputRef}
               id="avatar-file-upload-input"
@@ -259,7 +257,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 }
                 fileInputRef.current?.click();
               }}
-              className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:border-[var(--color-primary)] text-slate-700 hover:text-[var(--color-primary)] text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-98 cursor-pointer"
+              className="h-9 px-3.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs active:scale-98 cursor-pointer"
             >
               <Upload className="w-3.5 h-3.5" />
               Bild hochladen
@@ -268,10 +266,10 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
             <button
               type="button"
               onClick={() => setShowIconSelector(!showIconSelector)}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
+              className={`h-9 px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer ${
                 showIconSelector
-                  ? "bg-amber-50 border-amber-300 text-amber-900 ring-2 ring-amber-400/20"
-                  : "bg-white border-slate-200 hover:border-slate-300 text-slate-600"
+                  ? "bg-amber-50/80 border-amber-300 text-amber-900 ring-2 ring-amber-400/20"
+                  : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
@@ -282,7 +280,7 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
               <button
                 type="button"
                 onClick={handleRemoveAvatar}
-                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                className="h-9 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200/80 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Foto entfernen"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -295,15 +293,15 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
 
       {/* Icon Selector Drawer / Grid (Zero Storage Cost) */}
       {showIconSelector && (
-        <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="bg-white border border-slate-200/80 rounded-xl p-4 space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-150 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-amber-500" />
+            <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               Icons
             </span>
           </div>
 
-          <div className="grid grid-cols-6 gap-3 items-center justify-items-center py-1">
+          <div className="grid grid-cols-6 gap-2.5 sm:gap-3 items-center justify-items-center py-1.5">
             {AVATAR_ICON_OPTIONS.map((opt) => {
               const isSelected = !activeAvatarUrl && activeAvatarIcon === opt.id;
               
@@ -331,59 +329,59 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                   onClick={() => handleSelectIcon(opt.id)}
                   title={opt.name}
                   style={buttonCustomStyle}
-                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center ${
+                  className={`w-9.5 h-9.5 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 ${
                     isSelected && activeAvatarColor ? "" : `${opt.bgClass} ${opt.colorClass}`
                   } shadow-2xs transition-all duration-150 cursor-pointer outline-none ${
                     isSelected
-                      ? "ring-2 ring-slate-800 ring-offset-2 ring-offset-white scale-105"
-                      : "hover:scale-105 active:scale-95"
+                      ? "ring-2 ring-[var(--color-primary)] ring-offset-2 ring-offset-white font-bold"
+                      : "hover:scale-105 active:scale-95 opacity-85 hover:opacity-100"
                   }`}
                 >
-                  {opt.id === "initials" && <span className="font-black text-sm sm:text-base tracking-wider">{initials}</span>}
-                  {opt.id === "tennis-ball" && <TennisBallSvg className="w-5 h-5" color={isSelected && activeAvatarColor ? activeAvatarColor : undefined} />}
-                  {opt.id === "racket" && <TennisRacketSvg className="w-5 h-5" />}
-                  {opt.id === "trophy" && <Trophy className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "medal" && <Medal className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "flame" && <Flame className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "shield" && <Shield className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "crown" && <Crown className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "star" && <Star className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "coffee" && <Coffee className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "beer" && <Beer className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "sunglasses" && <Sunglasses className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "dumbbell" && <Dumbbell className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "zap" && <Zap className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "target" && <Target className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "rocket" && <Rocket className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "heart" && <Heart className="w-5 h-5" strokeWidth={2.2} />}
-                  {opt.id === "user" && <UserIcon className="w-5 h-5" strokeWidth={2.2} />}
+                  {opt.id === "initials" && <span className="font-bold text-xs tracking-wider select-none">{initials}</span>}
+                  {opt.id === "user" && <UserIcon className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "tennis-ball" && <TennisBallSvg className="w-4.5 h-4.5 shrink-0" color={isSelected && activeAvatarColor ? activeAvatarColor : undefined} />}
+                  {opt.id === "racket" && <TennisRacketSvg className="w-4.5 h-4.5 shrink-0" />}
+                  {opt.id === "trophy" && <Trophy className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "medal" && <Medal className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "flame" && <Flame className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "shield" && <Shield className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "crown" && <Crown className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "star" && <Star className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "coffee" && <Coffee className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "beer" && <Beer className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "sunglasses" && <Sunglasses className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "dumbbell" && <Dumbbell className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "zap" && <Zap className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "target" && <Target className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "rocket" && <Rocket className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
+                  {opt.id === "heart" && <Heart className="w-4.5 h-4.5 shrink-0" strokeWidth={2} />}
                 </button>
               );
             })}
           </div>
 
-          {/* Kompakte Regenbogen-Farbzeile (Lösung B) */}
-          <div className="pt-2.5 border-t border-slate-200/70 space-y-1.5">
+          {/* Farbzeile */}
+          <div className="pt-3 border-t border-slate-100 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
-                <Palette className="w-3 h-3 text-indigo-500" />
+              <span className="text-xs font-semibold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-indigo-500" />
                 Farbe
               </span>
               {activeAvatarColor && (
                 <button
                   type="button"
                   onClick={() => handleSelectColor(null)}
-                  className="text-[10px] font-bold text-slate-400 hover:text-slate-700 flex items-center gap-1 hover:underline transition-colors cursor-pointer"
+                  className="text-xs font-medium text-slate-400 hover:text-slate-700 flex items-center gap-1 hover:underline transition-colors cursor-pointer"
                   title="Auf Standard zurücksetzen"
                 >
-                  <RotateCcw className="w-2.5 h-2.5" />
+                  <RotateCcw className="w-3 h-3" />
                   Zurücksetzen
                 </button>
               )}
             </div>
 
-            {/* 1 einzige Zeile mit 10 Regenbogen-Punkten + 1 Pipette */}
-            <div className="flex items-center justify-between gap-1 sm:gap-1.5 py-0.5">
+            {/* Farbpalette */}
+            <div className="flex items-center justify-between gap-1.5 py-0.5 max-w-md">
               {AVATAR_COLOR_PRESETS.map((preset) => {
                 const isSelected = activeAvatarColor?.toLowerCase() === preset.value.toLowerCase();
                 return (
@@ -392,10 +390,10 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                     type="button"
                     onClick={() => handleSelectColor(preset.value)}
                     title={preset.name}
-                    className={`flex-1 aspect-square max-w-[32px] min-w-[22px] rounded-full transition-all duration-150 cursor-pointer relative flex items-center justify-center shadow-2xs outline-none ${
+                    className={`flex-1 aspect-square max-w-[30px] min-w-[20px] rounded-full transition-all duration-150 cursor-pointer relative flex items-center justify-center shadow-2xs outline-none ${
                       isSelected
-                        ? "ring-2 ring-slate-800 ring-offset-2 ring-offset-white scale-110 z-10"
-                        : "hover:scale-115 active:scale-95 hover:z-10"
+                        ? "ring-2 ring-[var(--color-primary)] ring-offset-2 ring-offset-white scale-110 z-10"
+                        : "hover:scale-110 active:scale-95"
                     }`}
                     style={{ backgroundColor: preset.value }}
                   >
@@ -406,13 +404,13 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 );
               })}
 
-              {/* 11. Punkt: Pipette / Regenbogen-Knopf für freie Farbwahl */}
+              {/* Pipette / Regenbogen-Knopf */}
               <label
-                title={isCustomColor ? `Eigene Farbe: ${activeAvatarColor}` : "Beliebige eigene Farbe wählen (Farbrad)"}
-                className={`flex-1 aspect-square max-w-[32px] min-w-[22px] rounded-full transition-all duration-150 relative flex items-center justify-center cursor-pointer shadow-2xs outline-none ${
+                title={isCustomColor ? `Eigene Farbe: ${activeAvatarColor}` : "Beliebige eigene Farbe wählen"}
+                className={`flex-1 aspect-square max-w-[30px] min-w-[20px] rounded-full transition-all duration-150 relative flex items-center justify-center cursor-pointer shadow-2xs outline-none ${
                   isCustomColor
-                    ? "ring-2 ring-slate-800 ring-offset-2 ring-offset-white scale-110 z-10"
-                    : "border border-slate-300 hover:border-slate-500 hover:scale-115 active:scale-95 bg-linear-to-tr from-rose-400 via-amber-300 via-emerald-400 to-indigo-500"
+                    ? "ring-2 ring-[var(--color-primary)] ring-offset-2 ring-offset-white scale-110 z-10"
+                    : "border border-slate-300 hover:border-slate-500 hover:scale-110 active:scale-95 bg-linear-to-tr from-rose-400 via-amber-300 via-emerald-400 to-indigo-500"
                 }`}
                 style={isCustomColor ? { backgroundColor: activeAvatarColor } : {}}
               >

@@ -196,7 +196,7 @@ export interface ClubSettings {
     guestBillingMode?: 'per_player' | 'per_court';
     maxBookingsPerDay?: number; // Added per-day booking limit
     maxBookingsPerWeek?: number; // Added per-week booking limit
-    bypassRestrictionsForLeagueGames?: boolean; // Ligaspiel-Buchungen von Limits ausnehmen
+    bypassRestrictionsForLeagueGames?: boolean; // Ligaspielbuchungen von Limits ausnehmen
     cancellationDeadlineMinutes?: number;
     maxDurationMinutesSingle?: number;
     maxDurationMinutesDouble?: number;
@@ -300,7 +300,7 @@ Hier siehst du den aktuellen Stand der Vereinsmeisterschaft im Herren Einzel. An
 Die gesamte Anwendung wurde für Smartphones optimiert. Du kannst deinen Platz also bequem direkt vom Court aus buchen. Nutze am besten die "Tag"-Ansicht im Dashboard für die beste Übersicht auf kleinen Bildschirmen.
 
 - Keine App-Installation nötig
-- Echtzeit-Synchronisierung`,
+- Echtzeitsynchronisierung`,
   modules: {
     landing_page: true,
     events: true,
@@ -734,7 +734,27 @@ export async function saveBooking(vereinsId: string, booking: Booking) {
       const docSnap = await transaction.get(docRef);
       if (docSnap.exists()) {
         const existingData = docSnap.data() as Booking;
-        if (booking.id !== finalId && booking.id !== existingData.id) {
+        const isSameId = booking.id === finalId || booking.id === existingData.id;
+        const isEditingThisBooking =
+          booking.editingBookingId === existingData.id ||
+          booking.editingBookingId === finalId;
+        const isSameGroup =
+          !!booking.group_token &&
+          !!existingData.group_token &&
+          booking.group_token === existingData.group_token;
+        const isOwner =
+          (!!booking.bookedBy && !!existingData.bookedBy && booking.bookedBy === existingData.bookedBy) ||
+          (!!booking.userId && !!existingData.userId && booking.userId === existingData.userId) ||
+          (!!booking.userId && !!existingData.bookedBy && booking.userId === existingData.bookedBy) ||
+          (!!booking.bookedBy && !!existingData.userId && booking.bookedBy === existingData.userId) ||
+          (!!booking.createdBy && !!existingData.createdBy && booking.createdBy === existingData.createdBy);
+        const isPrivileged =
+          booking.actionPerformedBy === 'superadmin' ||
+          !!booking.impersonatedBy;
+
+        const isAllowedUpdate = isSameId || isEditingThisBooking || isSameGroup || isOwner || isPrivileged;
+
+        if (!isAllowedUpdate) {
           throw new Error(`Besetzt: Der Zeitslot am ${booking.date} um ${booking.time} Uhr auf ${booking.court} ist bereits von einem anderen Mitglied gebucht oder gesperrt.`);
         }
       }
@@ -1891,28 +1911,28 @@ export async function createGlobalBackup(
         const weekNum = getWeekNumber(lastSunday);
         id = `weekly_${weekNum.year}_W${weekNum.week}`;
         const sundayStr = lastSunday.toLocaleDateString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric' });
-        backupName = `Wöchentliches System-Backup (KW ${weekNum.week} - Stand Sonntag, ${sundayStr})`;
+        backupName = `Wöchentliches Systembackup (KW ${weekNum.week} - Stand Sonntag, ${sundayStr})`;
       } else if (creator === "rollback-auto") {
         id = `rollback_auto_${Date.now()}`;
         backupName = `Automatisches Backup vor Rollback (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
       } else if (creator === "league-reset") {
         id = `league_reset_auto_${Date.now()}`;
-        backupName = `Sicherheits-Snapshot vor Testdaten-Reset (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
+        backupName = `Sicherheitssnapshot vor Testdaten-Reset (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
       } else {
         id = `manual_${Date.now()}`;
-        backupName = `Manuelles System-Backup (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
+        backupName = `Manuelles Systembackup (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
       }
     } else if (creator === "system") {
       const lastSunday = getLastCompletedSunday(new Date());
       const weekNum = getWeekNumber(lastSunday);
       const sundayStr = lastSunday.toLocaleDateString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric' });
-      backupName = `Wöchentliches System-Backup (KW ${weekNum.week} - Stand Sonntag, ${sundayStr})`;
+      backupName = `Wöchentliches Systembackup (KW ${weekNum.week} - Stand Sonntag, ${sundayStr})`;
     } else if (creator === "rollback-auto") {
       backupName = `Automatisches Backup vor Rollback (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
     } else if (creator === "league-reset") {
-      backupName = `Sicherheits-Snapshot vor Testdaten-Reset (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
+      backupName = `Sicherheitssnapshot vor Testdaten-Reset (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
     } else {
-      backupName = `Manuelles System-Backup (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
+      backupName = `Manuelles Systembackup (${new Date(timestamp).toLocaleString("de-DE", { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`;
     }
   }
 
@@ -1953,7 +1973,7 @@ export async function restoreGlobalBackup(backupId: string) {
     backupDoc = await getDoc(doc(db, 'backups', backupId));
   }
   if (!backupDoc.exists()) {
-    throw new Error("Das ausgewählte System-Backup existiert nicht mehr.");
+    throw new Error("Das ausgewählte Systembackup existiert nicht mehr.");
   }
 
   const backup = backupDoc.data() as GlobalSystemBackup;
@@ -2155,13 +2175,13 @@ export async function checkAndPerformGlobalWeeklyBackup() {
 
     const backupDoc = await getDoc(doc(db, 'system_backups', weekId));
     if (!backupDoc.exists()) {
-      console.log(`[Auto-Backup] Creating global weekly backup ${weekId}...`);
+      console.log(`[Autobackup] Creating global weekly backup ${weekId}...`);
       await createGlobalBackup("system", weekId);
       await cleanupOldGlobalBackups();
     }
     localStorage.setItem(cacheKey, Date.now().toString());
   } catch (err) {
-    console.warn("[Auto-Backup] Weekly backup check skipped or deferred:", err);
+    console.warn("[Autobackup] Weekly backup check skipped or deferred:", err);
   }
 }
 

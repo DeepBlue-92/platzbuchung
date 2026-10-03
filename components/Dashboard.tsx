@@ -2349,11 +2349,11 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     const duration = getDurationInHours(modalStartTime, endTime);
     if (duration < 2) {
-      setError(`Hobbyliga-Matches müssen eine Mindestspieldauer von 2 Stunden haben (aktuell: ${duration.toFixed(duration % 1 === 0 ? 0 : 1)} Std.).`);
+      setError(`Hobbyligamatches müssen eine Mindestspieldauer von 2 Stunden haben (aktuell: ${duration.toFixed(duration % 1 === 0 ? 0 : 1)} Std.).`);
       return;
     }
     if (duration > 3) {
-      setError(`Hobbyliga-Matches dürfen maximal 3 Stunden dauern (aktuell: ${duration.toFixed(duration % 1 === 0 ? 0 : 1)} Std.).`);
+      setError(`Hobbyligamatches dürfen maximal 3 Stunden dauern (aktuell: ${duration.toFixed(duration % 1 === 0 ? 0 : 1)} Std.).`);
       return;
     }
 
@@ -4370,23 +4370,6 @@ const Dashboard: React.FC<DashboardProps> = ({
               <i className="fa-solid fa-clock-rotate-left text-[10px]"></i>{" "}
               Heute
             </button>
-            {(isPublicWochenplan || !currentUser) && (
-              <>
-                <div className="w-[1px] h-3 bg-slate-300 mx-1 shrink-0 relative z-10" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInlineLoginPrompt("Melde dich an, um Plätze zu reservieren und alle Buchungsdetails einzusehen.");
-                    setIsPublicLoginModalOpen(true);
-                    setInlineLoginError(null);
-                  }}
-                  className="px-2.5 sm:px-3 h-full rounded-lg bg-[var(--color-primary)] hover:brightness-95 font-black uppercase text-[10px] lg:text-[9px] tracking-widest text-white transition-all flex items-center justify-center gap-1.5 relative cursor-pointer outline-none shadow-sm active:scale-95 whitespace-nowrap"
-                  title="Jetzt anmelden"
-                >
-                  <i className="fa-solid fa-right-to-bracket text-[10px]"></i> Anmelden
-                </button>
-              </>
-            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-3 sm:gap-4 overflow-x-auto w-full lg:w-auto shrink-0 border-t sm:border-t-0 lg:border-l border-slate-200 lg:border-slate-300 pt-1 sm:pt-0 lg:pl-4 lg:pr-3 min-h-8 items-center justify-center sm:justify-start">
@@ -4711,8 +4694,19 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <div className="flex flex-col flex-1 bg-white select-text h-full overflow-y-auto">
                   <div className="p-6 flex-1 flex flex-col justify-center max-w-sm mx-auto w-full space-y-6">
                     <div className="text-center space-y-2">
-                      <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-800 border border-slate-200 shadow-sm">
-                        <i className="fa-solid fa-user-lock text-lg"></i>
+                      <div
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto shadow-md text-white text-xl"
+                        style={{ backgroundColor: settings?.primaryColor || "var(--color-primary)" }}
+                      >
+                        {settings?.headerLogoUrl || settings?.logoUrl || settings?.customHeaderLogoUrl || settings?.customLogoUrl ? (
+                          <img
+                            src={settings?.customHeaderLogoUrl || settings?.headerLogoUrl || settings?.customLogoUrl || settings?.logoUrl}
+                            alt="Logo"
+                            className="w-9 h-9 object-contain"
+                          />
+                        ) : (
+                          <i className="fa-solid fa-user-lock text-lg"></i>
+                        )}
                       </div>
                       <h4 className="text-base font-black uppercase tracking-tight text-slate-800">
                         Bitte anmelden, um diesen Slot zu buchen

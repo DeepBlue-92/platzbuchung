@@ -37,7 +37,7 @@ export interface MatchResultNotificationResult {
 
 /**
  * Event 'HOBBYLIGA_NEW_POST':
- * Broadcast-Benachrichtigung an alle aktiven Hobbyliga-Teilnehmer (außer an den Verfasser selbst).
+ * Broadcast-Benachrichtigung an alle aktiven Hobbyligateilnehmer (außer an den Verfasser selbst).
  * Respektiert individuelle Opt-out-Einstellungen (HOBBYLIGA_NEW_POST: false).
  */
 export async function broadcastHobbyligaNewPost(
@@ -257,7 +257,7 @@ export async function notifyMatchResultSubmitted(
       opponentId: payload.opponentId,
       opponentName: opponent.name,
       opponentEmail: opponent.email,
-      reason: "Gegner hat Benachrichtigungen für Spiel-Ergebnisse deaktiviert (Opt-out).",
+      reason: "Gegner hat Benachrichtigungen für Spielergebnisse deaktiviert (Opt-out).",
     };
   }
 

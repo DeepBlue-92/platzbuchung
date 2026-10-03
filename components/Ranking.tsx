@@ -97,7 +97,7 @@ const RankingView: React.FC<RankingProps> = ({
   const currentCategory =
     categories.find((c) => c.id === activeCategory) || categories[0];
 
-  // View layout is determined globally by Vereins-Admin configuration (no player toggle)
+  // View layout is determined globally by Vereinsadmin configuration (no player toggle)
   const viewLayout: "pyramid" | "list" = useMemo(() => {
     // 1. Club-wide setting in ClubSettings
     const globalMode =

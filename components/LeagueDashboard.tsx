@@ -397,7 +397,7 @@ export function LeagueDashboard({ currentUser, clubId, users, settings, bookings
   };
 
   const handleCancelMatchResult = async (match: LeagueMatch) => {
-    if (!window.confirm("Möchtest du dieses Match-Ergebnis wirklich stornieren? Die vergebenen Ranglisten-Punkte werden zurückgesetzt und das Spiel wird wieder als geplantes Match markiert.")) {
+    if (!window.confirm("Möchtest du dieses Matchergebnis wirklich stornieren? Die vergebenen Ranglistenpunkte werden zurückgesetzt und das Spiel wird wieder als geplantes Match markiert.")) {
       return;
     }
     try {

@@ -112,10 +112,10 @@ export const HeaderInspector: React.FC<HeaderInspectorProps> = ({
         </button>
       </div>
 
-      {/* Vereins-Logo Section (Links, quadratisch) */}
+      {/* Vereinslogo Section (Links, quadratisch) */}
       <div className="space-y-2">
         <label className="text-xs font-bold uppercase text-slate-700 block">
-          Vereins-Logo (Links)
+          Vereinslogo (Links)
         </label>
         <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
           <div className="w-16 h-16 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">

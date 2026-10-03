@@ -125,16 +125,17 @@ export const GlobalEmailSettingsCard: React.FC<GlobalEmailSettingsCardProps> = (
   };
 
   return (
-    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-4">
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 lg:p-7 shadow-xs space-y-5">
       {/* Header: Title, Speichern & Global Not-Aus-Schalter */}
-      <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 text-slate-900">
-          <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shadow-2xs">
-            <Mail className="w-4 h-4" />
-          </div>
-          <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
-            Globale E-Mail-Einstellungen
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+        <div className="text-left">
+          <h3 className="text-base font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Mail className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+            <span>Globale E-Mail-Einstellungen</span>
           </h3>
+          <p className="text-xs text-slate-500 font-normal mt-0.5">
+            Systemweiter Versand, Onboarding-Standards und Vorlagen-Zuweisung je Benachrichtigungstyp.
+          </p>
         </div>
 
         {/* Aktionen rechts: Speichern-Button & Globaler Not-Aus Schalter */}
@@ -143,9 +144,9 @@ export const GlobalEmailSettingsCard: React.FC<GlobalEmailSettingsCardProps> = (
             type="button"
             onClick={handleSave}
             disabled={!hasUnsavedChanges || isSaving}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 ${
               hasUnsavedChanges
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs ring-2 ring-emerald-500/20"
+                ? "bg-[var(--color-primary)] hover:brightness-95 text-white"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
             }`}
             title={hasUnsavedChanges ? "Änderungen an den globalen Einstellungen speichern" : "Keine ungespeicherten Änderungen"}
@@ -165,7 +166,7 @@ export const GlobalEmailSettingsCard: React.FC<GlobalEmailSettingsCardProps> = (
               type="button"
               onClick={() => setConfirmModalType("resume")}
               disabled={isProcessingStop}
-              className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 animate-pulse"
+              className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 animate-pulse"
               title="Klicken, um den E-Mail-Versand nach Bestätigung wieder zu aktivieren"
             >
               {isProcessingStop ? (
@@ -180,7 +181,7 @@ export const GlobalEmailSettingsCard: React.FC<GlobalEmailSettingsCardProps> = (
               type="button"
               onClick={() => setConfirmModalType("pause")}
               disabled={isProcessingStop}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-700 hover:border-red-200 border border-slate-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-700 hover:border-red-200 border border-slate-200/80 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
               title="Klicken, um den gesamten E-Mail-Versand des Vereins sofort zu stoppen (Not-Aus)"
             >
               <Power className="w-3.5 h-3.5 text-slate-500" />
@@ -192,7 +193,7 @@ export const GlobalEmailSettingsCard: React.FC<GlobalEmailSettingsCardProps> = (
 
       {/* Pausierungs-Warnhinweis */}
       {isGlobalEmailPaused && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-900 flex items-center gap-2.5 animate-in fade-in">
+        <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-900 flex items-center gap-2.5 animate-in fade-in">
           <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
           <span>
             Der E-Mail-Versand ist derzeit klubweit vollständig pausiert (Not-Aus aktiv). Es werden keinerlei System-Mails versendet.
@@ -201,109 +202,111 @@ export const GlobalEmailSettingsCard: React.FC<GlobalEmailSettingsCardProps> = (
       )}
 
       {/* Bereinigte E-Mail Matrix */}
-      <div className={`overflow-x-auto ${isGlobalEmailPaused ? "opacity-50 pointer-events-none" : ""}`}>
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500 bg-slate-50/60">
-              <th className="py-3 px-3 min-w-[200px]">E-Mail-Typ</th>
-              <th className="py-3 px-3 text-center min-w-[170px]">Versand systemweit aktiv</th>
-              <th className="py-3 px-3 text-center min-w-[170px]">Standard bei Registrierung</th>
-              <th className="py-3 px-3 min-w-[240px]">Aktive Vorlage</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {NOTIFICATION_EVENT_DEFINITIONS.map((eventDef) => {
-              const eventKey = eventDef.key;
-              const isSysActive = localSystemwideActive[eventKey] !== false;
-              const isOnbActive = localOnboardingDefaults[eventKey] !== false;
-              const assignedTemplateId = localAssignments[eventKey] || "default_tmpl";
+      <div className={`border border-slate-200/80 rounded-xl overflow-hidden bg-white shadow-2xs ${isGlobalEmailPaused ? "opacity-50 pointer-events-none" : ""}`}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-50/70">
+                <th className="py-3 px-4 min-w-[200px]">E-Mail-Typ</th>
+                <th className="py-3 px-4 text-center min-w-[170px]">Versand systemweit aktiv</th>
+                <th className="py-3 px-4 text-center min-w-[170px]">Standard bei Registrierung</th>
+                <th className="py-3 px-4 min-w-[240px]">Aktive Vorlage</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {NOTIFICATION_EVENT_DEFINITIONS.map((eventDef) => {
+                const eventKey = eventDef.key;
+                const isSysActive = localSystemwideActive[eventKey] !== false;
+                const isOnbActive = localOnboardingDefaults[eventKey] !== false;
+                const assignedTemplateId = localAssignments[eventKey] || "default_tmpl";
 
-              return (
-                <tr
-                  key={eventKey}
-                  className={`hover:bg-slate-50/80 transition-colors ${
-                    !isSysActive ? "bg-slate-50/40 text-slate-400" : ""
-                  }`}
-                >
-                  {/* Spalte 1: E-Mail-Typ */}
-                  <td className="py-3.5 px-3">
-                    <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
-                      <span className={!isSysActive ? "line-through text-slate-400" : ""}>
-                        {eventDef.label}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
-                      {eventDef.description}
-                    </div>
-                  </td>
+                return (
+                  <tr
+                    key={eventKey}
+                    className={`hover:bg-slate-50/80 transition-colors ${
+                      !isSysActive ? "bg-slate-50/40 text-slate-400" : ""
+                    }`}
+                  >
+                    {/* Spalte 1: E-Mail-Typ */}
+                    <td className="py-3.5 px-4">
+                      <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                        <span className={!isSysActive ? "line-through text-slate-400" : ""}>
+                          {eventDef.label}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">
+                        {eventDef.description}
+                      </div>
+                    </td>
 
-                  {/* Spalte 2: Versand systemweit aktiv (Schlichte Checkbox) */}
-                  <td className="py-3.5 px-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={isSysActive}
-                      disabled={isGlobalEmailPaused}
-                      onChange={() => handleToggleEvent(eventKey)}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:cursor-not-allowed"
-                      title={
-                        isSysActive
-                          ? "Klicken zum systemweiten Deaktivieren"
-                          : "Klicken zum systemweiten Aktivieren"
-                      }
-                    />
-                  </td>
-
-                  {/* Spalte 3: Standard bei Registrierung (Schlichte Checkbox) */}
-                  <td className="py-3.5 px-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={isOnbActive}
-                      disabled={isGlobalEmailPaused || !isSysActive}
-                      onChange={() => handleToggleDefault(eventKey)}
-                      className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                      title={
-                        !isSysActive
-                          ? "Inaktiv weil systemweit deaktiviert"
-                          : isOnbActive
-                          ? "Bei Neuanmeldung aktiv – Klicken zum Deaktivieren"
-                          : "Bei Neuanmeldung inaktiv – Klicken zum Aktivieren"
-                      }
-                    />
-                  </td>
-
-                  {/* Spalte 4: Aktive Vorlage (Dropdown) */}
-                  <td className="py-3.5 px-3">
-                    <div className="flex items-center gap-2 max-w-sm">
-                      <select
-                        value={assignedTemplateId}
-                        onChange={(e) => handleSelectChange(eventKey, e.target.value)}
+                    {/* Spalte 2: Versand systemweit aktiv (Schlichte Checkbox) */}
+                    <td className="py-3.5 px-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSysActive}
                         disabled={isGlobalEmailPaused}
-                        className="flex-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:border-emerald-600 shadow-2xs font-semibold cursor-pointer disabled:cursor-not-allowed"
-                      >
-                        {availableTemplates.map((tmpl) => (
-                          <option key={tmpl.id} value={tmpl.id}>
-                            {tmpl.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={() => handleToggleEvent(eventKey)}
+                        className="h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer disabled:cursor-not-allowed"
+                        title={
+                          isSysActive
+                            ? "Klicken zum systemweiten Deaktivieren"
+                            : "Klicken zum systemweiten Aktivieren"
+                        }
+                      />
+                    </td>
 
-                      {onNavigateToEditor && (
-                        <button
-                          type="button"
-                          onClick={() => onNavigateToEditor(assignedTemplateId)}
-                          className="h-8 px-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-                          title="Diese Vorlage im Designer bearbeiten"
+                    {/* Spalte 3: Standard bei Registrierung (Schlichte Checkbox) */}
+                    <td className="py-3.5 px-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isOnbActive}
+                        disabled={isGlobalEmailPaused || !isSysActive}
+                        onChange={() => handleToggleDefault(eventKey)}
+                        className="h-4 w-4 rounded border-slate-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                        title={
+                          !isSysActive
+                            ? "Inaktiv weil systemweit deaktiviert"
+                            : isOnbActive
+                            ? "Bei Neuanmeldung aktiv – Klicken zum Deaktivieren"
+                            : "Bei Neuanmeldung inaktiv – Klicken zum Aktivieren"
+                        }
+                      />
+                    </td>
+
+                    {/* Spalte 4: Aktive Vorlage (Dropdown) */}
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2 max-w-sm">
+                        <select
+                          value={assignedTemplateId}
+                          onChange={(e) => handleSelectChange(eventKey, e.target.value)}
+                          disabled={isGlobalEmailPaused}
+                          className="flex-1 h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-800 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/10 outline-none transition-all cursor-pointer disabled:cursor-not-allowed shadow-2xs"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                          {availableTemplates.map((tmpl) => (
+                            <option key={tmpl.id} value={tmpl.id}>
+                              {tmpl.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        {onNavigateToEditor && (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToEditor(assignedTemplateId)}
+                            className="h-9 w-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center transition-colors cursor-pointer shrink-0 border border-slate-200"
+                            title="Diese Vorlage im Designer bearbeiten"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Unten: Ungespeicherte Änderungen Leiste */}
@@ -317,7 +320,7 @@ export const GlobalEmailSettingsCard: React.FC<GlobalEmailSettingsCardProps> = (
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-[var(--color-primary)] hover:brightness-95 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
           >
             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             <span>Änderungen speichern</span>
